@@ -1,0 +1,357 @@
+import { useState } from 'preact/hooks';
+import { back } from '../app';
+import type { Opt } from '../data/catalog';
+import { addSel, locate, removeSel, uid, unavailable, type RSel, type Sel } from '../data/engine';
+import type { Profile } from '../data/model';
+import type { RosterCtl } from '../store';
+import { Pts, TopBar, fmtN } from './common';
+import { Icon } from './Icon';
+import { cleanCat } from './RosterView';
+
+export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: string; backTo: string }) {
+  const rs = ctl.ev.find(selUid);
+  const [tab, setTab] = useState<'options' | 'stats' | 'rules'>('options');
+  if (!rs) {
+    return (
+      <div class="page">
+        <TopBar title="Unit" backTo={backTo} />
+        <p class="muted pad">This unit is no longer in the list.</p>
+      </div>
+    );
+  }
+  const isRoot = !rs.parent;
+  const issues = ctl.ev.issues.filter((i) => i.level === 'error' && i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)));
+  const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
+
+  return (
+    <div class="page unit-page">
+      <TopBar title={rs.eff.name} sub={cat} backTo={backTo} right={<Pts v={rs.total} />} />
+      <div class="tabs" role="tablist">
+        {(['options', 'stats', 'rules'] as const).map((t) => (
+          <button role="tab" aria-selected={tab === t} class={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+            {t === 'options' ? 'Options' : t === 'stats' ? 'Profiles' : 'Rules'}
+          </button>
+        ))}
+      </div>
+      {issues.length > 0 && tab === 'options' && (
+        <ul class="issues inline">{issues.map((i) => <li class="error"><Icon name="warn" size={16} /><span>{i.message.split(' › ').pop()}</span></li>)}</ul>
+      )}
+      {tab === 'options' && (
+        <>
+          <ProfileStrip ctl={ctl} rs={rs} />
+          <OptList ctl={ctl} rs={rs} opts={rs.force.ctx.options(rs.node)} depth={0} />
+          {!ctl.scratch && isRoot && (
+            <div class="unit-actions">
+              <button class="btn" onClick={() => {
+                ctl.mutate((r) => {
+                  const f = r.forces.find((x) => x.uid === rs.force.force.uid)!;
+                  const copy = reUid(structuredClone(rs.sel));
+                  f.selections.splice(f.selections.findIndex((s) => s.uid === rs.sel.uid) + 1, 0, copy);
+                });
+                back(backTo);
+              }}><Icon name="copy" /> Duplicate</button>
+              <button class="btn danger" onClick={() => { ctl.mutate((r) => removeSel(r, rs.sel.uid)); back(backTo); }}><Icon name="trash" /> Remove</button>
+            </div>
+          )}
+        </>
+      )}
+      {tab === 'stats' && <Profiles ctl={ctl} profiles={ctl.ev.profilesFor(rs)} />}
+      {tab === 'rules' && <Rules ctl={ctl} rs={rs} />}
+    </div>
+  );
+}
+
+function under(r: RSel, selUid: string): boolean {
+  return r.children.some((c) => c.sel.uid === selUid || under(c, selUid));
+}
+function reUid(s: Sel): Sel {
+  s.uid = uid();
+  s.children.forEach(reUid);
+  return s;
+}
+
+/** Compact headline stats (unit profiles) on the options tab. */
+function ProfileStrip({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
+  const all = ctl.ev.profilesFor(rs);
+  const types = [...new Set(all.map((p) => p.typeName))];
+  const main = types.find((t) => /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t)) ?? types[0];
+  const list = all.filter((p) => p.typeName === main && p.characteristics.every((c) => c.value.length < 30));
+  if (!list.length) return null;
+  return <div class="strip"><ProfileTable profiles={list} /></div>;
+}
+
+function OptList({ ctl, rs, opts, depth }: { ctl: RosterCtl; rs: RSel; opts: Opt[]; depth: number }) {
+  return (
+    <div class={'opts' + (depth ? ' nested' : '')}>
+      {opts.map((o) => (o.kind === 'group' ? <GroupBlock key={o.key} ctl={ctl} rs={rs} g={o} depth={depth} /> : <OptRow key={o.key} ctl={ctl} rs={rs} o={o} depth={depth} />))}
+    </div>
+  );
+}
+
+function limitText(min: number, max: number) {
+  if (max === 1 && min === 1) return 'pick 1';
+  if (max === 1) return 'up to 1';
+  if (min > 0 && max > 0) return min === max ? `pick ${min}` : `${min}–${max}`;
+  if (max > 0) return `up to ${max}`;
+  if (min > 0) return `at least ${min}`;
+  return '';
+}
+
+function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; depth: number }) {
+  const { ev } = ctl;
+  const eff = ev.optionEff(g, rs, rs.force);
+  const chosen = ev.selected(g, rs, rs.force);
+  const n = chosen.reduce((t, c) => t + c.sel.number, 0);
+  const { min, max } = ev.limits(g, rs, rs.force, eff);
+  const [open, setOpen] = useState(depth > 0 ? n > 0 || min > 0 : true);
+  if ((eff.hidden || unavailable(eff)) && !n) return null;
+  const radio = max === 1 && g.members.every((m) => m.kind === 'entry');
+  const bad = (min > 0 && n < min) || (max >= 0 && n > max);
+
+  return (
+    <div class="group">
+      <button class="group-head" onClick={() => setOpen(!open)}>
+        <span class="g-name">{eff.name}</span>
+        <span class={'g-lim' + (bad ? ' bad' : '')}>{limitText(min, max)}{max !== 1 && n ? ` · ${n}` : ''}</span>
+        <Icon name={open ? 'down' : 'chev'} size={16} />
+      </button>
+      {open && (
+        radio ? (
+          <div class="opts">
+            {g.members.map((m) => <RadioRow key={m.key} ctl={ctl} rs={rs} g={g} o={m} required={min >= 1} depth={depth} />)}
+          </div>
+        ) : (
+          <OptList ctl={ctl} rs={rs} opts={g.members} depth={depth} />
+        )
+      )}
+    </div>
+  );
+}
+
+function groupFull(ctl: RosterCtl, rs: RSel, o: Opt) {
+  // walk up enclosing groups: any one at its max blocks adding more
+  for (let i = o.groupIds.length - 1; i >= 0; i--) {
+    const gid = o.groupIds[i];
+    const g = findGroup(ctl.ev.ctxFor(rs.force.force).options(rs.node), gid);
+    if (!g) continue;
+    const { max } = ctl.ev.limits(g, rs, rs.force);
+    if (max < 0) continue;
+    const n = ctl.ev.selected(g, rs, rs.force).reduce((t, c) => t + c.sel.number, 0);
+    if (n >= max) return true;
+  }
+  return false;
+}
+function findGroup(opts: Opt[], id: string): Opt | undefined {
+  for (const o of opts) {
+    if (o.kind !== 'group') continue;
+    if (o.node.id === id || o.node.linkId === id) return o;
+    const r = findGroup(o.members, id);
+    if (r) return r;
+  }
+  return undefined;
+}
+
+/** Make room in a full group by dropping one of the other choices (e.g. swap the default pistol for a fist). */
+function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
+  const ctx = ctl.ev.ctxFor(rs.force.force);
+  let group: Opt | undefined;
+  for (let i = o.groupIds.length - 1; i >= 0 && !group; i--) {
+    const g = findGroup(ctx.options(rs.node), o.groupIds[i]);
+    if (!g) continue;
+    const { max } = ctl.ev.limits(g, rs, rs.force);
+    const n = ctl.ev.selected(g, rs, rs.force).reduce((t, c) => t + c.sel.number, 0);
+    if (max >= 0 && n >= max) group = g;
+  }
+  if (!group) return setCount(ctl, rs, o, newCount);
+  const others = ctl.ev.selected(group, rs, rs.force).filter((c) => c.opt.key !== o.key);
+  // prefer dropping something that isn't mandatory, cheapest first
+  const victim = others
+    .filter((c) => ctl.ev.limits(c.opt, rs, rs.force).min < c.sel.number)
+    .sort((a, b) => a.total - b.total)[0];
+  if (!victim) return;
+  ctl.mutate((r) => {
+    const parent = locate(r, rs.sel.uid)!.sel;
+    const v = parent.children.find((c) => c.uid === victim.sel.uid)!;
+    if (v.number > 1) v.number--;
+    else parent.children = parent.children.filter((c) => c !== v);
+    const mine = parent.children.filter((c) => c.key === o.key);
+    if (mine.length) mine[mine.length - 1].number++;
+    else addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, newCount);
+  });
+}
+
+function costLabel(ctl: RosterCtl, v: number | undefined) {
+  if (!v) return null;
+  return <span class="o-pts">{v > 0 ? '+' : ''}{fmtN(v)}</span>;
+}
+
+function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
+  ctl.mutate((r) => {
+    const parent = locate(r, rs.sel.uid)!.sel;
+    const mine = parent.children.filter((c) => c.key === o.key);
+    if (n <= 0) {
+      parent.children = parent.children.filter((c) => c.key !== o.key);
+      return;
+    }
+    if (mine.length) {
+      const total = mine.reduce((t, c) => t + c.number, 0);
+      mine[mine.length - 1].number = Math.max(1, mine[mine.length - 1].number + (n - total));
+      return;
+    }
+    addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, n);
+  });
+}
+
+function OptRow({ ctl, rs, o, depth }: { ctl: RosterCtl; rs: RSel; o: Opt; depth: number }) {
+  const { ev } = ctl;
+  const eff = ev.optionEff(o, rs, rs.force);
+  const chosen = ev.selected(o, rs, rs.force);
+  const n = chosen.reduce((t, c) => t + c.sel.number, 0);
+  if ((eff.hidden || unavailable(eff)) && !n) return null;
+  const { min, max } = ev.limits(o, rs, rs.force, eff);
+  const full = groupFull(ctl, rs, o);
+  const cost = eff.costs.get(ev.pointsTypeId);
+  const bad = (min > 0 && n < min) || (max >= 0 && n > max);
+
+  const control = max === 1 ? (
+    <button
+      class={'check' + (n ? ' on' : '')}
+      role="checkbox"
+      aria-checked={n > 0}
+      disabled={n > 0 && min >= 1}
+      onClick={() => (n ? setCount(ctl, rs, o, 0) : full ? swapIn(ctl, rs, o, 1) : setCount(ctl, rs, o, 1))}
+    >
+      <span class="box">{n > 0 && <Icon name="check" size={16} />}</span>
+      <span class="o-name">{eff.name}</span>
+      {costLabel(ctl, cost)}
+    </button>
+  ) : (
+    <div class={'stepper-row' + (bad ? ' bad' : '')}>
+      <span class="o-name">{eff.name}{max > 1 && <small class="muted"> (max {max})</small>}</span>
+      {costLabel(ctl, cost)}
+      <div class="stepper">
+        <button aria-label={'Fewer ' + eff.name} disabled={n <= min} onClick={() => setCount(ctl, rs, o, n - 1)}><Icon name="minus" size={18} /></button>
+        <span class={'count' + (n ? ' on' : '')}>{n}</span>
+        <button aria-label={'More ' + eff.name} disabled={max >= 0 && n >= max} onClick={() => (full ? swapIn(ctl, rs, o, n + 1) : setCount(ctl, rs, o, n + 1))}><Icon name="plus" size={18} /></button>
+      </div>
+    </div>
+  );
+  return (
+    <div class="opt">
+      {control}
+      {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
+    </div>
+  );
+}
+
+function RadioRow({ ctl, rs, g, o, required, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; o: Opt; required: boolean; depth: number }) {
+  const { ev } = ctl;
+  const eff = ev.optionEff(o, rs, rs.force);
+  const chosen = ev.selected(o, rs, rs.force);
+  const on = chosen.length > 0;
+  if ((eff.hidden || unavailable(eff)) && !on) return null;
+  const cost = eff.costs.get(ev.pointsTypeId);
+  const pick = () => {
+    if (on) {
+      if (!required) setCount(ctl, rs, o, 0);
+      return;
+    }
+    ctl.mutate((r) => {
+      const parent = locate(r, rs.sel.uid)!.sel;
+      parent.children = parent.children.filter((c) => !c.key.startsWith(g.key + '/'));
+      addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, 1);
+    });
+  };
+  return (
+    <div class="opt">
+      <button class={'radio' + (on ? ' on' : '')} role="radio" aria-checked={on} onClick={pick}>
+        <span class="dot" />
+        <span class="o-name">{eff.name}</span>
+        {costLabel(ctl, cost)}
+      </button>
+      {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
+    </div>
+  );
+}
+
+/** Options belonging to a selected child (e.g. a model's wargear). */
+function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
+  const opts = rs.force.ctx.options(rs.node);
+  const visible = opts.filter((o) => {
+    const e = ctl.ev.optionEff(o, rs, rs.force);
+    return (!e.hidden && !unavailable(e)) || ctl.ev.selected(o, rs, rs.force).length;
+  });
+  const [open, setOpen] = useState(depth < 1);
+  if (!visible.length || depth > 6) return null;
+  return (
+    <div class="subopts">
+      <button class="sub-head" onClick={() => setOpen(!open)}>
+        <Icon name={open ? 'down' : 'chev'} size={14} />
+        <span>{rs.sel.number > 1 ? `${rs.sel.number}× ` : ''}{rs.eff.name} options</span>
+        {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
+      </button>
+      {open && <OptList ctl={ctl} rs={rs} opts={visible} depth={depth + 1} />}
+    </div>
+  );
+}
+
+// ---------- profiles & rules ----------
+export function Profiles({ ctl, profiles }: { ctl: RosterCtl; profiles: Profile[] }) {
+  if (!profiles.length) return <p class="muted pad">No profiles for this unit.</p>;
+  const types = [...new Set(profiles.map((p) => p.typeName))];
+  return (
+    <div class="profiles">
+      {types.map((t) => {
+        const list = profiles.filter((p) => p.typeName === t);
+        const long = list.some((p) => p.characteristics.some((c) => c.value.length > 40)) || list[0].characteristics.length <= 1;
+        return (
+          <section class="ptype">
+            <h3>{t}</h3>
+            {long ? list.map((p) => (
+              <div class="pcard">
+                <b>{p.name}</b>
+                {p.characteristics.map((c) => c.value && <p><span class="muted">{c.name}:</span> {c.value}</p>)}
+              </div>
+            )) : <ProfileTable profiles={list} />}
+          </section>
+        );
+      })}
+      <div class="foot-space" />
+      <span hidden>{ctl.roster.uid}</span>
+    </div>
+  );
+}
+
+function ProfileTable({ profiles }: { profiles: Profile[] }) {
+  const cols = profiles[0].characteristics.map((c) => c.name);
+  return (
+    <div class="table-wrap">
+      <table class="ptable">
+        <thead><tr><th>Name</th>{cols.map((c) => <th>{c}</th>)}</tr></thead>
+        <tbody>
+          {profiles.map((p) => (
+            <tr><td class="pname">{p.name}</td>{cols.map((c) => <td>{p.characteristics.find((x) => x.name === c)?.value ?? ''}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Rules({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
+  const rules = ctl.ev.rulesFor(rs);
+  const [q, setQ] = useState('');
+  if (!rules.length) return <p class="muted pad">No special rules listed.</p>;
+  const shown = rules.filter((r) => (r.name + ' ' + r.description).toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div class="rules">
+      {rules.length > 8 && <div class="search"><Icon name="search" size={18} /><input placeholder="Search rules" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>}
+      {shown.map((r) => (
+        <details class="rule">
+          <summary>{r.name}</summary>
+          <p>{r.description || <span class="muted">No description in the data.</span>}</p>
+        </details>
+      ))}
+    </div>
+  );
+}
