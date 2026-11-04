@@ -530,7 +530,7 @@ describe('validation', () => {
     w.pick(w.add('Squad'), 'Gun');
     expect(w.errors()).toEqual([]);
     w.pick(w.add('Squad'), 'Gun');
-    expect(w.errors()).toContain('Gun: at most 1 allowed (has 2)');
+    expect(w.errors()).toContain('Gun: at most 1 allowed in this detachment (has 2)');
   });
   it('checks a max across the roster for selections anywhere', () => {
     const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0,
@@ -538,29 +538,29 @@ describe('validation', () => {
     w.pick(w.add('Squad'), 'Gun');
     const f2 = w.addForce();
     w.pick(w.add('Squad', 1, f2), 'Gun');
-    expect(w.errors()).toContain('Gun: at most 1 allowed (has 2)');
+    expect(w.errors()).toContain('Gun: at most 1 allowed in the list (has 2)');
   });
   it('checks limits on root units within a force', () => {
     const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="force"/>')));
     w.add('Boss');
     expect(w.errors()).toEqual([]);
     w.add('Boss');
-    expect(w.errors()).toEqual(['Boss: at most 1 allowed (has 2)']);
+    expect(w.errors()).toEqual(['Boss: at most 1 allowed in this detachment (has 2)']);
   });
   it('checks limits on root units across a roster', () => {
     const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="roster"/>')));
     w.add('Boss');
     w.add('Boss', 1, w.addForce());
-    expect(w.errors()).toContain('Boss: at most 1 allowed (has 2)');
+    expect(w.errors()).toContain('Boss: at most 1 allowed in the list (has 2)');
   });
   it('requires mandatory root units', () => {
     const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="min" value="1" field="selections" scope="force"/>')));
-    expect(w.errors()).toEqual(['Boss: needs at least 1 (has 0)']);
+    expect(w.errors()).toEqual(['Boss: needs at least 1 in this detachment (has 0)']);
   });
   it('checks points limits on a root unit', () => {
     const w = world(unit('u', 'Boss', 30, cons('<constraint id="c" type="max" value="50" field="pts" scope="force"/>')));
     w.add('Boss', 2);
-    expect(w.errors()).toEqual(['Boss: at most 50 pts allowed (has 60)']);
+    expect(w.errors()).toEqual(['Boss: at most 50 pts allowed in this detachment (has 60)']);
   });
   it('checks percentage limits against the current total', () => {
     const w = world(
@@ -569,7 +569,7 @@ describe('validation', () => {
     );
     w.add('Other');
     w.add('Boss');
-    expect(w.errors()).toEqual(['Boss: at most 25 pts allowed (has 30)']);
+    expect(w.errors()).toEqual(['Boss: at most 25 pts allowed in the list (has 30)']);
     w.add('Other');
     expect(w.errors()).toEqual([]);
   });
@@ -654,7 +654,7 @@ describe('validation', () => {
       const w = world(unit('t', 'Troop', 6, inCat('tr')), { gst });
       w.add('Troop');
       w.add('Troop', 1, w.addForce());
-      expect(w.errors()).toContain('Troops: at most 10 pts allowed (has 12)');
+      expect(w.errors()).toContain('Troops: at most 10 pts allowed in the list (has 12)');
     });
     it('counts a unit only in the category it was added under when the data gives no primary', () => {
       const w = world(unit('t', 'Troop', 0, '<categoryLinks><categoryLink id="l" targetId="tr"/></categoryLinks>'), { gst: FOC });
