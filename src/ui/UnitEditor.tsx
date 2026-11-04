@@ -257,7 +257,7 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
   });
 }
 
-function costLabel(ctl: RosterCtl, v: number | undefined, each = false) {
+function costLabel(v: number | undefined, each = false) {
   if (!v) return null;
   return <span class="o-pts">{v > 0 ? '+' : ''}{fmtN(v)}{each ? <small> ea</small> : null}</span>;
 }
@@ -311,12 +311,12 @@ function OptRow({ ctl, rs, o, depth }: { ctl: RosterCtl; rs: RSel; o: Opt; depth
     >
       <span class="box">{n > 0 && <Icon name="check" size={16} />}</span>
       <span class="o-name">{eff.name}</span>
-      {costLabel(ctl, cost, rs.sel.number > 1)}
+      {costLabel(cost, rs.sel.number > 1)}
     </button>
   ) : (
     <div class={'stepper-row' + (bad ? ' bad' : '')}>
       <span class="o-name">{eff.name}{max > 1 && <small class="muted"> (max {max})</small>}</span>
-      {costLabel(ctl, cost, rs.sel.number > 1)}
+      {costLabel(cost, rs.sel.number > 1)}
       <div class="stepper">
         <button aria-label={'Fewer ' + eff.name} disabled={n <= min} onClick={() => setCount(ctl, rs, o, n - 1)}><Icon name="minus" size={18} /></button>
         <span class={'count' + (n ? ' on' : '')}>{n}</span>
@@ -355,7 +355,7 @@ function RadioRow({ ctl, rs, g, o, required, depth }: { ctl: RosterCtl; rs: RSel
       <button class={'radio' + (on ? ' on' : '')} role="radio" aria-checked={on} onClick={pick}>
         <span class="dot" />
         <span class="o-name">{eff.name}</span>
-        {costLabel(ctl, cost, rs.sel.number > 1)}
+        {costLabel(cost, rs.sel.number > 1)}
       </button>
       {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
     </div>

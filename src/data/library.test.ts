@@ -10,7 +10,7 @@ import { COST_TYPES } from '../test/fixture';
 /** The browser's DOMParser, as far as library.ts needs it: bad XML comes back as a parsererror document. */
 class Parser {
   parseFromString(text: string, type: string) {
-    const doc = new XmlParser().parseFromString(text, type as 'text/xml');
+    const doc = new XmlParser().parseFromString(text, type);
     return Object.assign(doc, { querySelector: () => (text.includes('BROKEN') ? {} : null) });
   }
 }

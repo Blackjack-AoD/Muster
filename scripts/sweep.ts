@@ -25,7 +25,7 @@ for (const [path, xml] of texts) { const h = readHeader(xml); if (h) meta.set(h.
 
 const parsed = new Map<string, DataFile>();
 const load = (id: string) => {
-  if (!parsed.has(id)) parsed.set(id, parseDataFile(new DOMParser().parseFromString(texts.get(meta.get(id)!.path)!, 'text/xml').documentElement as unknown as Element));
+  if (!parsed.has(id)) parsed.set(id, parseDataFile(new DOMParser().parseFromString(texts.get(meta.get(id)!.path), 'text/xml').documentElement as unknown as Element));
   return parsed.get(id)!;
 };
 const linkedTo = (cat: DataFile) => {
