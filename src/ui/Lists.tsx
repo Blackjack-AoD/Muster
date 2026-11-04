@@ -4,6 +4,8 @@ import type { RepoState } from '../data/db';
 import { Evaluator, uid, type Roster } from '../data/engine';
 import { activeSystems, getContext, rosterGameKey, systemsOf, gameKey, type SystemInfo } from '../data/library';
 import { saveRoster, useStore } from '../store';
+import { setUpForce } from '../data/setup';
+import type { Context } from '../data/catalog';
 import { Empty, Link, Loading, Sheet, TopBar, ago, fmtN } from './common';
 import { Icon } from './Icon';
 
@@ -123,7 +125,7 @@ function NewListDetails({ sys, catId, onClose, onBack }: { sys: SystemInfo; catI
   const repos = useStore((s) => s.repos);
   const repo = repos.find((r) => r.repo === sys.repo)!;
   const catName = sys.catalogues.find((c) => c.header!.id === catId)!.header!.name;
-  const [state, setState] = useState<{ forces: { id: string; name: string }[]; limit: number } | { error: string }>();
+  const [state, setState] = useState<{ forces: { id: string; name: string }[]; limit: number; ctx: Context } | { error: string }>();
   const [forceId, setForceId] = useState<string>();
   const [name, setName] = useState(catName.replace(/^\d{4}\s*-\s*/, ''));
   const [limit, setLimit] = useState('');
@@ -135,7 +137,7 @@ function NewListDetails({ sys, catId, onClose, onBack }: { sys: SystemInfo; catI
           const forces = ctx.forceEntries().filter((f) => !f.hidden).map((f) => ({ id: f.id, name: f.name }));
           const pt = ctx.pointsType();
           const lim = pt && pt.defaultCostLimit > 0 ? pt.defaultCostLimit : 3000;
-          setState({ forces, limit: lim });
+          setState({ forces, limit: lim, ctx });
           setForceId(forces[0]?.id);
           setLimit(String(lim));
         })
@@ -144,16 +146,18 @@ function NewListDetails({ sys, catId, onClose, onBack }: { sys: SystemInfo; catI
   }, [catId]);
 
   const create = async () => {
-    if (!forceId) return;
+    if (!forceId || !state || 'error' in state) return;
     const r: Roster = {
       uid: uid(), name: name.trim() || catName, repo: sys.repo, gameSystemId: sys.gst.header!.id,
       costLimit: Number(limit) || 0,
       forces: [{ uid: uid(), forceEntryId: forceId, catalogueId: catId, selections: [] }],
       created: Date.now(), updated: Date.now(),
     };
+    // mandatory set-up (Legion, Allegiance by lore, Expanded Army Lists...) so the list starts ready to fill
+    try { setUpForce(r, new Map([[catId, state.ctx]]), r.forces[0].uid, catName); } catch (e) { console.warn('set-up skipped', e); }
     await saveRoster(r);
     onClose();
-    go(`/r/${r.uid}`);
+    go(`/r/${r.uid}`, true);
   };
 
   return (

@@ -12,6 +12,8 @@ interface State {
   rosters: Roster[];
   sync: Record<string, SyncProgress>;
   toast?: string;
+  /** optional button on the toast, e.g. Undo */
+  toastAction?: { label: string; run: () => void };
   /** active game: "<repo>|<game system id>", or undefined for all games */
   game?: string;
 }
@@ -39,10 +41,14 @@ export function useStore<T>(sel: (s: State) => T): T {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(msg: string) {
-  set({ toast: msg });
+export function toast(msg: string, action?: { label: string; run: () => void }) {
+  set({ toast: msg, toastAction: action });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => set({ toast: undefined }), 2600);
+  toastTimer = setTimeout(() => set({ toast: undefined, toastAction: undefined }), action ? 5000 : 2600);
+}
+export function dismissToast() {
+  clearTimeout(toastTimer);
+  set({ toast: undefined, toastAction: undefined });
 }
 
 export async function init() {

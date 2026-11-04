@@ -26,7 +26,9 @@ Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub
 ## Screens
 - **Games**: pick the game you're playing. Lists, Library and new lists then only show that game (or pick "All games").
 - **Lists**: build and edit lists. All squad sizes and wargear choices happen here.
-- **Library**: read-only. **Armies** shows each unit's stats, standard loadout, available options with costs, profiles and rules. **Rules** searches every rule in every data file of the chosen game, with differently worded copies of a rule grouped together and labelled by army.
+- **Library**: read-only. **Armies** shows each unit with two tabs: **Profiles** (stat line fitted to the screen width, standard weapons, wargear) and **Rules** (its special rules). **Rules** searches every rule in every data file of the chosen game, with differently worded copies of a rule grouped together and labelled by army.
+- **List building**: a new list (or detachment) starts with its mandatory set-up already in place. For Horus Heresy that's the Legion (hidden, since there's nothing to choose), Allegiance set to the Legion's side in the lore (tap Loyalist / Traitor to change it), Rite of War, and Expanded Army Lists with every switch On. Swipe a unit left to delete it (with Undo), or right to duplicate it.
+- The phone's back button steps back one screen at a time and closes any open pop-up first.
 - **Data**: download / update repos, import files, back up lists.
 
 ## How the data is read
@@ -37,5 +39,9 @@ Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub
 - Rule and profile links honour their own hidden flags and modifiers (e.g. Legion-specific rules, "Duellist's Edge (1)").
 - Percentage limits (e.g. "no more than 25% of the army's points") are checked against the current total.
 
+## Tested data
+Every unit of every army has been added and checked (`npm run sweep`) in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e.
+
 ## Not yet covered
-Some rare BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), and `self`-scoped constraints.
+- **Child forces** (forces inside forces, e.g. Age of Sigmar 4's regiments inside an army). AoS data loads, but lists can't be built properly yet.
+- Some rare BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), and `self`-scoped constraints.

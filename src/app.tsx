@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { useStore } from './store';
+import { dismissToast, useStore } from './store';
 import { Lists } from './ui/Lists';
 import { RosterView } from './ui/RosterView';
 import { UnitPage } from './ui/UnitPage';
@@ -27,6 +27,11 @@ export function go(path: string, replace = false) {
   else { history.pushState(null, '', h); depth++; }
   dispatchEvent(new HashChangeEvent('hashchange'));
 }
+/** history step for an open sheet (same address, marked so back can close it) */
+export function pushSheetState(id: number) {
+  history.pushState({ sheet: id }, '', location.href);
+  depth++;
+}
 /** go back within the app, or to a sensible parent page if opened directly */
 export function back(fallback = '/') {
   if (depth > 0) history.back();
@@ -37,6 +42,7 @@ export function App() {
   const hash = useHash();
   const ready = useStore((s) => s.ready);
   const toast = useStore((s) => s.toast);
+  const toastAction = useStore((s) => s.toastAction);
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [hash]);
@@ -67,13 +73,18 @@ export function App() {
       {page}
       {showNav && (
         <nav class="tabbar">
-          <a class={tab === 'games' ? 'on' : ''} href="#/games"><Icon name="dice" /><span>Games</span></a>
           <a class={tab === 'lists' ? 'on' : ''} href="#/"><Icon name="list" /><span>Lists</span></a>
           <a class={tab === 'lib' ? 'on' : ''} href="#/lib"><Icon name="book" /><span>Library</span></a>
+          <a class={tab === 'games' ? 'on' : ''} href="#/games"><Icon name="dice" /><span>Games</span></a>
           <a class={tab === 'data' ? 'on' : ''} href="#/data"><Icon name="sync" /><span>Data</span></a>
         </nav>
       )}
-      {toast && <div class="toast">{toast}</div>}
+      {toast && (
+        <div class={'toast' + (toastAction ? ' has-action' : '')} role="status">
+          <span>{toast}</span>
+          {toastAction && <button onClick={() => { toastAction.run(); dismissToast(); }}>{toastAction.label}</button>}
+        </div>
+      )}
     </div>
   );
 }

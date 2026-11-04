@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { back, go } from '../app';
-import { addSel, forceRootOptions, removeSel, uid, unavailable, type Issue, type RForce, type RSel, type Roster } from '../data/engine';
+import { addSel, forceRootOptions, locate, removeSel, uid, unavailable, type Evaluator, type Issue, type RForce, type RSel, type Roster, type Sel } from '../data/engine';
 import type { Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
 import { deleteRoster, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
+import { pick, setUpForce } from '../data/setup';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
 import { rosterText, shareText } from './exporter';
@@ -15,6 +16,7 @@ export function RosterView({ uid: rid }: { uid: string }) {
   const roster = useStore((s) => s.rosters.find((r) => r.uid === rid));
   const { ctl, error, loading } = useRosterCtl(roster);
   if (loading) return <div class="page"><TopBar title={roster?.name ?? 'List'} backTo="/" /><Loading label="Loading army data…" /></div>;
+  if (!roster) return <div class="page"><TopBar title="List" backTo="/" /><p class="muted pad">This list has been deleted.</p></div>;
   if (!ctl) return <div class="page"><TopBar title="List" backTo="/" /><p class="error-text pad">{error}</p></div>;
   return <RosterBody ctl={ctl} />;
 }
@@ -78,6 +80,9 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
   }
   const primaryOf = (o: Opt) => (o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0])?.targetId;
   const catHasOptions = (c: string) => avail.some((o) => primaryOf(o) === c);
+  // only offer "+" when something in the category can still be added (set-up entries are usually one-offs already taken)
+  const canAdd = (c: string) => avail.some((o) => primaryOf(o) === c && roomFor(ctl.ev, o, rf));
+  const setupOnly = (c: string) => avail.every((o) => primaryOf(o) !== c || !isUnitLike(o));
 
   return (
     <section class="force">
@@ -92,21 +97,33 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
       {open && (
         <div class="cats">
           {cats.map((c) => {
-            const units = byCat.get(c) ?? [];
+            const all = byCat.get(c) ?? [];
             const lim = catLimits(ctl, rf, c);
-            if (!units.length && lim.min === 0 && !catHasOptions(c)) return null;
-            if (!units.length && lim.max === 0) return null;
+            // counting-only sections (e.g. Compulsory HQ / Troops) hold no units of their own: their problems show as issues
+            if (!all.length && !catHasOptions(c)) return null;
+            if (!all.length && lim.min === 0 && !catHasOptions(c)) return null;
+            if (!all.length && lim.max === 0) return null;
+            // set-up picks with nothing to choose (e.g. the Legion itself) stay in the list but out of sight
+            const units = all.filter((u) => !silentSetup(ctl.ev, u));
+            if (!units.length && all.length && !lim.bad && !canAdd(c)) return null;
+            const plus = canAdd(c);
+            const showCount = lim.bad || !setupOnly(c);
             return (
               <div class="cat" key={c}>
                 <div class="cat-head">
                   <span class="cat-name">{cleanCat(rf.ctx.categoryName(c))}</span>
-                  <span class={'cat-count' + (lim.bad ? ' bad' : '')}>
-                    {units.reduce((t, u) => t + u.sel.number, 0)}
-                    {(lim.min > 0 || lim.max >= 0) && <small> ({lim.min}–{lim.max < 0 ? '∞' : lim.max})</small>}
-                  </span>
-                  {catHasOptions(c) && <button class="icon-btn sm" aria-label={'Add ' + cleanCat(rf.ctx.categoryName(c))} onClick={() => onAdd(c)}><Icon name="plus" size={20} /></button>}
+                  {showCount && (
+                    <span class={'cat-count' + (lim.bad ? ' bad' : '')}>
+                      {all.reduce((t, u) => t + u.sel.number, 0)}
+                      {(lim.min > 0 || lim.max >= 0) && <small> ({lim.min}–{lim.max < 0 ? '∞' : lim.max})</small>}
+                    </span>
+                  )}
+                  {plus && <button class="icon-btn sm" aria-label={'Add ' + cleanCat(rf.ctx.categoryName(c))} onClick={() => onAdd(c)}><Icon name="plus" size={20} /></button>}
                 </div>
-                {units.map((u) => <UnitRow key={u.sel.uid} ctl={ctl} u={u} />)}
+                {units.map((u) => {
+                  const ch = inlineChoice(ctl.ev, u);
+                  return ch ? <ChoiceRow key={u.sel.uid} ctl={ctl} u={u} choice={ch} /> : <UnitRow key={u.sel.uid} ctl={ctl} u={u} />;
+                })}
               </div>
             );
           })}
@@ -140,17 +157,165 @@ export function unitSummary(u: RSel): string {
   return [...counts].slice(0, 6).map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(' · ');
 }
 
+const isUnitLike = (o: Opt) => o.node.type === 'unit' || o.node.type === 'model';
+
+function visibleOpts(ev: Evaluator, rs: RSel) {
+  return rs.force.ctx.options(rs.node).filter((o) => {
+    const e = ev.optionEff(o, rs, rs.force);
+    return !e.hidden && !unavailable(e);
+  });
+}
+
+/** a set-up entry (not a unit) with no choices in it at all, e.g. the Legion picked when the list was made */
+function silentSetup(_ev: Evaluator, rs: RSel) {
+  return !isUnitLike(rs.opt) && !rs.total && rs.force.ctx.options(rs.node).length === 0;
+}
+
+/** room for another of this root option in the force (its own max, ignoring category limits) */
+function roomFor(ev: Evaluator, o: Opt, rf: RForce) {
+  const e = ev.optionEff(o, null, rf);
+  if (e.hidden || unavailable(e)) return false;
+  const have = rf.roots.filter((r) => r.opt.key === o.key).reduce((t, r) => t + r.sel.number, 0);
+  for (const c of e.constraints) {
+    if (c.type !== 'max' || c.field !== 'selections' || c.value < 0) continue;
+    if ((c.scope === 'parent' || c.scope === 'force') && have >= c.value) return false;
+  }
+  return ev.roomBeyondParent(o, null, rf, e);
+}
+
+/**
+ * A set-up entry that is just "pick one of a few" (e.g. Allegiance: Loyalist / Traitor) is shown as buttons
+ * right on the list, instead of a row that opens a page.
+ */
+function inlineChoice(ev: Evaluator, rs: RSel): { g: Opt; members: Opt[] } | null {
+  if (isUnitLike(rs.opt) || rs.total) return null;
+  const opts = visibleOpts(ev, rs);
+  if (opts.length !== 1 || opts[0].kind !== 'group') return null;
+  const g = opts[0];
+  if (ev.limits(g, rs, rs.force).max !== 1) return null;
+  const members = g.members.filter((m) => {
+    const e = ev.optionEff(m, rs, rs.force);
+    return !e.hidden && !unavailable(e);
+  });
+  if (members.length < 2 || members.length > 4) return null;
+  if (members.some((m) => m.kind !== 'entry' || rs.force.ctx.options(m.node).length > 0)) return null;
+  return { g, members };
+}
+
+function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: Opt; members: Opt[] } }) {
+  return (
+    <div class="choice-row" role="radiogroup" aria-label={u.eff.name}>
+      {choice.members.map((m) => {
+        const on = u.children.some((c) => c.opt.key === m.key);
+        return (
+          <button role="radio" aria-checked={on} class={on ? 'on' : ''} onClick={() => {
+            if (on) return;
+            ctl.mutate((r) => pick(r, ctl.contexts, u, choice.g, m));
+          }}>{ctl.ev.optionEff(m, u, u.force).name}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function reUid(s: Sel): Sel {
+  s.uid = uid();
+  s.children.forEach(reUid);
+  return s;
+}
+
+const SWIPE = 90; // px to trigger
+
+/** Tap to open. Swipe left to delete (with Undo), swipe right to duplicate. */
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
   const bad = ctl.ev.issues.some((i) => i.level === 'error' && i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)));
   const summary = unitSummary(u);
+  const [dx, setDx] = useState(0);
+  const drag = useRef<{ x: number; y: number; id: number; swiping: boolean; moved: boolean } | null>(null);
+  const to = `/r/${ctl.roster.uid}/u/${u.sel.uid}`;
+  const swipeable = isUnitLike(u.opt);
+
+  const remove = () => {
+    const loc = locate(ctl.roster, u.sel.uid);
+    if (!loc) return;
+    const idx = loc.list.indexOf(loc.sel);
+    const saved = structuredClone(loc.sel);
+    const forceUid = loc.force.uid;
+    ctl.mutate((r) => removeSel(r, u.sel.uid));
+    toast(`Removed ${u.eff.name}`, {
+      label: 'Undo',
+      run: () => ctl.mutate((r) => {
+        const f = r.forces.find((x) => x.uid === forceUid);
+        if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, saved);
+      }),
+    });
+  };
+  const duplicate = () => {
+    ctl.mutate((r) => {
+      const loc = locate(r, u.sel.uid);
+      if (!loc) return;
+      loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, reUid(structuredClone(loc.sel)));
+    });
+    toast(`Duplicated ${u.eff.name}`);
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (!swipeable || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId, swiping: false, moved: false };
+  };
+  const onMove = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    const my = e.clientY - d.y;
+    if (!d.swiping) {
+      if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { drag.current = null; return; } // scrolling
+      if (Math.abs(mx) < 12) return;
+      d.swiping = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+    d.moved = true;
+    setDx(Math.max(-160, Math.min(160, mx)));
+  };
+  const onUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d?.swiping) return;
+    const x = dx;
+    setDx(0);
+    if (x <= -SWIPE) remove();
+    else if (x >= SWIPE) duplicate();
+    // swallow the click that follows a swipe
+    suppressClick.current = true;
+    setTimeout(() => (suppressClick.current = false), 50);
+  };
+  const suppressClick = useRef(false);
+
   return (
-    <Link class={'unit-row' + (bad ? ' bad' : '')} to={`/r/${ctl.roster.uid}/u/${u.sel.uid}`}>
-      <div class="ur-main">
-        <div class="ur-name">{u.sel.number > 1 ? `${u.sel.number}× ` : ''}{u.eff.name}</div>
-        {summary && <div class="ur-sub">{summary}</div>}
-      </div>
-      <span class="ur-pts">{fmtN(u.total)}</span>
-    </Link>
+    <div class={'swipe' + (dx > 0 ? ' dup' : dx < 0 ? ' del' : '')}>
+      {swipeable && (
+        <div class="swipe-bg" aria-hidden="true">
+          <span class={'sb-dup' + (dx >= SWIPE ? ' armed' : '')}><Icon name="copy" size={18} /> Duplicate</span>
+          <span class={'sb-del' + (dx <= -SWIPE ? ' armed' : '')}>Delete <Icon name="trash" size={18} /></span>
+        </div>
+      )}
+      <a
+        class={'unit-row' + (bad ? ' bad' : '') + (dx ? ' dragging' : '')}
+        href={'#' + to}
+        style={dx ? { transform: `translateX(${dx}px)` } : undefined}
+        onClick={(e) => { e.preventDefault(); if (!suppressClick.current) go(to); }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={() => { drag.current = null; setDx(0); }}
+      >
+        <div class="ur-main">
+          <div class="ur-name">{u.sel.number > 1 ? `${u.sel.number}× ` : ''}{u.eff.name}</div>
+          {summary && <div class="ur-sub">{summary}</div>}
+        </div>
+        {(u.total || swipeable) ? <span class="ur-pts">{fmtN(u.total)}</span> : <Icon name="chev" size={18} />}
+      </a>
+    </div>
   );
 }
 
@@ -177,7 +342,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
     let newUid = '';
     ctl.mutate((r) => { newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId); });
     onClose();
-    go(`/r/${ctl.roster.uid}/u/${newUid}`);
+    go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
   };
 
   return (
@@ -210,7 +375,7 @@ function IssuesSheet({ issues, ctl, onClose }: { issues: Issue[]; ctl: RosterCtl
           <li class={i.level}>
             <Icon name="warn" size={16} />
             {i.selUid ? (
-              <a href={`#/r/${ctl.roster.uid}/u/${i.selUid}`} onClick={(e) => { e.preventDefault(); onClose(); go(`/r/${ctl.roster.uid}/u/${i.selUid}`); }}>{i.message}</a>
+              <a href={`#/r/${ctl.roster.uid}/u/${i.selUid}`} onClick={(e) => { e.preventDefault(); onClose(); go(`/r/${ctl.roster.uid}/u/${i.selUid}`, true); }}>{i.message}</a>
             ) : <span>{i.message}</span>}
           </li>
         ))}
@@ -244,7 +409,7 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
           if (!confirm(`Delete "${ctl.roster.name}"? This can't be undone.`)) return;
           await deleteRoster(ctl.roster.uid);
           onClose();
-          back('/');
+          go('/', true);
         }}><Icon name="trash" /> Delete list</button>
       </div>
     </Sheet>
@@ -289,8 +454,14 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
       {!forces ? <Loading /> : (
         <div class="pick-list compact">
           {forces.map((f) => (
-            <button class="pick" onClick={() => {
-              ctl.mutate((r) => r.forces.push({ uid: uid(), forceEntryId: f.id, catalogueId: catId!, selections: [] }));
+            <button class="pick" onClick={async () => {
+              const ctx = await getContext(repo, catId!);
+              const contexts = new Map(ctl.contexts).set(catId!, ctx);
+              ctl.mutate((r) => {
+                const fu = uid();
+                r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId!, selections: [] });
+                try { setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId!)); } catch (e) { console.warn('set-up skipped', e); }
+              });
               onClose();
             }}><span><b>{f.name}</b></span><Icon name="plus" /></button>
           ))}

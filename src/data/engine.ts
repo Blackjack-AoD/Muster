@@ -675,10 +675,13 @@ export function addSel(
   const list = parentUid ? locate(roster, parentUid)!.sel.children : force.selections;
   list.push(s);
   fillDefaults(roster, contexts, s.uid, 0);
+  // second pass: one model's picks can unlock another's (e.g. a sergeant's weapon mirrors the squad's choice)
+  fillDefaults(roster, contexts, s.uid, 0, true);
   return s.uid;
 }
 
-function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: string, depth: number) {
+/** revisit: also walk into children that were already there (second pass over a newly added unit) */
+function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: string, depth: number, revisit = false) {
   if (depth > 12) return;
   const added: string[] = [];
   // Fill one step at a time and re-evaluate: limits often change once a default is picked
@@ -753,7 +756,8 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
     if (walk(ctx.options(rs.node))) changed = true;
     if (!changed) break;
   }
-  for (const a of added) fillDefaults(roster, contexts, a, depth + 1);
+  const next = revisit ? (locate(roster, selUid)?.sel.children.map((c) => c.uid) ?? []) : added;
+  for (const a of next) fillDefaults(roster, contexts, a, depth + 1, revisit);
 }
 
 export function defaultMember(group: Opt, visible: Opt[], strict = false, override?: string): Opt | undefined {

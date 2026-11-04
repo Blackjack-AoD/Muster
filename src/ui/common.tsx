@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect } from 'preact/hooks';
-import { back, go } from '../app';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { back, go, pushSheetState } from '../app';
 import { Icon } from './Icon';
 
 export function Link({ to, replace, class: cls, children }: { to: string; replace?: boolean; class?: string; children: ComponentChildren }) {
@@ -31,12 +31,47 @@ export function TopBar({ title, sub, onBack, backTo, right }: {
   );
 }
 
+let sheetSeq = 0;
+/** a sheet that just closed itself: its history step is released a moment later unless another sheet takes it over */
+let releasing: { cancelled: boolean } | null = null;
+
 export function Sheet({ title, onClose, children, full }: { title: ComponentChildren; onClose: () => void; children: ComponentChildren; full?: boolean }) {
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+  const close = useRef(onClose);
+  close.current = onClose;
+  // layout effect: runs in the same commit as a previous sheet's cleanup, so one sheet can hand its step to the next
+  useLayoutEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
     addEventListener('keydown', k);
     document.body.classList.add('locked');
-    return () => { removeEventListener('keydown', k); document.body.classList.remove('locked'); };
+    // The sheet gets its own history step, so the phone's back button closes it instead of leaving the page.
+    // Navigating from inside a sheet should use go(path, true), which replaces this step.
+    const id = ++sheetSeq;
+    if (releasing) {
+      releasing.cancelled = true;
+      releasing = null;
+      history.replaceState({ sheet: id }, '', location.href);
+    } else pushSheetState(id);
+    let popped = false;
+    const onPop = () => {
+      if (history.state?.sheet === id) return;
+      popped = true;
+      close.current();
+    };
+    addEventListener('popstate', onPop);
+    return () => {
+      removeEventListener('keydown', k);
+      removeEventListener('popstate', onPop);
+      document.body.classList.remove('locked');
+      // closed with the X, a tap outside or a choice: take our history step back off
+      if (!popped && history.state?.sheet === id) {
+        const r = (releasing = { cancelled: false });
+        queueMicrotask(() => {
+          if (r.cancelled) return;
+          releasing = null;
+          history.back();
+        });
+      }
+    };
   }, []);
   return (
     <div class="sheet-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>

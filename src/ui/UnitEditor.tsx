@@ -6,6 +6,7 @@ import type { Profile } from '../data/model';
 import type { RosterCtl } from '../store';
 import { Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
+import { onOffPair, pick } from '../data/setup';
 import { cleanCat } from './RosterView';
 
 export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: string; backTo: string }) {
@@ -22,25 +23,39 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
   const isRoot = !rs.parent;
   const issues = ctl.ev.issues.filter((i) => i.level === 'error' && i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)));
   const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
+  const unitLike = rs.node.type === 'unit' || rs.node.type === 'model';
+  // set-up entries (e.g. Expanded Army Lists) often have no profiles or rules: then there's only Options, and no tabs
+  const hasStats = ctl.ev.profilesFor(rs).length > 0;
+  const hasRules = ctl.ev.rulesFor(rs).length > 0;
+  const tabs = (['options', 'stats', 'rules'] as const).filter((t) => t === 'options' || (t === 'stats' ? hasStats : hasRules));
 
   return (
     <div class="page unit-page">
-      <TopBar title={rs.eff.name} sub={cat} backTo={backTo} right={<Pts v={rs.total} />} />
-      <div class="tabs" role="tablist">
-        {(['options', 'stats', 'rules'] as const).map((t) => (
-          <button role="tab" aria-selected={tab === t} class={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'options' ? 'Options' : t === 'stats' ? 'Profiles' : 'Rules'}
-          </button>
-        ))}
-      </div>
+      <TopBar title={rs.eff.name} sub={cat} backTo={backTo} right={unitLike || rs.total ? <Pts v={rs.total} /> : null} />
+      {tabs.length > 1 && (
+        <div class="tabs" role="tablist">
+          {tabs.map((t) => (
+            <button role="tab" aria-selected={tab === t} class={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+              {t === 'options' ? 'Options' : t === 'stats' ? 'Profiles' : 'Rules'}
+            </button>
+          ))}
+        </div>
+      )}
       {issues.length > 0 && tab === 'options' && (
         <ul class="issues inline">{issues.map((i) => <li class="error"><Icon name="warn" size={16} /><span>{i.message.split(' › ').pop()}</span></li>)}</ul>
       )}
       {tab === 'options' && (
         <>
           <ProfileStrip ctl={ctl} rs={rs} />
-          <OptList ctl={ctl} rs={rs} opts={rs.force.ctx.options(rs.node)} depth={0} />
-          {!ctl.scratch && isRoot && (
+          {switchesOnly(ctl, rs) ? (
+            <div class="opts switches">{switchesOnly(ctl, rs)!.map(({ g, pair }) => <ToggleRow key={g.key} ctl={ctl} rs={rs} g={g} pair={pair} />)}</div>
+          ) : (
+            <OptList ctl={ctl} rs={rs} opts={rs.force.ctx.options(rs.node)} depth={0} />
+          )}
+          {!hasVisibleOptions(ctl, rs) && (
+            <p class="muted pad">Nothing to choose here yet. Some choices open up once other units or options are in the list (for example, a Rite of War needs a Primarch, or a character with Master of the Legion).</p>
+          )}
+          {!ctl.scratch && isRoot && unitLike && (
             <div class="unit-actions">
               <button class="btn" onClick={() => {
                 ctl.mutate((r) => {
@@ -59,6 +74,48 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
       {tab === 'rules' && <Rules ctl={ctl} rs={rs} />}
     </div>
   );
+}
+
+type Pair = { on: Opt; off: Opt };
+
+function ToggleRow({ ctl, rs, g, pair }: { ctl: RosterCtl; rs: RSel; g: Opt; pair: Pair }) {
+  const on = ctl.ev.selected(g, rs, rs.force).some((c) => c.opt.key === pair.on.key);
+  return (
+    <button class={'toggle-row' + (on ? ' on' : '')} role="switch" aria-checked={on}
+      onClick={() => ctl.mutate((r) => pick(r, ctl.contexts, rs, g, on ? pair.off : pair.on))}>
+      <span class="o-name">{ctl.ev.optionEff(g, rs, rs.force).name}</span>
+      <span class="switch"><span class="knob" /></span>
+    </button>
+  );
+}
+
+/**
+ * When everything an entry offers is On/Off switches (possibly tucked inside headed groups, like Expanded Army Lists),
+ * list the switches flat, without the group headings.
+ */
+function switchesOnly(ctl: RosterCtl, rs: RSel): { g: Opt; pair: Pair }[] | null {
+  const out: { g: Opt; pair: Pair }[] = [];
+  const visible = (o: Opt) => {
+    const e = ctl.ev.optionEff(o, rs, rs.force);
+    return !e.hidden && !unavailable(e);
+  };
+  const walk = (opts: Opt[]): boolean => {
+    for (const o of opts.filter(visible)) {
+      if (o.kind !== 'group') return false;
+      const pair = onOffPair(o.members.filter(visible));
+      if (pair) out.push({ g: o, pair });
+      else if (!walk(o.members)) return false;
+    }
+    return true;
+  };
+  return walk(rs.force.ctx.options(rs.node)) && out.length > 1 ? out : null;
+}
+
+function hasVisibleOptions(ctl: RosterCtl, rs: RSel) {
+  return rs.force.ctx.options(rs.node).some((o) => {
+    const e = ctl.ev.optionEff(o, rs, rs.force);
+    return (!e.hidden && !unavailable(e)) || ctl.ev.selected(o, rs, rs.force).length > 0;
+  });
 }
 
 function under(r: RSel, selUid: string): boolean {
@@ -105,14 +162,22 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
   const { min, max } = ev.limits(g, rs, rs.force, eff);
   const [open, setOpen] = useState(depth > 0 ? n > 0 || min > 0 : true);
   if ((eff.hidden || unavailable(eff)) && !n) return null;
+  // "X On" / "X Off" pair: a single switch
+  const pair = onOffPair(g.members.filter((m) => {
+    const e = ev.optionEff(m, rs, rs.force);
+    return !e.hidden && !unavailable(e);
+  }));
+  if (pair) return <ToggleRow ctl={ctl} rs={rs} g={g} pair={pair} />;
   const radio = max === 1 && g.members.every((m) => m.kind === 'entry');
+  // a group of On/Off switches needs no "· n" count
+  const allSwitches = g.members.length > 0 && g.members.every((m) => m.kind === 'group' && onOffPair(m.members));
   const bad = (min > 0 && n < min) || (max >= 0 && n > max);
 
   return (
     <div class="group">
       <button class="group-head" onClick={() => setOpen(!open)}>
         <span class="g-name">{eff.name}</span>
-        <span class={'g-lim' + (bad ? ' bad' : '')}>{limitText(min, max)}{max !== 1 && n ? ` · ${n}` : ''}</span>
+        <span class={'g-lim' + (bad ? ' bad' : '')}>{limitText(min, max)}{max !== 1 && n && !allSwitches ? ` · ${n}` : ''}</span>
         <Icon name={open ? 'down' : 'chev'} size={16} />
       </button>
       {open && (

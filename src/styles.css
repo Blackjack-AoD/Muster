@@ -382,3 +382,65 @@ input:focus { border-color: var(--brass-dim); }
 .rule-ver + .rule-ver { border-top: 1px solid var(--line); padding-top: 12px; }
 .rule summary small { font-weight: 500; font-size: 12.5px; }
 .pick.radio > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* library unit page: stat blocks that fit the screen width */
+.lib-unit .unit-models { margin: 12px 0 0; }
+.statblock { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.stattable { width: 100%; table-layout: fixed; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.stattable th {
+  background: var(--card2); color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 7px 0; text-align: center; overflow: hidden; text-overflow: clip; white-space: nowrap;
+}
+.stattable td { text-align: center; padding: 2px 0 9px; font-size: 14.5px; white-space: nowrap; overflow: hidden; }
+.stattable.dense th { font-size: 9.5px; letter-spacing: 0; }
+.stattable.dense td { font-size: 13px; }
+.stattable tbody + tbody .sb-name td { border-top: 1px solid var(--line); }
+.stattable .sb-name td { text-align: left; padding: 9px 12px 4px; white-space: normal; font-size: 14.5px; }
+.stattable .sb-name b { font-weight: 600; color: var(--brass2); }
+.sb-long { font-size: 13px; color: #cfccc4; margin-top: 2px; }
+.statcards .pcard { margin: 0 0 8px; }
+.lib-unit .rules { padding-top: 0; }
+.lib-unit .rules .rule:first-child, .lib-unit .rules .search:first-child { margin-top: 0; }
+.lib-note { margin: 18px 0 28px; }
+.lib-unit .rules { padding-top: 6px; }
+.lib-unit .rules .rule:first-child { margin-top: 8px; }
+
+/* set-up entries on the list: inline single choice (e.g. Loyalist / Traitor) */
+.choice-row { display: flex; gap: 6px; margin: 0 10px 8px; padding: 4px; border-radius: 12px; background: var(--card2); }
+.choice-row button {
+  flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 600; font-size: 15px;
+}
+.choice-row button.on { background: linear-gradient(180deg, var(--brass2), var(--brass)); color: #1a1408; }
+
+/* On / Off switches (Expanded Army Lists) */
+.toggle-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0 4px;
+  background: none; border: 0; color: var(--text); text-align: left; font-size: 15px;
+}
+.toggle-row .o-name { flex: 1; }
+.switch { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: var(--line); transition: background 0.15s; }
+.switch .knob { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.toggle-row.on .switch { background: var(--brass-dim); }
+.toggle-row.on .knob { transform: translateX(18px); background: var(--brass2); }
+
+/* swipe a unit: right = duplicate, left = delete */
+.swipe { position: relative; margin: 0 10px 6px; }
+.swipe .unit-row { margin: 0; position: relative; z-index: 1; touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: transform 0.18s ease; }
+.swipe .unit-row.dragging { transition: none; }
+.swipe-bg {
+  position: absolute; inset: 0; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; font-weight: 600; font-size: 14px; visibility: hidden;
+}
+.swipe.dup .swipe-bg { visibility: visible; background: rgba(201, 164, 92, 0.18); }
+.swipe.del .swipe-bg { visibility: visible; background: rgba(224, 86, 79, 0.18); }
+.swipe-bg span { display: flex; align-items: center; gap: 6px; opacity: 0.55; }
+.swipe.dup .sb-del, .swipe.del .sb-dup { visibility: hidden; }
+.sb-dup { color: var(--brass2); }
+.sb-del { color: var(--red); }
+.swipe-bg span.armed { opacity: 1; }
+
+/* toast with an action button */
+.toast.has-action { display: flex; align-items: center; gap: 14px; padding-right: 8px; }
+.toast button { background: none; border: 0; color: var(--brass2); font-weight: 700; min-height: 36px; padding: 0 10px; }
+.opts.switches { padding: 8px 16px 0; }
+.opts.switches .toggle-row + .toggle-row { border-top: 1px solid var(--line); }

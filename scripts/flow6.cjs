@@ -20,9 +20,9 @@ module.exports = async (page, ctx, shots) => {
   await page.locator('.pick', { hasText: 'Deathwatch' }).first().click();
   await page.getByPlaceholder('Search units').fill('veterans');
   await page.locator('.pick', { hasText: /^Veterans/ }).first().click();
-  await page.waitForSelector('.overview', { timeout: 30000 });
+  await page.waitForSelector('.lib-unit .ov-sec', { timeout: 30000 });
   console.log('controls on library unit page:', await page.locator('.unit-page .stepper, .unit-page button.check, .unit-page button.radio, .mini').count());
-  console.log('loadout:', (await page.locator('.loadout li').allInnerTexts()).slice(0, 6));
+  console.log('models line:', await page.locator('.unit-models').count());
   await page.screenshot({ path: `${shots}/32-lib-unit.png` });
   await page.screenshot({ path: `${shots}/33-lib-unit-full.png`, fullPage: true });
   await page.getByRole('tab', { name: 'Rules' }).click();

@@ -26,7 +26,7 @@ module.exports = async (page, ctx, shots) => {
   await page.locator('.pick', { hasText: /^Space Marines: Codex/ }).first().click();
   await page.getByPlaceholder('Search units').fill('tactical');
   await page.locator('.pick', { hasText: 'Tactical Squad' }).first().click();
-  await page.waitForSelector('.unit-page .overview', { timeout: 30000 });
+  await page.waitForSelector('.lib-unit .ov-sec', { timeout: 30000 });
   console.log('40k preview pts:', await page.locator('.topbar .pts').innerText());
   await page.screenshot({ path: `${shots}/22-lib-40k.png` });
 };

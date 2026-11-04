@@ -1,15 +1,15 @@
-import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { Context, Opt } from '../data/catalog';
-import { addSel, rootOptionsCached, uid, unavailable, type Roster, type RSel } from '../data/engine';
+import type { Profile } from '../data/model';
+import { addSel, rootOptionsCached, uid, type Roster, type RSel } from '../data/engine';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
-import { useRosterCtl, useStore, type RosterCtl } from '../store';
+import { useRosterCtl, useStore } from '../store';
 import { Empty, Link, Loading, Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
-import { ProfileTable, Profiles, Rules, limitText } from './UnitEditor';
+import { Rules } from './UnitEditor';
 
 const enc = (repo: string) => repo.split('/').map(encodeURIComponent).join('/');
 
@@ -214,116 +214,105 @@ function UnitPreview({ repo, catId, unitKey }: { repo: string; catId: string; un
     return r;
   }, [ctx, unitKey]);
   const { ctl, error } = useRosterCtl(scratch, true);
-  const [tab, setTab] = useState<'overview' | 'profiles' | 'rules'>('overview');
+  const [tab, setTab] = useState<'profiles' | 'rules'>('profiles');
   const backTo = `/lib/${enc(repo)}/${encodeURIComponent(catId)}`;
   if (err || error) return <div class="page"><TopBar title="Unit" backTo={backTo} /><p class="error-text pad">{err || error}</p></div>;
   if (ctx && !scratch) return <div class="page"><TopBar title="Unit" backTo={backTo} /><p class="muted pad">This unit isn't in the data any more.</p></div>;
   const rs = ctl?.ev.forces[0]?.roots[0];
   if (!ctl || !rs) return <div class="page"><TopBar title="Unit" backTo={backTo} /><Loading /></div>;
   const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
+  const profiles = ctl.ev.profilesFor(rs);
+  // unit stats first, then weapons, then anything else (wargear, psychic powers...)
+  const types = [...new Set(profiles.map((p) => p.typeName))];
+  const rank = (t: string) => (/unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t) ? 0 : /weapon/i.test(t) ? 1 : 2);
+  types.sort((a, b) => rank(a) - rank(b));
+  const models = unitModels(rs);
   return (
-    <div class="page unit-page">
+    <div class="page unit-page lib-unit">
       <TopBar title={rs.eff.name} sub={cat} backTo={backTo} right={rs.total ? <Pts v={rs.total} /> : null} />
       <div class="tabs" role="tablist">
-        {(['overview', 'profiles', 'rules'] as const).map((t) => (
-          <button role="tab" aria-selected={tab === t} class={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'overview' ? 'Overview' : t === 'profiles' ? 'Profiles' : 'Rules'}
-          </button>
-        ))}
+        <button role="tab" aria-selected={tab === 'profiles'} class={tab === 'profiles' ? 'on' : ''} onClick={() => setTab('profiles')}>Profiles</button>
+        <button role="tab" aria-selected={tab === 'rules'} class={tab === 'rules' ? 'on' : ''} onClick={() => setTab('rules')}>Rules</button>
       </div>
-      {tab === 'overview' && <Overview ctl={ctl} rs={rs} />}
-      {tab === 'profiles' && <Profiles ctl={ctl} profiles={ctl.ev.profilesFor(rs)} />}
+      {tab === 'profiles' && (
+        <>
+          {models && <p class="muted small pad-x unit-models">{models}</p>}
+          {types.map((t) => (
+            <section class="ov-sec" key={t}>
+              <h3>{rank(t) === 1 ? 'Standard weapons' : t}</h3>
+              <StatBlock profiles={profiles.filter((p) => p.typeName === t)} />
+            </section>
+          ))}
+          {!types.length && <p class="muted pad">No profiles for this unit.</p>}
+          <p class="muted small pad-x lib-note">Wargear choices and squad size are on the Lists tab once the unit is in a list.</p>
+        </>
+      )}
       {tab === 'rules' && <Rules ctl={ctl} rs={rs} />}
     </div>
   );
 }
 
-function Overview({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
-  const all = ctl.ev.profilesFor(rs);
-  const types = [...new Set(all.map((p) => p.typeName))];
-  const main = types.find((t) => /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t)) ?? types[0];
-  const stats = all.filter((p) => p.typeName === main && p.characteristics.every((c) => c.value.length < 30));
+/** "5× Veteran" — the models in the standard unit */
+function unitModels(rs: RSel): string {
+  const counts = new Map<string, number>();
+  const walk = (r: RSel, mult: number) => {
+    for (const c of r.children) {
+      const n = c.sel.number * mult;
+      if (c.node.type === 'model') counts.set(c.eff.name, (counts.get(c.eff.name) ?? 0) + n);
+      walk(c, n);
+    }
+  };
+  walk(rs, rs.sel.number);
+  return [...counts].map(([name, n]) => `${n}× ${name}`).join(' · ');
+}
+
+const ABBR: Record<string, string> = {
+  strength: 'S', toughness: 'T', wounds: 'W', attacks: 'A', initiative: 'I', leadership: 'Ld', movement: 'M', move: 'M',
+  'weapon skill': 'WS', 'ballistic skill': 'BS', save: 'Sv', 'armour save': 'Sv', 'invulnerable save': 'Inv',
+  'front armour': 'FA', 'side armour': 'SA', 'rear armour': 'RA', 'hull points': 'HP', 'armour penetration': 'AP',
+  cool: 'Cl', willpower: 'Wp', intelligence: 'Int', 'structure points': 'SP', 'void shields': 'VS',
+};
+/** short column header for the stat grid; unknown long names are left alone (and stay out of the grid) */
+function abbr(c: string) {
+  return c.length <= 5 ? c : ABBR[c.toLowerCase()] ?? c;
+}
+
+/**
+ * Profiles laid out to fit a phone without sideways scrolling: short stats in a fixed grid,
+ * the profile name on its own line, and wordy fields (unit type, weapon type, abilities) as text beneath.
+ */
+function StatBlock({ profiles }: { profiles: Profile[] }) {
+  const cols = profiles[0].characteristics.map((c) => c.name);
+  const val = (p: Profile, c: string) => p.characteristics.find((x) => x.name === c)?.value ?? '';
+  // a column goes in the grid when its values are short; long headers get abbreviated ("Strength" → "S")
+  const short = cols.filter((c) => profiles.every((p) => val(p, c).length <= 5) && (c.length <= 5 || abbr(c) !== c));
+  const long = cols.filter((c) => !short.includes(c));
+  // nothing fits a grid (e.g. wargear descriptions): show as text cards
+  if (!short.length) {
+    return (
+      <div class="statcards">
+        {profiles.map((p) => (
+          <div class="pcard"><b>{p.name}</b>{long.map((c) => val(p, c) && <p><span class="muted">{c}:</span> {val(p, c)}</p>)}</div>
+        ))}
+      </div>
+    );
+  }
   return (
-    <div class="overview">
-      {stats.length > 0 && <div class="strip"><ProfileTable profiles={stats} /></div>}
-      <section class="ov-sec">
-        <h3>Standard loadout</h3>
-        <Loadout rs={rs} />
-      </section>
-      <section class="ov-sec">
-        <h3>Options</h3>
-        <OptionsInfo ctl={ctl} rs={rs} depth={0} />
-      </section>
-      <p class="muted small pad-x">To change squad size or wargear, add this unit to a list on the Lists tab.</p>
+    <div class="statblock">
+      <table class={'stattable' + (short.length > 10 ? ' dense' : '')}>
+        <thead><tr>{short.map((c) => <th title={c}>{abbr(c)}</th>)}</tr></thead>
+        {profiles.map((p) => (
+          <tbody>
+            <tr class="sb-name"><td colSpan={short.length}>
+              <b>{p.name}</b>
+              {/* type fields read fine bare ("Infantry", "Assault 2"); anything else gets its label */}
+              {long.map((c) => val(p, c) && <div class="sb-long">{/type/i.test(c) ? '' : <span class="muted">{c}: </span>}{val(p, c)}</div>)}
+            </td></tr>
+            <tr class="sb-vals">{short.map((c) => <td>{val(p, c) || '–'}</td>)}</tr>
+          </tbody>
+        ))}
+      </table>
     </div>
   );
 }
 
-/** what the unit comes with by default, as totals (5 models with a bolter = 5× Bolter) */
-function Loadout({ rs }: { rs: RSel }) {
-  const lines: { depth: number; text: string; pts: number }[] = [];
-  const walk = (r: RSel, depth: number, mult: number) => {
-    for (const c of r.children) {
-      const k = c.sel.number * mult;
-      lines.push({ depth, text: `${k > 1 ? k + '× ' : ''}${c.eff.name}`, pts: c.total * mult });
-      walk(c, depth + 1, k);
-    }
-  };
-  walk(rs, 0, rs.sel.number);
-  if (!lines.length) return <p class="muted small">Nothing beyond the unit itself.</p>;
-  return (
-    <ul class="loadout">
-      {lines.map((l) => <li style={{ paddingLeft: `${l.depth * 16}px` }}>{l.text}{l.pts ? <span class="o-pts">{fmtN(l.pts)}</span> : null}</li>)}
-    </ul>
-  );
-}
-
-/** the choices a unit offers, as plain text: groups with their limits, options with their cost */
-function OptionsInfo({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
-  const { ev } = ctl;
-  const visible = (o: Opt) => {
-    const e = ev.optionEff(o, rs, rs.force);
-    return !e.hidden && !unavailable(e);
-  };
-  const row = (o: Opt): ComponentChildren => {
-    const e = ev.optionEff(o, rs, rs.force);
-    const { min, max } = ev.limits(o, rs, rs.force, e);
-    const lim = limitText(min, max);
-    if (o.kind === 'group') {
-      const members = o.members.filter(visible);
-      if (!members.length) return null;
-      return (
-        <li class="oi-group">
-          <div class="oi-head"><b>{e.name}</b>{lim && <span class="muted"> · {lim}</span>}</div>
-          <ul>{members.map(row)}</ul>
-        </li>
-      );
-    }
-    const cost = e.costs.get(ev.pointsTypeId);
-    return (
-      <li>
-        <span>{e.name}{lim && lim !== 'up to 1' && lim !== 'pick 1' ? <span class="muted"> ({lim})</span> : null}</span>
-        {cost ? <span class="o-pts">{cost > 0 ? '+' : ''}{fmtN(cost)}{rs.sel.number > 1 ? <small> ea</small> : null}</span> : null}
-      </li>
-    );
-  };
-  const opts = rs.force.ctx.options(rs.node).filter(visible);
-  // the unit's models carry their own choices (weapons per model)
-  const kids = depth < 3 ? rs.children.filter((c) => rs.force.ctx.options(c.node).some((o) => {
-    const e = ev.optionEff(o, c, c.force);
-    return !e.hidden && !unavailable(e);
-  })) : [];
-  const seen = new Set<string>();
-  if (!opts.length && !kids.length) return depth ? null : <p class="muted small">No options.</p>;
-  return (
-    <>
-      {opts.length > 0 && <ul class="opt-info">{opts.map(row)}</ul>}
-      {kids.filter((c) => !seen.has(c.opt.key) && seen.add(c.opt.key)).map((c) => (
-        <div class="oi-sub">
-          <div class="oi-subhead">{c.eff.name}</div>
-          <OptionsInfo ctl={ctl} rs={c} depth={depth + 1} />
-        </div>
-      ))}
-    </>
-  );
-}
