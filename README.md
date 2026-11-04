@@ -15,15 +15,23 @@ Tools and tasks are managed by [mise](https://mise.jdx.dev), which installs the 
 ```
 mise tasks                                 # list every task
 mise run dev                               # local dev server
-mise run typecheck                         # type-check src/
+mise run test                              # unit tests
+mise run coverage                          # unit tests with a coverage report
+mise run typecheck                         # type-check src/ and the tests
 mise run build                             # type-check and build into dist/
 mise run preview                           # build, then serve dist/
-mise run sweep <data-dir> ["<army name filter>"]   # add every unit of every army; list crashes and errors
+mise run sweep <data-dir> ["<army name filter>"]   # look for unit test cases in real data
 mise run clean                             # remove dist/ and node_modules/
 mise exec -- npx tsx scripts/test-engine.ts <data-dir> "<catalogue name>" "<unit>" ...   # engine smoke test
 mise exec -- npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>           # default points per unit, old engine vs new
 ```
-Set `V=1` before `mise run sweep` to print each problem unit.
+
+## Testing
+Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. Pull requests and deploys both run them. They cover the data layer, storage, backups and share links; the UI screens and `src/update.ts` aren't covered yet.
+
+`it.fails` marks a known bug: the test states the right behaviour and passes while the bug exists. Fixing the bug turns it red, and it then becomes a normal `it`.
+
+The sweep finds new cases and never fails a build. It adds every unit of every army in a data folder, then prints the problems it hit with the smallest example of each, and the shapes of condition, repeat, constraint and modifier in that data that no unit test mentions. Turn what it finds into small unit tests.
 
 Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub Actions in repo settings).
 
@@ -46,8 +54,9 @@ Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub
 - Percentage limits (e.g. "no more than 25% of the army's points") are checked against the current total.
 
 ## Tested data
-Every unit of every army has been added and checked (`npm run sweep`) in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e.
+Every unit of every army has been added without a crash in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e. That shows the app copes with the data, not that its points are right; that's what the unit tests are for.
 
 ## Not yet covered
 - **Child forces** (forces inside forces, e.g. Age of Sigmar 4's regiments inside an army). AoS data loads, but lists can't be built properly yet.
-- Some rare BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), and `self`-scoped constraints.
+- Some BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), and `self`-scoped constraints.
+- New Recruit's extensions aren't implemented: modifiers that reach other entries (`affects`, used by 10th edition wargear that changes stats), the `replace`, `floor` and `ceil` modifier types, and scopes such as `root-entry` and `model`.
