@@ -88,7 +88,7 @@ function OptList({ ctl, rs, opts, depth }: { ctl: RosterCtl; rs: RSel; opts: Opt
   );
 }
 
-function limitText(min: number, max: number) {
+export function limitText(min: number, max: number) {
   if (max === 1 && min === 1) return 'pick 1';
   if (max === 1) return 'up to 1';
   if (min > 0 && max > 0) return min === max ? `pick ${min}` : `${min}–${max}`;
@@ -180,9 +180,9 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
   });
 }
 
-function costLabel(ctl: RosterCtl, v: number | undefined) {
+function costLabel(ctl: RosterCtl, v: number | undefined, each = false) {
   if (!v) return null;
-  return <span class="o-pts">{v > 0 ? '+' : ''}{fmtN(v)}</span>;
+  return <span class="o-pts">{v > 0 ? '+' : ''}{fmtN(v)}{each ? <small> ea</small> : null}</span>;
 }
 
 function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
@@ -194,8 +194,19 @@ function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
       return;
     }
     if (mine.length) {
-      const total = mine.reduce((t, c) => t + c.number, 0);
-      mine[mine.length - 1].number = Math.max(1, mine[mine.length - 1].number + (n - total));
+      let diff = n - mine.reduce((t, c) => t + c.number, 0);
+      if (diff > 0) {
+        // new models join the biggest group (they copy its wargear)
+        mine.reduce((a, c) => (c.number > a.number ? c : a)).number += diff;
+        return;
+      }
+      // fewer: take from split-off rows first (the latest), then the main group
+      for (let i = mine.length - 1; i >= 0 && diff < 0; i--) {
+        const take = Math.min(mine[i].number, -diff);
+        mine[i].number -= take;
+        diff += take;
+      }
+      parent.children = parent.children.filter((c) => c.number > 0);
       return;
     }
     addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, n);
@@ -223,12 +234,12 @@ function OptRow({ ctl, rs, o, depth }: { ctl: RosterCtl; rs: RSel; o: Opt; depth
     >
       <span class="box">{n > 0 && <Icon name="check" size={16} />}</span>
       <span class="o-name">{eff.name}</span>
-      {costLabel(ctl, cost)}
+      {costLabel(ctl, cost, rs.sel.number > 1)}
     </button>
   ) : (
     <div class={'stepper-row' + (bad ? ' bad' : '')}>
       <span class="o-name">{eff.name}{max > 1 && <small class="muted"> (max {max})</small>}</span>
-      {costLabel(ctl, cost)}
+      {costLabel(ctl, cost, rs.sel.number > 1)}
       <div class="stepper">
         <button aria-label={'Fewer ' + eff.name} disabled={n <= min} onClick={() => setCount(ctl, rs, o, n - 1)}><Icon name="minus" size={18} /></button>
         <span class={'count' + (n ? ' on' : '')}>{n}</span>
@@ -267,7 +278,7 @@ function RadioRow({ ctl, rs, g, o, required, depth }: { ctl: RosterCtl; rs: RSel
       <button class={'radio' + (on ? ' on' : '')} role="radio" aria-checked={on} onClick={pick}>
         <span class="dot" />
         <span class="o-name">{eff.name}</span>
-        {costLabel(ctl, cost)}
+        {costLabel(ctl, cost, rs.sel.number > 1)}
       </button>
       {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
     </div>
@@ -281,18 +292,61 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
     const e = ctl.ev.optionEff(o, rs, rs.force);
     return (!e.hidden && !unavailable(e)) || ctl.ev.selected(o, rs, rs.force).length;
   });
-  const [open, setOpen] = useState(depth < 1);
+  const siblings = rs.parent ? rs.parent.children.filter((c) => c.opt.key === rs.opt.key) : [];
+  // a model just split off its group opens straight away, ready for its own wargear
+  const [open, setOpen] = useState(depth < 1 || (siblings.length > 1 && siblings.indexOf(rs) > 0));
   if (!visible.length || depth > 6) return null;
+  // offer "Merge" on the later row only, back into an earlier row with identical wargear
+  const twin = siblings.slice(0, siblings.indexOf(rs)).find((c) => sameGear(c.sel, rs.sel));
+  const n = rs.sel.number;
   return (
     <div class="subopts">
-      <button class="sub-head" onClick={() => setOpen(!open)}>
-        <Icon name={open ? 'down' : 'chev'} size={14} />
-        <span>{rs.sel.number > 1 ? `${rs.sel.number}× ` : ''}{rs.eff.name} options</span>
-        {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
-      </button>
+      <div class="sub-bar">
+        <button class="sub-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <Icon name={open ? 'down' : 'chev'} size={14} />
+          <span>{n > 1 ? `${n}× ` : siblings.length > 1 ? "1× " : ""}{rs.eff.name}</span>
+          {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
+        </button>
+        {n > 1 && !ctl.scratch && (
+          <button class="mini" title="Give one model different wargear" onClick={() => splitOne(ctl, rs)}>Split 1</button>
+        )}
+        {twin && !ctl.scratch && (
+          <button class="mini" title="Same wargear as another group: combine them" onClick={() => mergeInto(ctl, rs, twin)}>Merge</button>
+        )}
+      </div>
       {open && <OptList ctl={ctl} rs={rs} opts={visible} depth={depth + 1} />}
     </div>
   );
+}
+
+/** same option tree and counts (ignoring uids) */
+function gearSig(s: Sel): string {
+  return s.children.map((c) => `${c.key}*${c.number}(${gearSig(c)})`).sort().join(',');
+}
+function sameGear(a: Sel, b: Sel) {
+  return gearSig(a) === gearSig(b);
+}
+
+/** Separate one model from a group so it can take its own wargear. */
+function splitOne(ctl: RosterCtl, rs: RSel) {
+  ctl.mutate((r) => {
+    const loc = locate(r, rs.sel.uid);
+    if (!loc || loc.sel.number < 2) return;
+    loc.sel.number--;
+    const copy = reUid(structuredClone(loc.sel));
+    copy.number = 1;
+    loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
+  });
+}
+
+function mergeInto(ctl: RosterCtl, rs: RSel, into: RSel) {
+  ctl.mutate((r) => {
+    const a = locate(r, rs.sel.uid);
+    const b = locate(r, into.sel.uid);
+    if (!a || !b) return;
+    b.sel.number += a.sel.number;
+    a.list.splice(a.list.indexOf(a.sel), 1);
+  });
 }
 
 // ---------- profiles & rules ----------
@@ -322,7 +376,7 @@ export function Profiles({ ctl, profiles }: { ctl: RosterCtl; profiles: Profile[
   );
 }
 
-function ProfileTable({ profiles }: { profiles: Profile[] }) {
+export function ProfileTable({ profiles }: { profiles: Profile[] }) {
   const cols = profiles[0].characteristics.map((c) => c.name);
   return (
     <div class="table-wrap">
@@ -338,7 +392,7 @@ function ProfileTable({ profiles }: { profiles: Profile[] }) {
   );
 }
 
-function Rules({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
+export function Rules({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
   const rules = ctl.ev.rulesFor(rs);
   const [q, setQ] = useState('');
   if (!rules.length) return <p class="muted pad">No special rules listed.</p>;

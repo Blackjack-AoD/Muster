@@ -1,6 +1,7 @@
 // Download .gst/.cat files from a GitHub repo onto the phone, only fetching what changed.
 import { db, type FileMeta, type RepoState } from './db';
 import { readHeader } from './parse';
+import { dataFileText, readZip } from './zip';
 
 export const DEFAULT_REPOS = ['Blackjack-AoD/NRData', 'Blackjack-AoD/M40GA'];
 
@@ -26,7 +27,8 @@ async function gh(path: string) {
   return r.json();
 }
 
-const DATA_FILE = /\.(gst|cat)$/i;
+/** .gst/.cat, or their zipped forms .gstz/.catz, anywhere in the repo */
+export const DATA_FILE = /\.(gst|cat)z?$/i;
 
 export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => void): Promise<RepoState> {
   const existing = (await db.repos()).find((r) => r.repo === repo) ?? { repo, files: [] };
@@ -36,7 +38,8 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
     const branch: string = info.default_branch;
     const br = await gh(`/repos/${repo}/branches/${encodeURIComponent(branch)}`);
     const commit: string = br.commit.sha;
-    const tree = await gh(`/repos/${repo}/git/trees/${commit}`);
+    // recursive: data files in subfolders count too
+    const tree = await gh(`/repos/${repo}/git/trees/${commit}?recursive=1`);
     const remote: { path: string; sha: string; size: number }[] = tree.tree
       .filter((t: { type: string; path: string }) => t.type === 'blob' && DATA_FILE.test(t.path))
       .map((t: { path: string; sha: string; size: number }) => ({ path: t.path, sha: t.sha, size: t.size }));
@@ -57,7 +60,7 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
           try {
             const r = await fetch(url);
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            text = await r.text();
+            text = await dataFileText(f.path, await r.arrayBuffer());
             break;
           } catch (e) {
             if (attempt === 2) throw new Error(`Failed to download ${f.path}: ${(e as Error).message}`);
@@ -89,16 +92,33 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
   }
 }
 
-/** Import .gst/.cat files picked from the phone (no internet needed). */
-export async function importLocalFiles(repo: string, picked: File[]) {
+/**
+ * Import data picked from the phone (no internet needed): .gst/.cat/.gstz/.catz files,
+ * or a .zip of a whole repo (e.g. GitHub's "Download ZIP"). Returns how many data files were added.
+ */
+export async function importLocalFiles(repo: string, picked: File[]): Promise<number> {
   const existing = (await db.repos()).find((r) => r.repo === repo) ?? { repo, files: [] as FileMeta[] };
-  const files = existing.files.filter((f) => !picked.some((p) => p.name === f.path));
+  const incoming: { path: string; text: string; stamp: string }[] = [];
   for (const p of picked) {
-    if (!DATA_FILE.test(p.name)) continue;
-    const text = await p.text();
-    await db.putFile(repo, p.name, text);
-    files.push({ path: p.name, sha: 'local-' + p.lastModified, size: text.length, header: readHeader(text) });
+    if (DATA_FILE.test(p.name)) {
+      incoming.push({ path: p.name, text: await dataFileText(p.name, await p.arrayBuffer()), stamp: 'local-' + p.lastModified });
+    } else if (/\.zip$/i.test(p.name)) {
+      const entries = readZip(await p.arrayBuffer()).filter((e) => DATA_FILE.test(e.name));
+      // GitHub zips wrap everything in "<repo>-<branch>/": drop a single shared top folder
+      const tops = new Set(entries.map((e) => e.name.split('/')[0]));
+      const strip = tops.size === 1 && entries.every((e) => e.name.includes('/'));
+      for (const e of entries) {
+        const path = strip ? e.name.slice(e.name.indexOf('/') + 1) : e.name;
+        incoming.push({ path, text: await dataFileText(e.name, await e.read()), stamp: 'local-' + p.lastModified });
+      }
+    }
+  }
+  const files = existing.files.filter((f) => !incoming.some((p) => p.path === f.path));
+  for (const f of incoming) {
+    await db.putFile(repo, f.path, f.text);
+    files.push({ path: f.path, sha: f.stamp, size: f.text.length, header: readHeader(f.text) });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
   await db.putRepo({ ...existing, repo, files, syncedAt: Date.now() });
+  return incoming.length;
 }

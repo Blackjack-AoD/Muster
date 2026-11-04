@@ -125,17 +125,19 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
 }
 
 export function unitSummary(u: RSel): string {
-  const bits: string[] = [];
-  const walk = (r: RSel, depth: number) => {
+  // totals across the unit: a group of 5 models each with a plasma gun counts as 5 plasma guns
+  const counts = new Map<string, number>();
+  const walk = (r: RSel, depth: number, mult: number) => {
     for (const c of r.children) {
+      const n = c.sel.number * mult;
       const isModel = c.node.type === 'model';
-      if (isModel && c.sel.number > 0) bits.push(`${c.sel.number}× ${c.eff.name}`);
-      else if (depth < 3 && (c.eff.costs.size && [...c.eff.costs.values()].some((v) => v > 0))) bits.push(c.sel.number > 1 ? `${c.sel.number}× ${c.eff.name}` : c.eff.name);
-      walk(c, depth + 1);
+      const paid = depth < 3 && c.eff.costs.size > 0 && [...c.eff.costs.values()].some((v) => v > 0);
+      if ((isModel && n > 0) || paid) counts.set(c.eff.name, (counts.get(c.eff.name) ?? 0) + n);
+      walk(c, depth + 1, n);
     }
   };
-  walk(u, 0);
-  return [...new Set(bits)].slice(0, 6).join(' · ');
+  walk(u, 0, u.sel.number);
+  return [...counts].slice(0, 6).map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(' · ');
 }
 
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {

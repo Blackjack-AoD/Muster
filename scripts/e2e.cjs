@@ -2,7 +2,7 @@ const { chromium, devices } = require('playwright');
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const DATA = { 'Blackjack-AoD/NRData': '../data/NRData', 'Blackjack-AoD/M40GA': '../data/M40GA' };
-const tree = (dir) => execSync(`git -C ${dir} ls-tree -l HEAD`).toString().trim().split('\n').map(l => { const [meta, path] = l.split('\t'); const [, type, sha, size] = meta.split(/\s+/); return { path, type, sha, size: Number(size) }; });
+const tree = (dir) => execSync(`git -C ${dir} ls-tree -r -l HEAD`).toString().trim().split('\n').map(l => { const [meta, path] = l.split('\t'); const [, type, sha, size] = meta.split(/\s+/); return { path, type, sha, size: Number(size) }; });
 const shots = process.env.SHOTS || 'shots'; fs.mkdirSync(shots, { recursive: true });
 (async () => {
   const browser = await chromium.launch();

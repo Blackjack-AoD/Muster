@@ -52,6 +52,8 @@ export interface Eff {
   constraints: Constraint[];
   categories: Set<string>;
   primary?: string;
+  /** set by a defaultSelectionEntryId modifier */
+  defaultId?: string;
 }
 export interface Issue {
   level: 'error' | 'warn';
@@ -139,9 +141,10 @@ export class Evaluator {
     rs.children.forEach((c) => this.computeEff(c));
   }
 
+  /** A selection with number N stands for N identical models/items; its children are per one of them. */
   private computeTotal(rs: RSel): number {
-    const own = (rs.eff.costs.get(this.pointsTypeId) ?? 0) * rs.sel.number;
-    rs.total = own + rs.children.reduce((t, c) => t + this.computeTotal(c), 0);
+    const own = rs.eff.costs.get(this.pointsTypeId) ?? 0;
+    rs.total = rs.sel.number * (own + rs.children.reduce((t, c) => t + this.computeTotal(c), 0));
     return rs.total;
   }
 
@@ -173,6 +176,9 @@ export class Evaluator {
       case 'name':
         if (m.type === 'set') eff.name = v;
         else if (m.type === 'append') eff.name = `${eff.name} ${v}`;
+        return;
+      case 'defaultSelectionEntryId':
+        if (m.type === 'set') eff.defaultId = v;
         return;
       case 'category':
         if (m.type === 'add') eff.categories.add(v);
@@ -290,10 +296,17 @@ export class Evaluator {
         return w.self ? [w.self.children] : [];
       case 'parent':
         return [w.parent ? w.parent.children : w.force.roots];
+      case 'primary-category': {
+        // units in the force that share this unit's primary category (e.g. "other Elites")
+        let top: RSel | null = w.self ?? w.parent;
+        while (top?.parent) top = top.parent;
+        const prim = top ? top.eff.primary : w.opt?.node.categoryLinks.find((c) => c.primary)?.targetId;
+        return prim ? [w.force.roots.filter((r) => r.eff.primary === prim)] : [w.force.roots];
+      }
       case 'force':
-      case 'primary-category':
-      case 'primary-catalogue':
         return [w.force.roots];
+      case 'primary-catalogue':
+        return this.forces.filter((f) => f.force.catalogueId === w.force.force.catalogueId).map((f) => f.roots);
       case 'roster':
         return this.forces.map((f) => f.roots);
       case 'ancestor':
@@ -307,21 +320,22 @@ export class Evaluator {
     }
   }
 
-  private countIn(items: RSel[], childId: string, deep: boolean, costField: string | null): number {
+  /** mult: how many copies of these items exist (product of the numbers of the selections above them) */
+  private countIn(items: RSel[], childId: string, deep: boolean, costField: string | null, mult = 1): number {
     let t = 0;
     for (const rs of items) {
       if (this.matches(rs, childId)) {
-        t += costField ? this.totalOf(rs, costField) : rs.sel.number;
+        t += mult * (costField ? this.totalOf(rs, costField) : rs.sel.number);
         if (!deep || costField) continue;
       }
-      if (deep) t += this.countIn(rs.children, childId, deep, costField);
+      if (deep) t += this.countIn(rs.children, childId, deep, costField, mult * rs.sel.number);
     }
     return t;
   }
 
   private totalOf(rs: RSel, costTypeId: string): number {
-    const own = (rs.eff.costs.get(costTypeId) ?? 0) * rs.sel.number;
-    return own + rs.children.reduce((t, c) => t + this.totalOf(c, costTypeId), 0);
+    const own = rs.eff.costs.get(costTypeId) ?? 0;
+    return rs.sel.number * (own + rs.children.reduce((t, c) => t + this.totalOf(c, costTypeId), 0));
   }
 
   // ---------- options shown to the user ----------
@@ -350,6 +364,19 @@ export class Evaluator {
     return { min, max };
   }
 
+  /** false when a force- or roster-wide max on this option is already reached */
+  roomBeyondParent(opt: Opt, parent: RSel | null, force: RForce, eff?: Eff): boolean {
+    const e = eff ?? this.optionEff(opt, parent, force);
+    for (const c of e.constraints) {
+      if (c.type !== 'max' || c.field !== 'selections' || c.value < 0) continue;
+      if (c.scope !== 'force' && c.scope !== 'roster') continue;
+      const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [force.roots];
+      const n = containers.reduce((t, items) => t + this.countIn(items, opt.node.id, true, null), 0);
+      if (n >= c.value) return false;
+    }
+    return true;
+  }
+
   // ---------- validation ----------
   private validate() {
     const issues = this.issues;
@@ -369,14 +396,16 @@ export class Evaluator {
       for (const o of forceRootOptions(rf.ctx, rf.entry)) {
         const w: Where = { self: null, parent: null, force: rf, opt: o };
         const eff = this.effective(o.node, w);
-        const have = rf.roots.filter((r) => r.opt.key === o.key || r.node.id === o.node.id);
+        // the same entry can be linked more than once (often one link is switched off): judge each link by its own picks
+        const have = rf.roots.filter((r) => r.opt.key === o.key);
         if ((eff.hidden || unavailable(eff)) && !have.length) continue;
         for (const c of eff.constraints) {
           if (c.field !== 'selections' && !this.isCostType(c.field)) continue;
           const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
           if (c.scope !== 'roster' && c.scope !== 'force' && c.scope !== 'parent') continue;
-          const n = containers.reduce((t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, c.field === 'selections' ? null : c.field), 0);
-          this.report(c, n, `${eff.name}`, rf.force.uid, have[0]?.sel.uid);
+          const field = c.field === 'selections' ? null : c.field;
+          const n = containers.reduce((t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field), 0);
+          this.report(this.pct(c, containers), n, `${eff.name}`, rf.force.uid, have[0]?.sel.uid);
         }
         if (eff.hidden && have.length) for (const h of have) issues.push({ level: 'warn', forceUid: rf.force.uid, selUid: h.sel.uid, message: `${eff.name} is not available with the current choices` });
       }
@@ -422,18 +451,26 @@ export class Evaluator {
       (t, items) => t + this.countCat(items, catId, c.includeChildSelections, c.field === 'selections' ? null : c.field),
       0,
     );
-    this.report(c, n, name, rf.force.uid);
+    this.report(this.pct(c, containers), n, name, rf.force.uid);
+  }
+
+  /** percentage limits (e.g. "no more than 25% of the army's points") become absolute numbers */
+  private pct(c: Constraint, containers: RSel[][]): Constraint {
+    if (!c.percentValue) return c;
+    const field = c.field === 'selections' ? null : c.field;
+    const all = containers.reduce((t, items) => t + this.countIn(items, 'any', false, field), 0);
+    return { ...c, value: Math.round((c.value / 100) * all * 100) / 100 };
   }
 
   /** count selections in a category (root selections use their primary category) */
-  private countCat(items: RSel[], catId: string, deep: boolean, costField: string | null): number {
+  private countCat(items: RSel[], catId: string, deep: boolean, costField: string | null, mult = 1): number {
     let t = 0;
     for (const rs of items) {
       if (rs.eff.categories.has(catId) || rs.eff.primary === catId) {
-        t += costField ? this.totalOf(rs, costField) : rs.sel.number;
+        t += mult * (costField ? this.totalOf(rs, costField) : rs.sel.number);
         continue;
       }
-      if (deep) t += this.countCat(rs.children, catId, deep, costField);
+      if (deep) t += this.countCat(rs.children, catId, deep, costField, mult * rs.sel.number);
     }
     return t;
   }
@@ -483,7 +520,7 @@ export class Evaluator {
       for (const l of r.node.infoLinks) {
         if (l.type !== 'profile') continue;
         const p = ctx.profile(l.targetId);
-        if (p) list.push({ ...p, name: l.name || p.name, modifiers: [...p.modifiers, ...l.modifiers] });
+        if (p) list.push({ ...p, name: l.name || p.name, hidden: p.hidden || l.hidden, modifiers: [...p.modifiers, ...l.modifiers] });
       }
       for (const p of list) {
         const eff = this.profileEff(p, w);
@@ -495,6 +532,18 @@ export class Evaluator {
     };
     visit(rs);
     return out;
+  }
+
+  ruleEff(r: Rule, w: Where): Rule | null {
+    if (!r.modifiers.length) return r.hidden ? null : r;
+    const q: Rule = { ...r };
+    for (const m of r.modifiers) {
+      if (!this.modTimes(m, w)) continue;
+      if (m.field === 'hidden') { if (m.type === 'set') q.hidden = m.value === 'true'; }
+      else if (m.field === 'name') q.name = m.type === 'append' ? `${q.name} ${m.value}` : m.type === 'set' ? m.value : q.name;
+      else if (m.field === 'description') q.description = m.type === 'append' ? `${q.description} ${m.value}`.trim() : m.type === 'set' ? m.value : q.description;
+    }
+    return q.hidden ? null : q;
   }
 
   profileEff(p: Profile, w: Where): Profile | null {
@@ -522,14 +571,16 @@ export class Evaluator {
     const seen = new Set<string>();
     const ctx = rs.force.ctx;
     const visit = (r: RSel) => {
+      const w: Where = { self: r, parent: r.parent, force: r.force };
       const list: Rule[] = [...r.node.rules];
       for (const l of r.node.infoLinks) {
         if (l.type !== 'rule') continue;
         const rr = ctx.rule(l.targetId);
-        if (rr) list.push({ ...rr, name: l.name || rr.name });
+        if (rr) list.push({ ...rr, name: l.name || rr.name, hidden: rr.hidden || l.hidden, modifiers: [...rr.modifiers, ...l.modifiers] });
       }
-      for (const x of list) {
-        if (x.hidden || seen.has(x.name)) continue;
+      for (const x0 of list) {
+        const x = this.ruleEff(x0, w);
+        if (!x || seen.has(x.name)) continue;
         seen.add(x.name);
         out.push(x);
       }
@@ -629,67 +680,90 @@ export function addSel(
 
 function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: string, depth: number) {
   if (depth > 12) return;
-  const ev = new Evaluator(roster, contexts);
-  const rs = ev.find(selUid);
-  if (!rs) return;
-  const ctx = rs.force.ctx;
   const added: string[] = [];
-  // count what's selected under this parent by option key (including what we add now)
-  const countKey = (pred: (k: string) => boolean) =>
-    rs.sel.children.filter((c) => pred(c.key)).reduce((t, c) => t + c.number, 0);
-  const addChild = (o: Opt, n: number) => {
-    if (n <= 0) return;
-    const ex = rs.sel.children.find((c) => c.key === o.key && !c.children.length);
-    if (ex && !added.includes(ex.uid)) { ex.number += n; return; }
-    const child: Sel = { uid: uid(), key: o.key, number: n, children: [] };
-    rs.sel.children.push(child);
-    added.push(child.uid);
-  };
-  const walk = (opts: Opt[]) => {
-    for (const o of opts) {
-      const eff = ev.optionEff(o, rs, rs.force);
-      if (eff.hidden || unavailable(eff)) continue;
-      const { min, max } = ev.limits(o, rs, rs.force, eff);
-      if (o.kind === 'entry') {
-        const have = countKey((k) => k === o.key);
-        addChild(o, Math.min(min, max < 0 ? min : max) - have);
-        continue;
-      }
-      // group: mandatory members first, then fill the rest with the default
-      walk(o.members);
-      let have = countKey((k) => k.startsWith(o.key + '/'));
-      if (min > have) {
-        const visible = o.members.filter((m) => {
-          const e = ev.optionEff(m, rs, rs.force);
-          return !e.hidden && !unavailable(e);
-        });
-        const pts = ev.pointsTypeId;
-        const cost = (m: Opt) => m.node.costs.find((c) => c.typeId === pts)?.value ?? 0;
-        // members the data originally marked mandatory first, then cheapest
-        const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
-        const cheapest = [...visible].sort((x, y) => baseMin(x) - baseMin(y) || cost(x) - cost(y));
-        const ordered = [defaultMember(o, visible), ...cheapest].filter((m): m is Opt => !!m && m.kind === 'entry');
-        for (const m of ordered) {
-          if (have >= min) break;
-          const lim = ev.limits(m, rs, rs.force);
+  // Fill one step at a time and re-evaluate: limits often change once a default is picked
+  // (e.g. "min 2 unless the default is taken").
+  for (let pass = 0; pass < 60; pass++) {
+    const ev = new Evaluator(roster, contexts);
+    const rs = ev.find(selUid);
+    if (!rs) return;
+    const ctx = rs.force.ctx;
+    const countKey = (pred: (k: string) => boolean) =>
+      rs.sel.children.filter((c) => pred(c.key)).reduce((t, c) => t + c.number, 0);
+    const addChild = (o: Opt, n: number) => {
+      if (n <= 0) return false;
+      const ex = rs.sel.children.find((c) => c.key === o.key && !c.children.length);
+      if (ex) { ex.number += n; return true; }
+      const child: Sel = { uid: uid(), key: o.key, number: n, children: [] };
+      rs.sel.children.push(child);
+      added.push(child.uid);
+      return true;
+    };
+    const visibleOf = (g: Opt) => g.members.filter((m) => {
+      const e = ev.optionEff(m, rs, rs.force);
+      return !e.hidden && !unavailable(e);
+    });
+    const pts = ev.pointsTypeId;
+    // cost after modifiers (a link can make a 'free' weapon cost points)
+    const cost = (m: Opt) => (m.kind === 'entry' ? ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0 : 0);
+    const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
+    /** one entry inside group g (searching nested groups) that can take another selection */
+    const pickIn = (g: Opt, d = 0): Opt | undefined => {
+      if (d > 6) return undefined;
+      const visible = visibleOf(g);
+      const cheapest = [...visible].sort((x, y) => baseMin(x) - baseMin(y) || cost(x) - cost(y));
+      const def = defaultMember(g, visible, true, ev.optionEff(g, rs, rs.force).defaultId);
+      const ordered = [...(def ? [def] : []), ...cheapest];
+      // prefer nested groups that carry their own default
+      ordered.sort((x, y) => Number(y === def) - Number(x === def));
+      for (const m of ordered) {
+        const lim = ev.limits(m, rs, rs.force);
+        if (m.kind === 'entry') {
           const cur = countKey((k) => k === m.key);
-          const room = lim.max < 0 ? min - have : Math.max(0, lim.max - cur);
-          const n = Math.min(room, min - have);
-          addChild(m, n);
-          have += Math.max(0, n);
+          if ((lim.max < 0 || cur < lim.max) && ev.roomBeyondParent(m, rs, rs.force)) return m;
+        } else {
+          const cur = countKey((k) => k.startsWith(m.key + '/'));
+          if (lim.max >= 0 && cur >= lim.max) continue;
+          const hit = pickIn(m, d + 1);
+          if (hit) return hit;
         }
       }
-    }
-  };
-  walk(ctx.options(rs.node));
+      return undefined;
+    };
+    let changed = false;
+    const walk = (opts: Opt[]): boolean => {
+      for (const o of opts) {
+        const eff = ev.optionEff(o, rs, rs.force);
+        if (eff.hidden || unavailable(eff)) continue;
+        const { min, max } = ev.limits(o, rs, rs.force, eff);
+        if (o.kind === 'entry') {
+          const have = countKey((k) => k === o.key);
+          if (addChild(o, Math.min(min, max < 0 ? min : max) - have)) changed = true;
+          continue;
+        }
+        if (walk(o.members)) return true;
+        const have = countKey((k) => k.startsWith(o.key + '/'));
+        if (min > have && (max < 0 || have < max)) {
+          const m = pickIn(o);
+          if (m && addChild(m, 1)) return true; // re-evaluate before picking more
+        }
+      }
+      return false;
+    };
+    if (walk(ctx.options(rs.node))) changed = true;
+    if (!changed) break;
+  }
   for (const a of added) fillDefaults(roster, contexts, a, depth + 1);
 }
 
-export function defaultMember(group: Opt, visible: Opt[]): Opt | undefined {
-  const d = group.node.defaultSelectionEntryId;
+export function defaultMember(group: Opt, visible: Opt[], strict = false, override?: string): Opt | undefined {
+  const d = override || group.node.defaultSelectionEntryId;
   if (d) {
     const hit = visible.find((m) => m.node.id === d || m.node.linkId === d || m.key.endsWith('/' + d));
     if (hit) return hit;
   }
-  return visible[0];
+  // no default of its own: a nested group that has one
+  const nested = visible.find((m) => m.kind === 'group' && m.node.defaultSelectionEntryId);
+  if (nested) return nested;
+  return strict ? undefined : visible[0];
 }

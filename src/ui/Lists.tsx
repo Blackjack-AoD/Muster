@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { RepoState } from '../data/db';
 import { Evaluator, uid, type Roster } from '../data/engine';
-import { getContext, systemsOf, type SystemInfo } from '../data/library';
+import { activeSystems, getContext, rosterGameKey, systemsOf, gameKey, type SystemInfo } from '../data/library';
 import { saveRoster, useStore } from '../store';
 import { Empty, Link, Loading, Sheet, TopBar, ago, fmtN } from './common';
 import { Icon } from './Icon';
@@ -18,14 +18,22 @@ export function Lists() {
   const rosters = useStore((s) => s.rosters);
   const repos = useStore((s) => s.repos);
   const sync = useStore((s) => s.sync);
+  const game = useStore((s) => s.game);
   const [creating, setCreating] = useState(false);
-  const sorted = useMemo(() => [...rosters].sort((a, b) => b.updated - a.updated), [rosters]);
+  const { active } = activeSystems(repos, game);
+  const filterKey = active && systemsOf(repos).length > 1 ? gameKey(active) : undefined;
+  const sorted = useMemo(
+    () => rosters.filter((r) => !filterKey || rosterGameKey(r) === filterKey).sort((a, b) => b.updated - a.updated),
+    [rosters, filterKey],
+  );
+  const elsewhere = rosters.length - sorted.length;
   const syncing = Object.values(sync).some((p) => p.stage === 'checking' || p.stage === 'downloading');
   const hasData = systemsOf(repos).length > 0;
 
   return (
     <div class="page">
-      <TopBar title="Muster" sub="Army lists" />
+      <TopBar title="Muster" sub={active ? active.gst.header!.name : 'Army lists · all games'}
+        right={hasData ? <Link class="icon-btn sm" to="/games"><Icon name="dice" /></Link> : null} />
       {!hasData && (
         <div class="banner">
           {syncing ? (
@@ -59,6 +67,9 @@ export function Lists() {
           ))}
         </div>
       )}
+      {elsewhere > 0 && (
+        <p class="muted small pad-x center">{elsewhere} list{elsewhere === 1 ? '' : 's'} in other games. <Link to="/games">Switch game</Link></p>
+      )}
       {hasData && sorted.length > 0 && (
         <button class="fab" aria-label="New list" onClick={() => setCreating(true)}><Icon name="plus" size={26} /></button>
       )}
@@ -69,8 +80,9 @@ export function Lists() {
 
 function NewList({ onClose }: { onClose: () => void }) {
   const repos = useStore((s) => s.repos);
+  const game = useStore((s) => s.game);
   const systems = systemsOf(repos);
-  const [sys, setSys] = useState<SystemInfo | undefined>(systems.length === 1 ? systems[0] : undefined);
+  const [sys, setSys] = useState<SystemInfo | undefined>(activeSystems(repos, game).active);
   const [catId, setCatId] = useState<string>();
   const [q, setQ] = useState('');
 

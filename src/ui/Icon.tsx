@@ -17,6 +17,7 @@ const P: Record<string, string> = {
   share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
   shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z',
   edit: 'M4 20h4L19 9l-4-4L4 16v4z',
+  dice: 'M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01',
 };
 
 export function Icon({ name, size = 22 }: { name: string; size?: number }) {

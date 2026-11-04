@@ -1,12 +1,13 @@
 {
   "name": "muster",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Offline army list builder for BattleScribe / New Recruit data",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p . && vite build",
     "preview": "vite preview",
-    "test:engine": "tsx scripts/test-engine.ts"
+    "test:engine": "tsx scripts/test-engine.ts",
+    "sweep": "tsx scripts/sweep.ts"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",

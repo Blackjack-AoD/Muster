@@ -20,6 +20,16 @@ export function clearCaches(repo?: string) {
   for (const k of [...contexts.keys()]) if (!repo || k.startsWith(repo + '|')) contexts.delete(k);
 }
 
+export const gameKey = (s: SystemInfo) => `${s.repo}|${s.gst.header!.id}`;
+export const rosterGameKey = (r: Roster) => `${r.repo}|${r.gameSystemId}`;
+
+/** The systems to show for the chosen game: just that one, or all when none is chosen (or it's gone). */
+export function activeSystems(repos: RepoState[], game?: string): { systems: SystemInfo[]; active?: SystemInfo } {
+  const all = systemsOf(repos);
+  const active = all.find((s) => gameKey(s) === game) ?? (all.length === 1 ? all[0] : undefined);
+  return { systems: active ? [active] : all, active };
+}
+
 export function systemsOf(repos: RepoState[]): SystemInfo[] {
   const out: SystemInfo[] = [];
   for (const r of repos) {

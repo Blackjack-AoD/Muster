@@ -130,6 +130,8 @@ export interface EntryNode {
   infoLinks: InfoLink[];
   /** selectionEntries, selectionEntryGroups and entryLinks, in file order */
   children: EntryNode[];
+  /** display order set by the data author (lower first) */
+  sortIndex?: number;
   /** forceEntry only: nested forceEntries */
   forces?: EntryNode[];
   page?: string;

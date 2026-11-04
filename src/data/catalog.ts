@@ -90,7 +90,8 @@ export class Context {
       tag: target.tag,
       id: target.id,
       linkId: n.id,
-      name: n.name || target.name,
+      // links often carry an editor placeholder name; the target's name is the real one
+      name: n.name && !/^new entry ?link$/i.test(n.name) ? n.name : target.name,
       hidden: n.hidden || target.hidden,
       collective: n.collective || target.collective,
       constraints: [...target.constraints, ...n.constraints],
@@ -102,6 +103,7 @@ export class Context {
       infoLinks: [...target.infoLinks, ...n.infoLinks],
       children: [...target.children, ...n.children],
       defaultSelectionEntryId: n.defaultSelectionEntryId || target.defaultSelectionEntryId,
+      sortIndex: n.sortIndex ?? target.sortIndex,
     };
     this.resolved.set(n, merged);
     return merged;
@@ -128,6 +130,11 @@ export class Context {
       } else if (r.tag === 'selectionEntry') {
         out.push({ key, kind: 'entry', node: r, groupIds, members: [] });
       }
+    }
+    // honour the data's sortIndex; anything without one keeps file order, after the indexed ones
+    if (out.some((o) => o.node.sortIndex != null)) {
+      const pos = new Map(out.map((o, i) => [o, i]));
+      out.sort((x, y) => (x.node.sortIndex ?? Infinity) - (y.node.sortIndex ?? Infinity) || pos.get(x)! - pos.get(y)!);
     }
     return out;
   }

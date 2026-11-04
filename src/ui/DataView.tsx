@@ -109,17 +109,23 @@ export function DataView() {
       <div class="list-label">Files on this phone</div>
       <div class="pad-x">
         <label class="btn wide file-btn">
-          <Icon name="plus" /> Import .gst / .cat files
-          <input type="file" multiple accept=".gst,.cat,application/xml,text/xml" onChange={async (e) => {
-            const files = [...(e.currentTarget.files ?? [])];
+          <Icon name="plus" /> Import data files or a repo .zip
+          <input type="file" multiple accept=".gst,.cat,.gstz,.catz,.zip,application/xml,text/xml,application/zip" onChange={async (e) => {
+            const input = e.currentTarget;
+            const files = [...(input.files ?? [])];
+            input.value = '';
             if (!files.length) return;
-            await importLocalFiles('local', files);
-            clearCaches('local');
-            await refreshRepos();
-            toast(`Imported ${files.length} file(s)`);
+            try {
+              const n = await importLocalFiles('local', files);
+              clearCaches('local');
+              await refreshRepos();
+              toast(n ? `Imported ${n} data file${n === 1 ? '' : 's'}` : 'No .gst / .cat files found in that');
+            } catch (err) {
+              toast(`Couldn't import: ${(err as Error).message}`);
+            }
           }} />
         </label>
-        <p class="muted small">Handy for testing your own edits from New Recruit without pushing to GitHub. Import the game system (.gst) file too.</p>
+        <p class="muted small">Handy for testing your own edits from New Recruit without pushing to GitHub. Pick .gst / .cat files (zipped .gstz / .catz work too) and include the game system file, or pick a whole repo .zip from GitHub's Download ZIP.</p>
       </div>
 
       <div class="list-label">Your lists</div>

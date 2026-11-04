@@ -12,9 +12,13 @@ interface State {
   rosters: Roster[];
   sync: Record<string, SyncProgress>;
   toast?: string;
+  /** active game: "<repo>|<game system id>", or undefined for all games */
+  game?: string;
 }
 
-let state: State = { ready: false, repos: [], rosters: [], sync: {} };
+const GAME_KEY = 'muster.game';
+const savedGame = (() => { try { return localStorage.getItem(GAME_KEY) || undefined; } catch { return undefined; } })();
+let state: State = { ready: false, repos: [], rosters: [], sync: {}, game: savedGame };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
@@ -46,6 +50,15 @@ export async function init() {
   set({ ready: true, repos, rosters });
   persistStorage();
   if (!repos.length && navigator.onLine) syncAll(DEFAULT_REPOS);
+}
+
+/** Pick the game that Lists and Library show (undefined = all games). */
+export function setGame(game: string | undefined) {
+  try {
+    if (game) localStorage.setItem(GAME_KEY, game);
+    else localStorage.removeItem(GAME_KEY);
+  } catch { /* storage unavailable: keep it for this session only */ }
+  set({ game });
 }
 
 export async function syncAll(list?: string[]) {

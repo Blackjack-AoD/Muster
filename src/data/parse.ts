@@ -200,6 +200,8 @@ export function entry(el: El, tag?: NodeTag): EntryNode {
   };
   const tid = el.getAttribute('targetId');
   if (tid) n.targetId = tid;
+  const si = el.getAttribute('sortIndex');
+  if (si != null && si !== '' && Number.isFinite(Number(si))) n.sortIndex = Number(si);
   const def = el.getAttribute('defaultSelectionEntryId');
   if (def) n.defaultSelectionEntryId = def;
   if (t === 'forceEntry') n.forces = list(el, 'forceEntries', 'forceEntry').map((f) => entry(f, 'forceEntry'));

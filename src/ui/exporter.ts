@@ -19,13 +19,15 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
     const done = new Set<RSel>();
     const unitLines = (u: RSel) => {
       lines.push(`${u.sel.number > 1 ? u.sel.number + '× ' : ''}${u.eff.name} [${n(u.total)}]`);
-      const walk = (r: RSel, depth: number) => {
+      // counts are totals: 5 models each with a bolter print as 5× Bolter
+      const walk = (r: RSel, depth: number, mult: number) => {
         for (const c of r.children) {
-          lines.push(`${'  '.repeat(depth)}• ${c.sel.number > 1 ? c.sel.number + '× ' : ''}${c.eff.name}${c.total ? ` (${n(c.total)})` : ''}`);
-          walk(c, depth + 1);
+          const k = c.sel.number * mult;
+          lines.push(`${'  '.repeat(depth)}• ${k > 1 ? k + '× ' : ''}${c.eff.name}${c.total ? ` (${n(c.total * mult)})` : ''}`);
+          walk(c, depth + 1, k);
         }
       };
-      walk(u, 1);
+      walk(u, 1, u.sel.number);
     };
     for (const c of cats) {
       const units = rf.roots.filter((r) => (r.eff.primary ?? '') === c);

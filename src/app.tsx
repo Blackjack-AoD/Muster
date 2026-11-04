@@ -5,6 +5,8 @@ import { RosterView } from './ui/RosterView';
 import { UnitPage } from './ui/UnitPage';
 import { Library } from './ui/Library';
 import { DataView } from './ui/DataView';
+import { Games } from './ui/Games';
+import { Compendium } from './ui/Library';
 import { Icon } from './ui/Icon';
 
 function useHash() {
@@ -45,7 +47,13 @@ export function App() {
   if (!ready) page = <div class="center-fill"><div class="spinner" /></div>;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'u') page = <UnitPage rosterUid={parts[1]} selUid={parts[3]} />;
   else if (parts[0] === 'r' && parts[1]) page = <RosterView uid={parts[1]} />;
-  else if (parts[0] === 'lib') {
+  else if (parts[0] === 'games') {
+    tab = 'games';
+    page = <Games />;
+  } else if (parts[0] === 'lib-rules') {
+    tab = 'lib';
+    page = <Compendium />;
+  } else if (parts[0] === 'lib') {
     tab = 'lib';
     page = <Library repo={parts[1] && parts[2] ? `${parts[1]}/${parts[2]}` : undefined} catId={parts[3]} unitKey={parts[4]} />;
   } else if (parts[0] === 'data') {
@@ -59,6 +67,7 @@ export function App() {
       {page}
       {showNav && (
         <nav class="tabbar">
+          <a class={tab === 'games' ? 'on' : ''} href="#/games"><Icon name="dice" /><span>Games</span></a>
           <a class={tab === 'lists' ? 'on' : ''} href="#/"><Icon name="list" /><span>Lists</span></a>
           <a class={tab === 'lib' ? 'on' : ''} href="#/lib"><Icon name="book" /><span>Library</span></a>
           <a class={tab === 'data' ? 'on' : ''} href="#/data"><Icon name="sync" /><span>Data</span></a>

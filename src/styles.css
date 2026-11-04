@@ -343,3 +343,42 @@ input:focus { border-color: var(--brass-dim); }
   .sheet { border-radius: 20px; border-bottom: 1px solid var(--line); max-height: 80vh; }
   .sheet.full { height: 80vh; }
 }
+/* per-model wargear: group header with split / merge */
+.sub-bar { display: flex; align-items: center; gap: 6px; }
+.sub-bar .sub-head { flex: 1; min-width: 0; }
+.mini {
+  flex: none; min-height: 30px; padding: 0 10px; border-radius: 9px;
+  background: transparent; border: 1px dashed var(--brass-dim); color: var(--brass); font-size: 12.5px; font-weight: 600;
+}
+.mini:active { background: var(--card2); }
+.o-pts small { font-size: 0.8em; opacity: 0.75; }
+.center { text-align: center; }
+
+/* games */
+.pick-list.games { margin-top: 14px; }
+.pick-list.first { margin-top: 10px; }
+.tabbar a span { white-space: nowrap; }
+
+/* library: Armies / Rules switch, read-only unit overview, rules compendium */
+.lib-tabs { padding-top: 4px; }
+.sticky-search input { flex: 1; min-width: 0; }
+.rule .rule-src { padding-top: 0; font-size: 12px; color: var(--muted); }
+.ov-sec { margin: 18px 16px 0; }
+.ov-sec h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--brass); }
+.loadout, .opt-info, .opt-info ul { list-style: none; margin: 0; padding: 0; }
+.loadout { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 14px; }
+.loadout li, .opt-info li:not(.oi-group) {
+  display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 14.5px; border-bottom: 1px solid var(--line);
+}
+.loadout li:last-child, .opt-info li:last-child { border-bottom: 0; }
+.opt-info { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px 14px; margin-bottom: 8px; }
+.opt-info .oi-group { padding: 8px 0 2px; border-bottom: 1px solid var(--line); }
+.opt-info .oi-group > ul { padding-left: 12px; border-left: 2px solid var(--line); margin: 4px 0 6px; }
+.oi-head { font-size: 14.5px; }
+.oi-head b { font-weight: 600; color: var(--text); }
+.oi-sub { margin-top: 10px; }
+.oi-subhead { font-size: 13px; font-weight: 600; color: var(--brass2); margin: 0 0 6px 2px; }
+.overview > .muted { margin-top: 16px; padding-bottom: 24px; }
+.rule-ver + .rule-ver { border-top: 1px solid var(--line); padding-top: 12px; }
+.rule summary small { font-weight: 500; font-size: 12.5px; }
+.pick.radio > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
