@@ -30,7 +30,7 @@ Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub
 - **List building**: a new list (or detachment) starts with its mandatory set-up already in place. For Horus Heresy that's the Legion (hidden, since there's nothing to choose), Allegiance set to the Legion's side in the lore (tap Loyalist / Traitor to change it), Rite of War, and Expanded Army Lists with every switch On. Swipe a unit left to delete it (with Undo), or right to duplicate it.
 - The phone's back button steps back one screen at a time and closes any open pop-up first.
 - **Army sheet** (list menu → Army sheet): every unit with points, wargear, stats and rules, plus a rules reference. **Print / save PDF** uses the phone's print dialog (choose "Save as PDF"). **Share link** sends a link (WhatsApp etc.) that opens a read-only copy of the list in any browser, no Muster data needed. Very long lists leave the rules reference out of the link to keep it short.
-- **Updates**: the app checks for a new version whenever it comes back to the front, and restarts into it once downloaded. Data tab → App → **Check for updates** does it on demand; **Reload a fresh copy** fixes a stuck update without touching lists or data.
+- **Updates**: the app checks for a new version once a week (when opened with a connection) and restarts into it. Data tab → App → **Check for updates** does it on demand; **Reload a fresh copy** fixes a stuck update without touching lists or data.
 - **Data**: download / update repos, import files, back up lists.
 
 ## How the data is read

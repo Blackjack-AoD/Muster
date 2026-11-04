@@ -16,13 +16,13 @@ module.exports = async (page, ctx, shots) => {
   const old = pkg.version;
   fs.writeFileSync('package.json', JSON.stringify({ ...pkg, version: old + '-test' }, null, 2) + '\n');
   try { execSync('npx vite build', { stdio: 'ignore' }); } finally { fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n'); }
+  // without pressing anything: reopening the app shouldn't switch version (weekly check already done)
+  for (let i = 0; i < 2; i++) { await page.reload(); await page.waitForSelector('text=Check for updates'); await page.waitForTimeout(6000); }
+  console.log('after reopening twice, no button press:', await ver());
   await page.getByRole('button', { name: 'Check for updates' }).click();
   await page.waitForTimeout(400);
   console.log('status:', (await page.locator('p.muted.small', { hasText: /^Muster / }).innerText().catch(() => '(reloading)')).replace(/^.*?\. /, ''));
-  for (let i = 0; i < 6; i++) {
-    await page.waitForTimeout(1500);
-    console.log('  sw:', await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return JSON.stringify({ active: r?.active?.state, waiting: r?.waiting?.state, installing: r?.installing?.state, ctrl: navigator.serviceWorker.controller?.scriptURL?.slice(-6) }); }).catch((e) => 'eval failed ' + e.message));
-  }
+  await page.waitForTimeout(5000);
   await page.waitForSelector('text=Check for updates');
   console.log('after:', await ver());
   await page.screenshot({ path: `${shots}/70-data-app.png`, fullPage: true });

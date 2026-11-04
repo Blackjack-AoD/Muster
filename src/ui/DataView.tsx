@@ -6,7 +6,7 @@ import { importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } fro
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
 import { shareBackup } from './exporter';
-import { APP_VERSION, BUILD_TIME, checkForUpdate, resetAppCache } from '../update';
+import { APP_VERSION, BUILD_TIME, checkForUpdate, lastUpdateCheck, resetAppCache } from '../update';
 
 const mb = (b: number) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
 
@@ -187,7 +187,7 @@ function AppUpdate({ online }: { online: boolean }) {
           <button class="btn grow" disabled={busy || !online} onClick={check}><Icon name="sync" /> Check for updates</button>
         </div>
         <p class="muted small">
-          Muster {APP_VERSION}{built ? ` · built ${built}` : ''}. {status ?? 'Updates also install by themselves when you open the app with a connection.'}
+          Muster {APP_VERSION}{built ? ` · built ${built}` : ''}. {status ?? `Checks automatically once a week${lastUpdateCheck() ? ` (last checked ${ago(lastUpdateCheck())})` : ''}.`}
         </p>
         <details class="reset">
           <summary class="muted small">Update stuck?</summary>

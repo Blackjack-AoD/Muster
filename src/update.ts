@@ -21,13 +21,24 @@ export function registerServiceWorker() {
   addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* offline or unsupported */ });
   });
-  // Installed apps can stay open for days: look for a new version whenever the app comes back to the front.
-  let last = Date.now();
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !navigator.onLine || Date.now() - last < 10 * 60_000) return;
-    last = Date.now();
-    navigator.serviceWorker.getRegistration().then((r) => r?.update()).catch(() => {});
-  });
+  // Automatic check at most once a week (on opening the app, or coming back to it); otherwise only on request.
+  const weekly = () => {
+    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (Date.now() - lastCheck() < WEEK) return;
+    checkForUpdate().catch(() => {});
+  };
+  addEventListener('load', () => setTimeout(weekly, 5000));
+  document.addEventListener('visibilitychange', weekly);
+}
+
+const WEEK = 7 * 24 * 60 * 60_000;
+const LAST_KEY = 'muster.lastUpdateCheck';
+function lastCheck() {
+  try { return Number(localStorage.getItem(LAST_KEY)) || 0; } catch { return 0; }
+}
+/** when the app last looked for a new version (0 = never) */
+export function lastUpdateCheck() {
+  return lastCheck();
 }
 
 export type UpdateResult = 'updating' | 'latest' | 'offline' | 'unsupported' | 'error';
@@ -40,6 +51,8 @@ export async function checkForUpdate(): Promise<UpdateResult> {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return 'unsupported';
     await reg.update();
+    try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch { /* fine */ }
+    // the browser may have fetched a new version already; it waits until we say so
     const next = reg.installing ?? reg.waiting;
     if (!next) return 'latest';
     if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });

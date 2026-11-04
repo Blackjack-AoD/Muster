@@ -38,9 +38,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: 'index.html',
-        // a new version takes over as soon as it has downloaded (src/update.ts then reloads the page once)
-        skipWaiting: true,
-        clientsClaim: true,
+        // a new version waits until the weekly check or "Check for updates" tells it to take over (src/update.ts)
         // data lives in IndexedDB; never cache GitHub responses in the service worker
         runtimeCaching: [],
       },
