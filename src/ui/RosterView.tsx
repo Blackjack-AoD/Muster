@@ -323,6 +323,12 @@ function isDescendant(r: RSel, selUid: string): boolean {
   return r.children.some((c) => c.sel.uid === selUid || isDescendant(c, selUid));
 }
 
+/** price shown before adding: the unit with its standard models and gear (own cost after modifiers) */
+function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: string) {
+  const base = o.node.costs.find((c) => c.typeId === pt)?.value ?? 0;
+  return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
+}
+
 function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; cat?: string; onClose: () => void }) {
   const [q, setQ] = useState('');
   const options = useMemo(() => {
@@ -356,7 +362,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
             {items.map(({ o, eff, cat: oc }) => (
               <button class="pick" onClick={() => add(o, oc)}>
                 <span><b>{eff.name}</b></span>
-                <span class="pick-pts">{fmtN(eff.costs.get(pt) ?? 0)}</span>
+                <span class="pick-pts">{fmtN(startPts(rf, o, eff, pt))}</span>
               </button>
             ))}
           </div>

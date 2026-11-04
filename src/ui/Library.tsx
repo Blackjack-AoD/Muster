@@ -161,7 +161,7 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
     for (const o of rootOptionsCached(ctx)) {
       if (o.node.hidden) continue;
       const c = (o.node.categoryLinks.find((l) => l.primary) ?? o.node.categoryLinks[0])?.targetId ?? '';
-      map.set(c, [...(map.get(c) ?? []), { o, cost: o.node.costs.find((x) => x.typeId === pts)?.value ?? 0 }]);
+      map.set(c, [...(map.get(c) ?? []), { o, cost: ctx.startCost(o.node, pts) }]);
     }
     return [...map].map(([c, items]) => ({ name: cleanCat(ctx.categoryName(c)) || 'Other', items: items.sort((a, b) => a.o.node.name.localeCompare(b.o.node.name)) }))
       .sort((a, b) => a.name.localeCompare(b.name));

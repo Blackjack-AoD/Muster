@@ -189,6 +189,51 @@ export class Context {
     return out;
   }
 
+  private startCache = new Map<string, number>();
+
+  /**
+   * Points for an entry as it comes by default: its own cost plus the minimum number of each mandatory
+   * model / upgrade inside it (a group's default, or its cheapest option). Quick estimate from the data,
+   * without conditions, for showing a price before the unit is added.
+   */
+  startCost(n: EntryNode, ptsId: string, depth = 0): number {
+    const key = ptsId + '|' + n.id + '|' + ((n as RNode).linkId ?? '');
+    const hit = this.startCache.get(key);
+    if (hit != null) return hit;
+    const own = n.costs.find((c) => c.typeId === ptsId)?.value ?? 0;
+    let total = own;
+    if (depth < 8) {
+      const minOf = (o: Opt) => o.node.constraints
+        .filter((c) => c.type === 'min' && c.field === 'selections' && c.scope === 'parent' && !c.percentValue)
+        .reduce((m, c) => Math.max(m, c.value), 0);
+      const visible = (o: Opt) => !o.node.hidden;
+      const cost = (o: Opt): number => {
+        if (o.kind === 'entry') return this.startCost(o.node, ptsId, depth + 1);
+        const ms = o.members.filter(visible);
+        const d = o.node.defaultSelectionEntryId;
+        const def = d ? ms.find((m) => m.node.id === d || m.node.linkId === d) : undefined;
+        if (def) return cost(def);
+        const costs = ms.map(cost);
+        return costs.length ? Math.min(...costs) : 0;
+      };
+      const walk = (opts: Opt[]) => {
+        for (const o of opts) {
+          if (!visible(o)) continue;
+          const min = minOf(o);
+          if (o.kind === 'entry') { if (min > 0) total += min * cost(o); continue; }
+          // group: mandatory picks inside it, plus the group's own minimum
+          const inner = o.members.filter((m) => visible(m) && minOf(m) > 0);
+          walk(inner);
+          const innerCount = inner.reduce((t, m) => t + minOf(m), 0);
+          if (min > innerCount) total += (min - innerCount) * cost(o);
+        }
+      };
+      walk(this.options(n));
+    }
+    this.startCache.set(key, total);
+    return total;
+  }
+
   pointsType(): CostType | undefined {
     return this.costTypes.find((c) => /^(pts|points)$/i.test(c.name)) ?? this.costTypes[0];
   }
