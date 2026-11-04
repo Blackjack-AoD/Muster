@@ -7,6 +7,7 @@ import type { RosterCtl } from '../store';
 import { Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { onOffPair, pick } from '../data/setup';
+import { StatBlock } from './StatBlock';
 import { cleanCat } from './RosterView';
 
 export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: string; backTo: string }) {
@@ -78,6 +79,15 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
 
 type Pair = { on: Opt; off: Opt };
 
+function hasVisibleMember(ev: RosterCtl['ev'], rs: RSel, g: Opt, d = 0): boolean {
+  if (d > 6) return true;
+  return g.members.some((m) => {
+    const e = ev.optionEff(m, rs, rs.force);
+    if (e.hidden || unavailable(e)) return ev.selected(m, rs, rs.force).length > 0;
+    return m.kind === 'entry' || hasVisibleMember(ev, rs, m, d + 1);
+  });
+}
+
 function ToggleRow({ ctl, rs, g, pair }: { ctl: RosterCtl; rs: RSel; g: Opt; pair: Pair }) {
   const on = ctl.ev.selected(g, rs, rs.force).some((c) => c.opt.key === pair.on.key);
   return (
@@ -134,7 +144,7 @@ function ProfileStrip({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
   const main = types.find((t) => /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t)) ?? types[0];
   const list = all.filter((p) => p.typeName === main && p.characteristics.every((c) => c.value.length < 30));
   if (!list.length) return null;
-  return <div class="strip"><ProfileTable profiles={list} /></div>;
+  return <div class="strip"><StatBlock profiles={list} /></div>;
 }
 
 function OptList({ ctl, rs, opts, depth }: { ctl: RosterCtl; rs: RSel; opts: Opt[]; depth: number }) {
@@ -162,6 +172,8 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
   const { min, max } = ev.limits(g, rs, rs.force, eff);
   const [open, setOpen] = useState(depth > 0 ? n > 0 || min > 0 : true);
   if ((eff.hidden || unavailable(eff)) && !n) return null;
+  // a heading with nothing under it right now (every option hidden by conditions) is just noise
+  if (!n && !hasVisibleMember(ev, rs, g)) return null;
   // "X On" / "X Off" pair: a single switch
   const pair = onOffPair(g.members.filter((m) => {
     const e = ev.optionEff(m, rs, rs.force);
@@ -431,7 +443,7 @@ export function Profiles({ ctl, profiles }: { ctl: RosterCtl; profiles: Profile[
                 <b>{p.name}</b>
                 {p.characteristics.map((c) => c.value && <p><span class="muted">{c.name}:</span> {c.value}</p>)}
               </div>
-            )) : <ProfileTable profiles={list} />}
+            )) : <div class="pad-x"><StatBlock profiles={list} /></div>}
           </section>
         );
       })}

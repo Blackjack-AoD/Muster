@@ -501,3 +501,9 @@ input:focus { border-color: var(--brass-dim); }
 .as-setup { margin: -2px 0 10px; font-size: 13.5px; color: #cfccc4; }
 @media print { .as-setup { color: #111; } }
 @media print { .as-head .as-pts { color: #000; } }
+
+/* per-model wargear headings: as easy to spot as the unit's option groups */
+.sub-head { min-height: 44px; color: var(--text); font-size: 15px; font-weight: 600; }
+.sub-head .icon { color: var(--brass); }
+.subopts { margin: 4px 0 8px 10px; padding-left: 10px; border-left: 2px solid var(--brass-dim); }
+.strip .statblock, .profiles .statblock { margin: 0; }
