@@ -90,7 +90,7 @@ Read the summary and the failure messages. The summary must show a failure for e
 
 Under both conditions, run a **mutation check**: first confirm the test passes, then change the expectation to what a broken version would produce, watch it fail, and revert. Report both results.
 
-**Your finish line:** every test on your list green, `mise run format` run, and `mise run format-check`, `mise run lint`, `mise run test` and `mise run typecheck` pass in your worktree with no new lint warnings, your commits made, and your report written. Do not push.
+**Your finish line:** every test on your list green, `mise run format` run, and `mise run format-check`, `mise run lint`, `mise run test` and `mise run typecheck` pass in your worktree with no new lint warnings, your commits made, and your report written. Do not push. Prettier occasionally needs a second pass: if `format-check` fails straight after `mise run format`, run it again.
 
 ## 4. Report
 
