@@ -2,3 +2,5 @@ node_modules
 dist
 shots
 coverage
+.claude/worktrees
+.claude/settings.local.json
