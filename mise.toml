@@ -32,6 +32,16 @@ description = "Lint src/ and the sweep"
 depends = ["install"]
 run = "npm run lint"
 
+[tasks.format]
+description = "Format the code with Prettier"
+depends = ["install"]
+run = "npm run format"
+
+[tasks.format-check]
+description = "Check the formatting without changing anything"
+depends = ["install"]
+run = "npm run format:check"
+
 [tasks.build]
 description = "Type-check and build into dist/"
 depends = ["install"]
