@@ -11,15 +11,19 @@ An installable, offline-first army list builder for BattleScribe / New Recruit d
 Open the site, then **Add to Home screen** / **Install app** in the browser menu (Safari: Share → Add to Home Screen).
 
 ## Develop
+Tools and tasks are managed by [mise](https://mise.jdx.dev), which installs the Node version set in `mise.toml`. Tasks install npm dependencies when needed. Run `mise trust` once after cloning, then `mise install`.
 ```
-npm install
-npm run dev        # local dev server
-npm run build      # production build into dist/
-npx tsx scripts/test-engine.ts <data-dir> "<catalogue name>" "<unit>" ...   # engine smoke test
-npm run sweep -- <data-dir> ["<army name filter>"]   # add every unit of every army; list crashes and errors
-npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>         # default points per unit, old engine vs new
+mise tasks                                 # list every task
+mise run dev                               # local dev server
+mise run typecheck                         # type-check src/
+mise run build                             # type-check and build into dist/
+mise run preview                           # build, then serve dist/
+mise run sweep <data-dir> ["<army name filter>"]   # add every unit of every army; list crashes and errors
+mise run clean                             # remove dist/ and node_modules/
+mise exec -- npx tsx scripts/test-engine.ts <data-dir> "<catalogue name>" "<unit>" ...   # engine smoke test
+mise exec -- npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>           # default points per unit, old engine vs new
 ```
-Set `V=1` before `npm run sweep` to print each problem unit.
+Set `V=1` before `mise run sweep` to print each problem unit.
 
 Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub Actions in repo settings).
 
