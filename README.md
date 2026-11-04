@@ -30,13 +30,49 @@ mise exec -- npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>  
 ```
 
 ## Testing
-Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. Pull requests and deploys both run them. They cover the data layer, storage, backups and share links; the UI screens and `src/update.ts` aren't covered yet.
+Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. A deploy stops if they fail. They cover the data layer, storage, backups and share links; the UI screens and `src/update.ts` aren't covered yet.
 
 `it.fails` marks a known bug: the test states the right behaviour and passes while the bug exists. Fixing the bug turns it red, and it then becomes a normal `it`.
 
 The sweep finds new cases and never fails a build. It adds every unit of every army in a data folder, then prints the problems it hit with the smallest example of each, and the shapes of condition, repeat, constraint and modifier in that data that no unit test mentions. Turn what it finds into small unit tests.
 
 Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub Actions in repo settings).
+
+## How we work
+Work is trunk-based: it lands on `main`, with no feature branches or pull requests. **Pushing `main` deploys to players**, and the deploy stops if the format check, lint or tests fail. Run those locally first, because a failed deploy still leaves the commit on `main`.
+
+Planning and building run through [Claude Code](https://claude.com/claude-code), using the agent and skills in `.claude/`. You'll also need the `gh` CLI, signed in. Run a skill by typing its name, such as `/implement-issue 12`.
+
+```
+/write-the-epic  →  /break-down-the-epic  →  /implement-epic or /implement-issue  →  /codereview  →  /review-ok
+```
+
+| Skill | What it does |
+| --- | --- |
+| `/write-the-epic` | Interviews you until each decision is settled, then files an epic as a GitHub issue. It records the decisions, and which screens and saved data change. |
+| `/break-down-the-epic <n>` | Splits an epic into small sub-issues with acceptance criteria and blockers, so agents can work at the same time without editing the same files. |
+| `/implement-issue <n>` | Claims an issue and builds each acceptance criterion in its own worktree, test first. It reads each diff, lands the work on local `main`, corrects stale docs and comments on the issue. It never pushes. Run it again on a finished issue to fix `BUG:` and `MISSING:` comments. |
+| `/implement-epic <n>` | Plans parallel streams of an epic's sub-issues and stops for your go-ahead, then runs each issue the way `/implement-issue` does. |
+| `/codereview` | Reviews a change with every check below, each in its own sub-agent. It covers uncommitted work by default, or `staged`, a ref or a date. Ask it to fix what it finds if you want that too. |
+| `/review-ok <n>` | Run this once you've approved the work. It pushes `main`, watches the deploy, closes the issue and cleans up worktrees. Nothing else pushes. |
+
+The review checks can also be run alone:
+
+| Check | What it reports |
+| --- | --- |
+| `/review-spec` | Work the issue asked for that wasn't built, and code nothing asked for |
+| `/review-tests` | Tests that would still pass with the code broken |
+| `/review-ts-smells` | Unsafe or unidiomatic TypeScript, and over-complex code |
+| `/review-stored-data` | Changes that could break lists saved on phones, in backups or in share links |
+| `/review-duplication` | Code the repo already has, and code left unreachable |
+| `/review-security` | Ways a data file, share link or backup could harm a player |
+| `/review-prose` | Commit messages, comments and docs that break the writing rules |
+
+**`senior-ts-dev`** is the agent that writes the code. `.claude/agents/senior-ts-dev.md` holds its TypeScript, testing and Muster rules, and it's a good summary of how code should look here even if you're writing it by hand.
+
+Two contracts sit behind the skills:
+- `.claude/contracts/delegation.md` binds any delegated work. Tests come first, with the failing test committed before the code. An agent stops and asks rather than making a decision no document settled.
+- `.claude/contracts/writing.md` sets the rules for commit messages, issue titles and comments.
 
 ## Screens
 - **Games**: pick the game you're playing. Lists, Library and new lists then only show that game (or pick "All games").
