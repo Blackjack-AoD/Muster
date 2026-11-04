@@ -14,14 +14,15 @@ const cat = (id: string) => `<categoryLinks><categoryLink id="l" targetId="${id}
 const gst = `<categoryEntries><categoryEntry id="hq" name="HQ:"/><categoryEntry id="tr" name="1. Troops"/></categoryEntries>
   <forceEntries><forceEntry id="det" name="Detachment:"><categoryLinks><categoryLink id="a" targetId="hq"/><categoryLink id="b" targetId="tr"/></categoryLinks></forceEntry></forceEntries>`;
 
-const profile = '<profiles><profile id="p" name="Stat" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">6</characteristic></characteristics></profile></profiles>';
+const profile =
+  '<profiles><profile id="p" name="Stat" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">6</characteristic></characteristics></profile></profiles>';
 const rule = '<rules><rule id="r" name="Fearless"><description>Never runs</description></rule></rules>';
 const army = world(
   unit('t', 'Boyz', 10, cat('tr') + children(entry('g', 'Choppa', 2))) +
-  unit('b', 'Boss', 50, cat('hq') + profile + rule) +
-  entry('s', 'Allegiance:', 0, `${cat('tr')}${children(entry('x', 'Loyalist'))}`, 'type="upgrade"') +
-  entry('p', 'Expanded', 0, `${cat('tr')}${children(entry('on', 'Legacy On'))}`, 'type="upgrade"') +
-  entry('e', 'Warlord Trait', 0, cat('tr'), 'type="upgrade"'),
+    unit('b', 'Boss', 50, cat('hq') + profile + rule) +
+    entry('s', 'Allegiance:', 0, `${cat('tr')}${children(entry('x', 'Loyalist'))}`, 'type="upgrade"') +
+    entry('p', 'Expanded', 0, `${cat('tr')}${children(entry('on', 'Legacy On'))}`, 'type="upgrade"') +
+    entry('e', 'Warlord Trait', 0, cat('tr'), 'type="upgrade"'),
   { gst, costLimit: 100 },
 );
 const boyz = army.add('Boyz', 2);
@@ -39,7 +40,10 @@ describe('buildSnapshot', () => {
     expect(s.forces[0]).toMatchObject({ name: 'Detachment', army: 'Orks', pts: 82 });
   });
   it('lists units in force-org order with cleaned up category names', () => {
-    expect(s.forces[0].units.map((u) => [u.name, u.cat, u.pts])).toEqual([['Boss', 'HQ', 50], ['2× Boyz', 'Troops', 32]]);
+    expect(s.forces[0].units.map((u) => [u.name, u.cat, u.pts])).toEqual([
+      ['Boss', 'HQ', 50],
+      ['2× Boyz', 'Troops', 32],
+    ]);
   });
   it('totals wargear across the unit', () => {
     expect(s.forces[0].units[1].gear).toEqual([{ d: 0, t: '6× Choppa (12)' }]);
@@ -63,11 +67,22 @@ describe('buildSnapshot', () => {
 describe('rosterText', () => {
   it('is a readable list in force-org order', () => {
     expect(rosterText(ctlOf(army), repos).split('\n')).toEqual([
-      'Test list — 82/100 pts', '',
-      '== Detachment: · Orks (82 pts) ==', '',
-      '-- HQ --', 'Boss [50]', '',
-      '-- 1. Troops --', '2× Boyz [32]', '  • 6× Choppa (12)',
-      'Allegiance: [0]', '  • Loyalist', 'Expanded [0]', '  • Legacy On', 'Warlord Trait [0]', '',
+      'Test list — 82/100 pts',
+      '',
+      '== Detachment: · Orks (82 pts) ==',
+      '',
+      '-- HQ --',
+      'Boss [50]',
+      '',
+      '-- 1. Troops --',
+      '2× Boyz [32]',
+      '  • 6× Choppa (12)',
+      'Allegiance: [0]',
+      '  • Loyalist',
+      'Expanded [0]',
+      '  • Legacy On',
+      'Warlord Trait [0]',
+      '',
       'Built with Muster',
     ]);
   });
@@ -75,7 +90,16 @@ describe('rosterText', () => {
     const w = world(unit('u', 'Boss', 150), { costLimit: 100 });
     w.add('Boss');
     expect(rosterText(ctlOf(w), repos).split('\n')).toEqual([
-      'Test list — 150/100 pts', '', '== Detachment · Orks (150 pts) ==', '', '-- Other --', 'Boss [150]', '', '(1 unresolved issue)', '', 'Built with Muster',
+      'Test list — 150/100 pts',
+      '',
+      '== Detachment · Orks (150 pts) ==',
+      '',
+      '-- Other --',
+      'Boss [150]',
+      '',
+      '(1 unresolved issue)',
+      '',
+      'Built with Muster',
     ]);
   });
   it('leaves out a limit of zero', () => {
@@ -86,7 +110,17 @@ describe('rosterText', () => {
 });
 
 describe('share links', () => {
-  const snap = (rules?: [string, string][]): Snapshot => ({ v: 1, name: 'List — ✓', game: 'G', pts: 1, limit: 0, forces: [], rules, issues: 0, at: 1 });
+  const snap = (rules?: [string, string][]): Snapshot => ({
+    v: 1,
+    name: 'List — ✓',
+    game: 'G',
+    pts: 1,
+    limit: 0,
+    forces: [],
+    rules,
+    issues: 0,
+    at: 1,
+  });
 
   it('survive a round trip, including non-Latin text', async () => {
     const s = snap([['Rule', 'Text ⚔']]);
@@ -100,7 +134,10 @@ describe('share links', () => {
     expect((await encodeSnapshot(snap([]))).withRules).toBe(false);
   });
   it('drop the rules text from a link that would be too long', async () => {
-    const noise = Array.from({ length: 6000 }, (_, i) => [`Rule ${i}`, Math.random().toString(36).repeat(3)] as [string, string]);
+    const noise = Array.from(
+      { length: 6000 },
+      (_, i) => [`Rule ${i}`, Math.random().toString(36).repeat(3)] as [string, string],
+    );
     const { data, withRules } = await encodeSnapshot(snap(noise));
     expect(withRules).toBe(false);
     expect((await decodeSnapshot(data)).rules).toBeUndefined();

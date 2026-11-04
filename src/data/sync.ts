@@ -6,7 +6,10 @@ import { dataFileText, readZip } from './zip';
 export const DEFAULT_REPOS = ['Blackjack-AoD/NRData', 'Blackjack-AoD/M40GA'];
 
 export function normaliseRepo(input: string): string | null {
-  const s = input.trim().replace(/\.git$/, '').replace(/\/+$/, '');
+  const s = input
+    .trim()
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
   const m = s.match(/(?:github\.com\/)?([\w.-]+)\/([\w.-]+)$/i);
   return m ? `${m[1]}/${m[2]}` : null;
 }
@@ -81,7 +84,13 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
     files.sort((a, b) => a.path.localeCompare(b.path));
     const state: RepoState = { repo, branch, commit, syncedAt: Date.now(), files };
     await db.putRepo(state);
-    onProgress({ repo, stage: 'done', done, total: todo.length, message: todo.length ? `${todo.length} file(s) updated` : 'Already up to date' });
+    onProgress({
+      repo,
+      stage: 'done',
+      done,
+      total: todo.length,
+      message: todo.length ? `${todo.length} file(s) updated` : 'Already up to date',
+    });
     return state;
   } catch (e) {
     const msg = (e as Error).message || 'Sync failed';
@@ -101,7 +110,11 @@ export async function importLocalFiles(repo: string, picked: File[]): Promise<nu
   const incoming: { path: string; text: string; stamp: string }[] = [];
   for (const p of picked) {
     if (DATA_FILE.test(p.name)) {
-      incoming.push({ path: p.name, text: await dataFileText(p.name, await p.arrayBuffer()), stamp: 'local-' + p.lastModified });
+      incoming.push({
+        path: p.name,
+        text: await dataFileText(p.name, await p.arrayBuffer()),
+        stamp: 'local-' + p.lastModified,
+      });
     } else if (/\.zip$/i.test(p.name)) {
       const entries = readZip(await p.arrayBuffer()).filter((e) => DATA_FILE.test(e.name));
       // GitHub zips wrap everything in "<repo>-<branch>/": drop a single shared top folder

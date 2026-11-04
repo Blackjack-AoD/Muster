@@ -16,7 +16,8 @@ class Parser {
 }
 
 const gst = (id = 'g') => `<gameSystem id="${id}" name="Game ${id}" revision="1">${COST_TYPES}</gameSystem>`;
-const cat = (id: string, inner = '', attrs = '') => `<catalogue id="${id}" name="Army ${id}" revision="1" gameSystemId="g" ${attrs}>${inner}</catalogue>`;
+const cat = (id: string, inner = '', attrs = '') =>
+  `<catalogue id="${id}" name="Army ${id}" revision="1" gameSystemId="g" ${attrs}>${inner}</catalogue>`;
 const meta = (path: string, xml: string): FileMeta => ({ path, sha: '1', size: xml.length, header: readHeader(xml) });
 
 async function repoOf(repo: string, files: Record<string, string>): Promise<RepoState> {
@@ -29,10 +30,17 @@ const roster = (repo: string, ...cats: string[]) =>
 beforeEach(() => vi.stubGlobal('DOMParser', Parser));
 
 describe('systemsOf', () => {
-  const repo: RepoState = { repo: 'r', files: [
-    meta('g.gst', gst()), meta('z.cat', cat('z')), meta('a.cat', cat('a')), meta('l.cat', cat('l', '', 'library="true"')),
-    meta('other.cat', cat('x').replace('gameSystemId="g"', 'gameSystemId="other"')), { path: 'bad.cat', sha: '1', size: 0, header: null },
-  ] };
+  const repo: RepoState = {
+    repo: 'r',
+    files: [
+      meta('g.gst', gst()),
+      meta('z.cat', cat('z')),
+      meta('a.cat', cat('a')),
+      meta('l.cat', cat('l', '', 'library="true"')),
+      meta('other.cat', cat('x').replace('gameSystemId="g"', 'gameSystemId="other"')),
+      { path: 'bad.cat', sha: '1', size: 0, header: null },
+    ],
+  };
   it('groups catalogues under their game, sorted, with libraries apart', () => {
     const [s] = systemsOf([repo]);
     expect(s.gst.path).toBe('g.gst');
@@ -69,7 +77,10 @@ describe('getContext', () => {
   it('builds a context with everything linked, following links between libraries', async () => {
     const link = (t: string) => `<catalogueLinks><catalogueLink targetId="${t}"/></catalogueLinks>`;
     const repo = await repoOf('ctx/1', {
-      'g.gst': gst(), 'a.cat': cat('a', link('l1')), 'l1.cat': cat('l1', link('l2') + link('a')), 'l2.cat': cat('l2', link('l1') + link('gone')),
+      'g.gst': gst(),
+      'a.cat': cat('a', link('l1')),
+      'l1.cat': cat('l1', link('l2') + link('a')),
+      'l2.cat': cat('l2', link('l1') + link('gone')),
     });
     const ctx = await getContext(repo, 'a');
     expect(ctx.files.map((f) => f.id)).toEqual(['a', 'l1', 'l2', 'g']);
@@ -82,7 +93,10 @@ describe('getContext', () => {
     expect(await getContext(repo, 'a')).not.toBe(first);
   });
   it('clearing one repo leaves others cached', async () => {
-    const [r3, r4] = [await repoOf('ctx/3', { 'g.gst': gst(), 'a.cat': cat('a') }), await repoOf('ctx/4', { 'g.gst': gst(), 'a.cat': cat('a') })];
+    const [r3, r4] = [
+      await repoOf('ctx/3', { 'g.gst': gst(), 'a.cat': cat('a') }),
+      await repoOf('ctx/4', { 'g.gst': gst(), 'a.cat': cat('a') }),
+    ];
     const keep = await getContext(r4, 'a');
     await getContext(r3, 'a');
     clearCaches('ctx/3');
@@ -119,6 +133,8 @@ describe('contextsFor', () => {
     expect([...out.keys()]).toEqual(['a', 'b']);
   });
   it('says when the data is not on this phone', async () => {
-    await expect(contextsFor(roster('cf/2', 'a'), [])).rejects.toThrow("Data for cf/2 isn't on this phone. Sync it on the Data tab.");
+    await expect(contextsFor(roster('cf/2', 'a'), [])).rejects.toThrow(
+      "Data for cf/2 isn't on this phone. Sync it on the Data tab.",
+    );
   });
 });

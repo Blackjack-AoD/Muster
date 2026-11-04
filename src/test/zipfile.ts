@@ -6,7 +6,12 @@ async function deflate(data: Uint8Array) {
   return new Uint8Array(await new Response(s).arrayBuffer());
 }
 
-export interface ZipFile { name: string; text?: string; method?: number; /** bytes of extra header, as real zip tools write */ extra?: number }
+export interface ZipFile {
+  name: string;
+  text?: string;
+  method?: number;
+  /** bytes of extra header, as real zip tools write */ extra?: number;
+}
 
 export async function makeZip(files: ZipFile[], comment = ''): Promise<Uint8Array> {
   const parts: Uint8Array[] = [];
@@ -47,6 +52,9 @@ export async function makeZip(files: ZipFile[], comment = ''): Promise<Uint8Arra
   const all = [...parts, ...central, new Uint8Array(end.buffer), c];
   const out = new Uint8Array(all.reduce((t, p) => t + p.length, 0));
   let p = 0;
-  for (const part of all) { out.set(part, p); p += part.length; }
+  for (const part of all) {
+    out.set(part, p);
+    p += part.length;
+  }
   return out;
 }

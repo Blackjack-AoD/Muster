@@ -13,7 +13,15 @@ export function Games() {
     return (
       <div class="page">
         <TopBar title="Games" />
-        <Empty title="No games yet"><p class="muted">Download army data on the <Link to="/data" replace>Data</Link> tab.</p></Empty>
+        <Empty title="No games yet">
+          <p class="muted">
+            Download army data on the{' '}
+            <Link to="/data" replace>
+              Data
+            </Link>{' '}
+            tab.
+          </p>
+        </Empty>
       </div>
     );
   }
@@ -30,7 +38,12 @@ export function Games() {
         {systems.length > 1 && (
           <button class={'pick radio' + (!current ? ' on' : '')} onClick={() => pick(undefined, '')}>
             <span class="dot" />
-            <span><b>All games</b><small>{rosters.length} list{rosters.length === 1 ? '' : 's'}</small></span>
+            <span>
+              <b>All games</b>
+              <small>
+                {rosters.length} list{rosters.length === 1 ? '' : 's'}
+              </small>
+            </span>
           </button>
         )}
         {systems.map((s) => {
@@ -42,13 +55,18 @@ export function Games() {
               <span class="dot" />
               <span>
                 <b>{name}</b>
-                <small>{s.catalogues.length} arm{s.catalogues.length === 1 ? 'y' : 'ies'} · {lists} list{lists === 1 ? '' : 's'} · {s.repo}</small>
+                <small>
+                  {s.catalogues.length} arm{s.catalogues.length === 1 ? 'y' : 'ies'} · {lists} list
+                  {lists === 1 ? '' : 's'} · {s.repo}
+                </small>
               </span>
             </button>
           );
         })}
       </div>
-      <p class="muted small pad-x">To add another game, add its data repo on the <Link to="/data">Data</Link> tab.</p>
+      <p class="muted small pad-x">
+        To add another game, add its data repo on the <Link to="/data">Data</Link> tab.
+      </p>
     </div>
   );
 }

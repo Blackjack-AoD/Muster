@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { Opt } from './catalog';
-import { addMandatoryRoots, applyLoreAllegiance, loreAllegiance, onOffPair, pick, setUpForce, switchesOn } from './setup';
+import {
+  addMandatoryRoots,
+  applyLoreAllegiance,
+  loreAllegiance,
+  onOffPair,
+  pick,
+  setUpForce,
+  switchesOn,
+} from './setup';
 import { children, entry, unit, world } from '../test/fixture';
 
-const min1 = (scope: string) => `<constraints><constraint id="c" type="min" value="1" field="selections" scope="${scope}"/></constraints>`;
-const group = (id: string, name: string, inner: string) => `<selectionEntryGroups><selectionEntryGroup id="${id}" name="${name}">${inner}</selectionEntryGroup></selectionEntryGroups>`;
+const min1 = (scope: string) =>
+  `<constraints><constraint id="c" type="min" value="1" field="selections" scope="${scope}"/></constraints>`;
+const group = (id: string, name: string, inner: string) =>
+  `<selectionEntryGroups><selectionEntryGroup id="${id}" name="${name}">${inner}</selectionEntryGroup></selectionEntryGroups>`;
 const setupEntry = (id: string, name: string, inner: string) => entry(id, name, 0, inner);
 const rootNames = (w: ReturnType<typeof world>) => w.ev().forces[0].roots.map((r) => r.eff.name);
 const opt = (name: string, kind: Opt['kind'] = 'entry') => ({ kind, node: { name } }) as unknown as Opt;
@@ -25,9 +35,14 @@ describe('onOffPair', () => {
 
 describe('loreAllegiance', () => {
   it.each([
-    ['Sons of Horus', 'Traitor'], ['Legiones Astartes: Iron Warriors', 'Traitor'], ["Emperor's Children", 'Traitor'],
-    ['Emperor’s Children', 'Traitor'], ['Daemons of the Ruinstorm', 'Traitor'],
-    ['Ultramarines', 'Loyalist'], ['Imperial Fists', 'Loyalist'], ['Solar Auxilia', 'Loyalist'],
+    ['Sons of Horus', 'Traitor'],
+    ['Legiones Astartes: Iron Warriors', 'Traitor'],
+    ["Emperor's Children", 'Traitor'],
+    ['Emperor’s Children', 'Traitor'],
+    ['Daemons of the Ruinstorm', 'Traitor'],
+    ['Ultramarines', 'Loyalist'],
+    ['Imperial Fists', 'Loyalist'],
+    ['Solar Auxilia', 'Loyalist'],
   ])('%s is %s', (army, side) => expect(loreAllegiance(army)).toBe(side));
 });
 
@@ -38,7 +53,11 @@ describe('addMandatoryRoots', () => {
     expect(rootNames(w)).toEqual(['Legion']);
   });
   it('leaves optional entries, hidden ones, and ones already there', () => {
-    const w = world(setupEntry('a', 'Optional', '') + entry('b', 'Hidden', 0, min1('force'), 'type="upgrade" hidden="true"') + setupEntry('c', 'Done', min1('force')));
+    const w = world(
+      setupEntry('a', 'Optional', '') +
+        entry('b', 'Hidden', 0, min1('force'), 'type="upgrade" hidden="true"') +
+        setupEntry('c', 'Done', min1('force')),
+    );
     w.add('Done');
     expect(addMandatoryRoots(w.roster, w.contexts, 'f1')).toBe(0);
     expect(rootNames(w)).toEqual(['Done']);
@@ -50,7 +69,12 @@ describe('addMandatoryRoots', () => {
     expect(addMandatoryRoots(w.roster, w.contexts, 'f2')).toBe(0);
   });
   it('re-checks, because one set-up entry can make another mandatory', () => {
-    const second = entry('b', 'Second', 0, `<constraints><constraint id="c2" type="min" value="0" field="selections" scope="force"/></constraints><modifiers><modifier type="set" field="c2" value="1"><conditions><condition type="atLeast" value="1" field="selections" scope="force" childId="a"/></conditions></modifier></modifiers>`);
+    const second = entry(
+      'b',
+      'Second',
+      0,
+      `<constraints><constraint id="c2" type="min" value="0" field="selections" scope="force"/></constraints><modifiers><modifier type="set" field="c2" value="1"><conditions><condition type="atLeast" value="1" field="selections" scope="force" childId="a"/></conditions></modifier></modifiers>`,
+    );
     const w = world(setupEntry('a', 'First', min1('force')) + second);
     expect(addMandatoryRoots(w.roster, w.contexts, 'f1')).toBe(2);
   });
@@ -61,15 +85,26 @@ describe('addMandatoryRoots', () => {
 });
 
 describe('applyLoreAllegiance', () => {
-  const allegiance = setupEntry('al', 'Allegiance', group('g', 'Side', children(entry('l', 'Loyalist'), entry('t', ' Traitor ')) ) + children(entry('x', 'Other')));
+  const allegiance = setupEntry(
+    'al',
+    'Allegiance',
+    group('g', 'Side', children(entry('l', 'Loyalist'), entry('t', ' Traitor '))) + children(entry('x', 'Other')),
+  );
   it('picks the side from the lore', () => {
     const w = world(allegiance);
     const a = w.add('Allegiance');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(w.ev().find(a)!.children.map((c) => c.eff.name.trim())).toEqual(['Traitor']);
+    expect(
+      w
+        .ev()
+        .find(a)!
+        .children.map((c) => c.eff.name.trim()),
+    ).toEqual(['Traitor']);
   });
   it('ignores groups that are not an allegiance choice', () => {
-    const w = world(setupEntry('al', 'Other', group('g', 'Side', children(entry('l', 'Loyalist'), entry('z', 'Neutral')))));
+    const w = world(
+      setupEntry('al', 'Other', group('g', 'Side', children(entry('l', 'Loyalist'), entry('z', 'Neutral')))),
+    );
     const a = w.add('Other');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
     expect(w.ev().find(a)!.children).toEqual([]);
@@ -81,25 +116,50 @@ describe('applyLoreAllegiance', () => {
 });
 
 describe('switchesOn', () => {
-  const panel = setupEntry('p', 'Expanded', group('g1', 'Legacy', children(entry('on', 'Legacy On'), entry('off', 'Legacy Off'))));
+  const panel = setupEntry(
+    'p',
+    'Expanded',
+    group('g1', 'Legacy', children(entry('on', 'Legacy On'), entry('off', 'Legacy Off'))),
+  );
   it('turns every switch on', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(w.ev().find(p)!.children.map((c) => c.eff.name)).toEqual(['Legacy On']);
+    expect(
+      w
+        .ev()
+        .find(p)!
+        .children.map((c) => c.eff.name),
+    ).toEqual(['Legacy On']);
   });
   it('replaces an Off with On', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     w.pick(p, 'Legacy Off');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(w.ev().find(p)!.children.map((c) => c.eff.name)).toEqual(['Legacy On']);
+    expect(
+      w
+        .ev()
+        .find(p)!
+        .children.map((c) => c.eff.name),
+    ).toEqual(['Legacy On']);
   });
   it('finds switches inside other groups', () => {
-    const w = world(setupEntry('p', 'Expanded', group('o', 'Outer', group('g1', 'Legacy', children(entry('on', 'X On'), entry('off', 'X Off'))))));
+    const w = world(
+      setupEntry(
+        'p',
+        'Expanded',
+        group('o', 'Outer', group('g1', 'Legacy', children(entry('on', 'X On'), entry('off', 'X Off')))),
+      ),
+    );
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(w.ev().find(p)!.children.map((c) => c.eff.name)).toEqual(['X On']);
+    expect(
+      w
+        .ev()
+        .find(p)!
+        .children.map((c) => c.eff.name),
+    ).toEqual(['X On']);
   });
   it('leaves units alone', () => {
     const w = world(unit('p', 'Squad', 0, group('g1', 'Legacy', children(entry('on', 'X On'), entry('off', 'X Off')))));
@@ -126,7 +186,12 @@ describe('pick', () => {
     const { w, p, rs, g } = setup();
     pick(w.roster, w.contexts, rs, g, g.members[0]);
     pick(w.roster, w.contexts, rs, g, g.members[1]);
-    expect(w.ev().find(p)!.children.map((c) => c.eff.name)).toEqual(['B']);
+    expect(
+      w
+        .ev()
+        .find(p)!
+        .children.map((c) => c.eff.name),
+    ).toEqual(['B']);
   });
   it('does nothing when the target is already picked', () => {
     const { w, p, rs, g } = setup();
@@ -140,8 +205,16 @@ describe('pick', () => {
 describe('setUpForce', () => {
   it('adds set-up, sets allegiance, and turns switches on', () => {
     const w = world(
-      setupEntry('al', 'Allegiance', min1('force') + group('g', 'Side', children(entry('l', 'Loyalist'), entry('t', 'Traitor')))) +
-      setupEntry('p', 'Expanded', min1('force') + group('g1', 'Legacy', children(entry('on', 'Legacy On'), entry('off', 'Legacy Off')))),
+      setupEntry(
+        'al',
+        'Allegiance',
+        min1('force') + group('g', 'Side', children(entry('l', 'Loyalist'), entry('t', 'Traitor'))),
+      ) +
+        setupEntry(
+          'p',
+          'Expanded',
+          min1('force') + group('g1', 'Legacy', children(entry('on', 'Legacy On'), entry('off', 'Legacy Off'))),
+        ),
     );
     setUpForce(w.roster, w.contexts, 'f1', 'Night Lords');
     const picks = w.ev().forces[0].roots.flatMap((r) => r.children.map((c) => c.eff.name));

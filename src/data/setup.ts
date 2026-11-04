@@ -27,7 +27,9 @@ export function addMandatoryRoots(roster: Roster, contexts: Map<string, Context>
       const eff = ev.optionEff(o, null, rf);
       if (eff.hidden || unavailable(eff)) continue;
       const mins = eff.constraints.filter((c) => c.type === 'min' && c.field === 'selections' && c.value >= 1);
-      const forceMin = mins.filter((c) => c.scope === 'parent' || c.scope === 'force').reduce((m, c) => Math.max(m, c.value), 0);
+      const forceMin = mins
+        .filter((c) => c.scope === 'parent' || c.scope === 'force')
+        .reduce((m, c) => Math.max(m, c.value), 0);
       // once per list (e.g. 40k 10th edition's Battle Size and Detachment): count every force
       const rosterMin = mins.filter((c) => c.scope === 'roster').reduce((m, c) => Math.max(m, c.value), 0);
       const here = rf.roots.filter((r) => r.opt.key === o.key).length;
@@ -46,8 +48,18 @@ export function addMandatoryRoots(roster: Roster, contexts: Map<string, Context>
 
 // Horus Heresy: which side each faction took in the lore. Anything not listed is Loyalist.
 const TRAITOR = [
-  "emperor's children", 'emperor’s children', 'iron warriors', 'night lords', 'world eaters', 'death guard',
-  'thousand sons', 'sons of horus', 'word bearers', 'alpha legion', 'daemon', 'ruinstorm',
+  "emperor's children",
+  'emperor’s children',
+  'iron warriors',
+  'night lords',
+  'world eaters',
+  'death guard',
+  'thousand sons',
+  'sons of horus',
+  'word bearers',
+  'alpha legion',
+  'daemon',
+  'ruinstorm',
 ];
 export function loreAllegiance(armyName: string): 'Traitor' | 'Loyalist' {
   const n = armyName.toLowerCase();
@@ -55,7 +67,12 @@ export function loreAllegiance(armyName: string): 'Traitor' | 'Loyalist' {
 }
 
 /** Set the Loyalist / Traitor choice to the army's side in the lore. */
-export function applyLoreAllegiance(roster: Roster, contexts: Map<string, Context>, forceUid: string, armyName: string) {
+export function applyLoreAllegiance(
+  roster: Roster,
+  contexts: Map<string, Context>,
+  forceUid: string,
+  armyName: string,
+) {
   const ev = new Evaluator(roster, contexts);
   const rf = ev.forces.find((f) => f.force.uid === forceUid);
   if (!rf) return;
@@ -81,10 +98,12 @@ export function switchesOn(roster: Roster, contexts: Map<string, Context>, force
     const walk = (rs: RSel, opts: Opt[]): boolean => {
       for (const g of opts) {
         if (g.kind !== 'group') continue;
-        const pair = onOffPair(g.members.filter((m) => {
-          const e = ev.optionEff(m, rs, rf);
-          return !e.hidden && !unavailable(e);
-        }));
+        const pair = onOffPair(
+          g.members.filter((m) => {
+            const e = ev.optionEff(m, rs, rf);
+            return !e.hidden && !unavailable(e);
+          }),
+        );
         if (pair && !rs.children.some((c) => c.opt.key === pair.on.key)) {
           pick(roster, contexts, rs, g, pair.on);
           return true;
@@ -95,7 +114,10 @@ export function switchesOn(roster: Roster, contexts: Map<string, Context>, force
     };
     for (const rs of rf.roots) {
       if (isUnitLike(rs.opt)) continue;
-      if (walk(rs, rf.ctx.options(rs.node))) { did = true; break; }
+      if (walk(rs, rf.ctx.options(rs.node))) {
+        did = true;
+        break;
+      }
     }
     if (!did) return;
   }

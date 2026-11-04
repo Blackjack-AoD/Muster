@@ -2,8 +2,29 @@
 // ignoring ids and numbers. Read from raw XML, so it works on data files and on unit test sources alike.
 
 const TAG = /<(condition|repeat|constraint|modifier)\b([^>]*?)\/?>/g;
-const WORD_FIELDS = new Set(['selections', 'forces', 'hidden', 'name', 'category', 'description', 'defaultSelectionEntryId']);
-const WORD_SCOPES = new Set(['self', 'parent', 'ancestor', 'force', 'roster', 'primary-category', 'primary-catalogue', 'root-entry', 'unit', 'model', 'upgrade', 'model-or-unit']);
+const WORD_FIELDS = new Set([
+  'selections',
+  'forces',
+  'hidden',
+  'name',
+  'category',
+  'description',
+  'defaultSelectionEntryId',
+]);
+const WORD_SCOPES = new Set([
+  'self',
+  'parent',
+  'ancestor',
+  'force',
+  'roster',
+  'primary-category',
+  'primary-catalogue',
+  'root-entry',
+  'unit',
+  'model',
+  'upgrade',
+  'model-or-unit',
+]);
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1];
 
@@ -20,11 +41,14 @@ export function shapesOf(xml: string, costTypes: Iterable<string> = []): string[
     const s = attr(a, 'scope') ?? 'parent';
     return WORD_SCOPES.has(s) ? s : 'id';
   };
-  const flags = (a: string) => [
-    attr(a, 'includeChildSelections') === 'true' && 'deep',
-    attr(a, 'percentValue') === 'true' && 'percent',
-    attr(a, 'roundUp') === 'true' && 'roundUp',
-  ].filter(Boolean).join(' ');
+  const flags = (a: string) =>
+    [
+      attr(a, 'includeChildSelections') === 'true' && 'deep',
+      attr(a, 'percentValue') === 'true' && 'percent',
+      attr(a, 'roundUp') === 'true' && 'roundUp',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   return [...xml.matchAll(TAG)].map(([, tag, a]) => {
     const f = flags(a);

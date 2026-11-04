@@ -63,27 +63,47 @@ function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) 
 const fileKey = (repo: string, path: string) => `${repo}|${path}`;
 
 export const db = {
-  getFile: (repo: string, path: string) => tx<string | undefined>('files', 'readonly', (s) => s.get(fileKey(repo, path))),
-  putFile: (repo: string, path: string, text: string) => tx('files', 'readwrite', (s) => { s.put(text, fileKey(repo, path)); }),
-  delFile: (repo: string, path: string) => tx('files', 'readwrite', (s) => { s.delete(fileKey(repo, path)); }),
+  getFile: (repo: string, path: string) =>
+    tx<string | undefined>('files', 'readonly', (s) => s.get(fileKey(repo, path))),
+  putFile: (repo: string, path: string, text: string) =>
+    tx('files', 'readwrite', (s) => {
+      s.put(text, fileKey(repo, path));
+    }),
+  delFile: (repo: string, path: string) =>
+    tx('files', 'readwrite', (s) => {
+      s.delete(fileKey(repo, path));
+    }),
   repos: () => tx<RepoState[]>('repos', 'readonly', (s) => s.getAll()),
-  putRepo: (r: RepoState) => tx('repos', 'readwrite', (s) => { s.put(r); }),
+  putRepo: (r: RepoState) =>
+    tx('repos', 'readwrite', (s) => {
+      s.put(r);
+    }),
   delRepo: async (repo: string) => {
     const all = await db.repos();
     const r = all.find((x) => x.repo === repo);
     if (r) for (const f of r.files) await db.delFile(repo, f.path);
-    await tx('repos', 'readwrite', (s) => { s.delete(repo); });
+    await tx('repos', 'readwrite', (s) => {
+      s.delete(repo);
+    });
   },
   rosters: () => tx<Roster[]>('rosters', 'readonly', (s) => s.getAll()),
-  putRoster: (r: Roster) => tx('rosters', 'readwrite', (s) => { s.put(JSON.parse(JSON.stringify(r))); }),
-  delRoster: (uid: string) => tx('rosters', 'readwrite', (s) => { s.delete(uid); }),
+  putRoster: (r: Roster) =>
+    tx('rosters', 'readwrite', (s) => {
+      s.put(JSON.parse(JSON.stringify(r)));
+    }),
+  delRoster: (uid: string) =>
+    tx('rosters', 'readwrite', (s) => {
+      s.delete(uid);
+    }),
 };
 
 /** Ask the browser not to clear our storage when space runs low. */
 export async function persistStorage() {
   try {
     if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function storageUse(): Promise<{ used: number; quota: number; persisted: boolean } | null> {

@@ -1,15 +1,9 @@
 {
-  "plugins": [
-    "typescript"
-  ],
+  "plugins": ["typescript"],
   "categories": {
     "correctness": "error"
   },
-  "ignorePatterns": [
-    "scripts/*.cjs",
-    "scripts/compare.ts",
-    "scripts/test-engine.ts"
-  ],
+  "ignorePatterns": ["scripts/*.cjs", "scripts/compare.ts", "scripts/test-engine.ts"],
   "rules": {
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "warn",

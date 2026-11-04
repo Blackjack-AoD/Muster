@@ -2,9 +2,22 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
 import type { Roster } from './data/engine';
-import { deleteRoster, dismissToast, getState, importRosters, init, refreshRepos, removeRepo, saveRoster, setGame, syncAll, toast } from './store';
+import {
+  deleteRoster,
+  dismissToast,
+  getState,
+  importRosters,
+  init,
+  refreshRepos,
+  removeRepo,
+  saveRoster,
+  setGame,
+  syncAll,
+  toast,
+} from './store';
 
-const roster = (uid: string, name = 'List') => ({ uid, name, repo: 'r', gameSystemId: 'g', costLimit: 0, forces: [], created: 0, updated: 0 }) as Roster;
+const roster = (uid: string, name = 'List') =>
+  ({ uid, name, repo: 'r', gameSystemId: 'g', costLimit: 0, forces: [], created: 0, updated: 0 }) as Roster;
 const stored = async (uid: string) => (await db.rosters()).filter((r) => r.uid === uid);
 
 beforeEach(() => {
@@ -23,7 +36,11 @@ describe('saving lists', () => {
   it('replaces rather than duplicates', async () => {
     await saveRoster(roster('s2', 'First'));
     await saveRoster(roster('s2', 'Second'));
-    expect(getState().rosters.filter((x) => x.uid === 's2').map((x) => x.name)).toEqual(['Second']);
+    expect(
+      getState()
+        .rosters.filter((x) => x.uid === 's2')
+        .map((x) => x.name),
+    ).toEqual(['Second']);
     expect((await stored('s2')).map((x) => x.name)).toEqual(['Second']);
   });
   it('keeps its own copy in memory', async () => {
@@ -83,7 +100,10 @@ describe('app state', () => {
   });
   it('remembers the chosen game, and copes without local storage', () => {
     const store = new Map<string, string>();
-    vi.stubGlobal('localStorage', { setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    vi.stubGlobal('localStorage', {
+      setItem: (k: string, v: string) => store.set(k, v),
+      removeItem: (k: string) => store.delete(k),
+    });
     setGame('r|g');
     expect(store.get('muster.game')).toBe('r|g');
     expect(getState().game).toBe('r|g');

@@ -6,7 +6,12 @@ const text = (b: Uint8Array) => new TextDecoder().decode(b);
 
 describe('readZip', () => {
   it('reads deflated and stored files', async () => {
-    const entries = readZip(await makeZip([{ name: 'a.txt', text: 'hello hello hello' }, { name: 'b.txt', text: 'plain', method: 0 }]));
+    const entries = readZip(
+      await makeZip([
+        { name: 'a.txt', text: 'hello hello hello' },
+        { name: 'b.txt', text: 'plain', method: 0 },
+      ]),
+    );
     expect(entries.map((e) => e.name)).toEqual(['a.txt', 'b.txt']);
     expect(text(await entries[0].read())).toBe('hello hello hello');
     expect(text(await entries[1].read())).toBe('plain');
@@ -26,7 +31,14 @@ describe('readZip', () => {
     expect(text(await readZip(padded.subarray(3, 3 + z.length))[0].read())).toBe('x');
   });
   it('skips folders', async () => {
-    expect(readZip(await makeZip([{ name: 'dir/', method: 0 }, { name: 'dir/a.txt', text: 'x' }])).map((e) => e.name)).toEqual(['dir/a.txt']);
+    expect(
+      readZip(
+        await makeZip([
+          { name: 'dir/', method: 0 },
+          { name: 'dir/a.txt', text: 'x' },
+        ]),
+      ).map((e) => e.name),
+    ).toEqual(['dir/a.txt']);
   });
   it('copes with a comment at the end', async () => {
     expect(readZip(await makeZip([{ name: 'a.txt' }], 'made by a test'))).toHaveLength(1);
@@ -74,7 +86,15 @@ describe('dataFileText', () => {
     expect(await dataFileText('a.cat', await makeZip([{ name: 'a.cat', text: xml }]))).toBe(xml);
   });
   it('prefers the data file inside', async () => {
-    expect(await dataFileText('a.catz', await makeZip([{ name: 'readme.txt', text: 'no' }, { name: 'a.gst', text: xml }]))).toBe(xml);
+    expect(
+      await dataFileText(
+        'a.catz',
+        await makeZip([
+          { name: 'readme.txt', text: 'no' },
+          { name: 'a.gst', text: xml },
+        ]),
+      ),
+    ).toBe(xml);
   });
   it('falls back to the first file', async () => {
     expect(await dataFileText('a.catz', await makeZip([{ name: 'data.xml', text: xml }]))).toBe(xml);

@@ -19,7 +19,9 @@ export function registerServiceWorker() {
     location.reload();
   });
   addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* offline or unsupported */ });
+    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {
+      /* offline or unsupported */
+    });
   });
   // Automatic check at most once a week (on opening the app, or coming back to it); otherwise only on request.
   const weekly = () => {
@@ -34,7 +36,11 @@ export function registerServiceWorker() {
 const WEEK = 7 * 24 * 60 * 60_000;
 const LAST_KEY = 'muster.lastUpdateCheck';
 function lastCheck() {
-  try { return Number(localStorage.getItem(LAST_KEY)) || 0; } catch { return 0; }
+  try {
+    return Number(localStorage.getItem(LAST_KEY)) || 0;
+  } catch {
+    return 0;
+  }
 }
 /** when the app last looked for a new version (0 = never) */
 export function lastUpdateCheck() {
@@ -51,7 +57,11 @@ export async function checkForUpdate(): Promise<UpdateResult> {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return 'unsupported';
     await reg.update();
-    try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch { /* fine */ }
+    try {
+      localStorage.setItem(LAST_KEY, String(Date.now()));
+    } catch {
+      /* fine */
+    }
     // the browser may have fetched a new version already; it waits until we say so
     const next = reg.installing ?? reg.waiting;
     if (!next) return 'latest';
@@ -60,7 +70,10 @@ export async function checkForUpdate(): Promise<UpdateResult> {
       // older builds wait to be told to take over
       if (next.state === 'installed') next.postMessage({ type: 'SKIP_WAITING' });
       // fallback if the new worker activates without a controller change (e.g. the page wasn't controlled)
-      if (next.state === 'activated' && !reloading) { reloading = true; location.reload(); }
+      if (next.state === 'activated' && !reloading) {
+        reloading = true;
+        location.reload();
+      }
     });
     return 'updating';
   } catch {

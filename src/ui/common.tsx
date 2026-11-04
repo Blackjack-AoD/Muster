@@ -3,16 +3,43 @@ import { useLayoutEffect, useRef } from 'preact/hooks';
 import { back, go, pushSheetState } from '../app';
 import { Icon } from './Icon';
 
-export function Link({ to, replace, class: cls, children }: { to: string; replace?: boolean; class?: string; children: ComponentChildren }) {
+export function Link({
+  to,
+  replace,
+  class: cls,
+  children,
+}: {
+  to: string;
+  replace?: boolean;
+  class?: string;
+  children: ComponentChildren;
+}) {
   return (
-    <a class={cls} href={'#' + to} onClick={(e) => { e.preventDefault(); go(to, replace); }}>
+    <a
+      class={cls}
+      href={'#' + to}
+      onClick={(e) => {
+        e.preventDefault();
+        go(to, replace);
+      }}
+    >
       {children}
     </a>
   );
 }
 
-export function TopBar({ title, sub, onBack, backTo, right }: {
-  title: ComponentChildren; sub?: ComponentChildren; onBack?: () => void; backTo?: string; right?: ComponentChildren;
+export function TopBar({
+  title,
+  sub,
+  onBack,
+  backTo,
+  right,
+}: {
+  title: ComponentChildren;
+  sub?: ComponentChildren;
+  onBack?: () => void;
+  backTo?: string;
+  right?: ComponentChildren;
 }) {
   const hasBack = onBack || backTo;
   return (
@@ -35,7 +62,17 @@ let sheetSeq = 0;
 /** a sheet that just closed itself: its history step is released a moment later unless another sheet takes it over */
 let releasing: { cancelled: boolean } | null = null;
 
-export function Sheet({ title, onClose, children, full }: { title: ComponentChildren; onClose: () => void; children: ComponentChildren; full?: boolean }) {
+export function Sheet({
+  title,
+  onClose,
+  children,
+  full,
+}: {
+  title: ComponentChildren;
+  onClose: () => void;
+  children: ComponentChildren;
+  full?: boolean;
+}) {
   const close = useRef(onClose);
   close.current = onClose;
   // layout effect: runs in the same commit as a previous sheet's cleanup, so one sheet can hand its step to the next
@@ -78,7 +115,9 @@ export function Sheet({ title, onClose, children, full }: { title: ComponentChil
       <div class={'sheet' + (full ? ' full' : '')} role="dialog" aria-modal="true">
         <div class="sheet-head">
           <h2>{title}</h2>
-          <button class="icon-btn" aria-label="Close" onClick={onClose}><Icon name="x" /></button>
+          <button class="icon-btn" aria-label="Close" onClick={onClose}>
+            <Icon name="x" />
+          </button>
         </div>
         <div class="sheet-body">{children}</div>
       </div>
@@ -89,7 +128,9 @@ export function Sheet({ title, onClose, children, full }: { title: ComponentChil
 export function Empty({ title, children }: { title: string; children?: ComponentChildren }) {
   return (
     <div class="empty">
-      <div class="empty-mark"><Icon name="shield" size={40} /></div>
+      <div class="empty-mark">
+        <Icon name="shield" size={40} />
+      </div>
       <h3>{title}</h3>
       {children}
     </div>

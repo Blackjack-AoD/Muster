@@ -21,11 +21,16 @@ function useHash() {
 }
 
 let depth = 0;
-addEventListener('popstate', () => { if (depth > 0) depth--; });
+addEventListener('popstate', () => {
+  if (depth > 0) depth--;
+});
 export function go(path: string, replace = false) {
   const h = '#' + path;
   if (replace) history.replaceState(null, '', h);
-  else { history.pushState(null, '', h); depth++; }
+  else {
+    history.pushState(null, '', h);
+    depth++;
+  }
   dispatchEvent(new HashChangeEvent('hashchange'));
 }
 /** history step for an open sheet (same address, marked so back can close it) */
@@ -51,7 +56,12 @@ export function App() {
   const parts = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   let page;
   let tab = 'lists';
-  if (!ready) page = <div class="center-fill"><div class="spinner" /></div>;
+  if (!ready)
+    page = (
+      <div class="center-fill">
+        <div class="spinner" />
+      </div>
+    );
   else if (parts[0] === 'view' && parts[1]) page = <SharedView data={parts[1]} />;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'sheet') page = <SheetPage rosterUid={parts[1]} />;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'u') page = <UnitPage rosterUid={parts[1]} selUid={parts[3]} />;
@@ -64,7 +74,13 @@ export function App() {
     page = <Compendium />;
   } else if (parts[0] === 'lib') {
     tab = 'lib';
-    page = <Library repo={parts[1] && parts[2] ? `${parts[1]}/${parts[2]}` : undefined} catId={parts[3]} unitKey={parts[4]} />;
+    page = (
+      <Library
+        repo={parts[1] && parts[2] ? `${parts[1]}/${parts[2]}` : undefined}
+        catId={parts[3]}
+        unitKey={parts[4]}
+      />
+    );
   } else if (parts[0] === 'data') {
     tab = 'data';
     page = <DataView />;
@@ -76,16 +92,37 @@ export function App() {
       {page}
       {showNav && (
         <nav class="tabbar">
-          <a class={tab === 'lists' ? 'on' : ''} href="#/"><Icon name="list" /><span>Lists</span></a>
-          <a class={tab === 'lib' ? 'on' : ''} href="#/lib"><Icon name="book" /><span>Library</span></a>
-          <a class={tab === 'games' ? 'on' : ''} href="#/games"><Icon name="dice" /><span>Games</span></a>
-          <a class={tab === 'data' ? 'on' : ''} href="#/data"><Icon name="sync" /><span>Data</span></a>
+          <a class={tab === 'lists' ? 'on' : ''} href="#/">
+            <Icon name="list" />
+            <span>Lists</span>
+          </a>
+          <a class={tab === 'lib' ? 'on' : ''} href="#/lib">
+            <Icon name="book" />
+            <span>Library</span>
+          </a>
+          <a class={tab === 'games' ? 'on' : ''} href="#/games">
+            <Icon name="dice" />
+            <span>Games</span>
+          </a>
+          <a class={tab === 'data' ? 'on' : ''} href="#/data">
+            <Icon name="sync" />
+            <span>Data</span>
+          </a>
         </nav>
       )}
       {toast && (
         <div class={'toast' + (toastAction ? ' has-action' : '')} role="status">
           <span>{toast}</span>
-          {toastAction && <button onClick={() => { toastAction.run(); dismissToast(); }}>{toastAction.label}</button>}
+          {toastAction && (
+            <button
+              onClick={() => {
+                toastAction.run();
+                dismissToast();
+              }}
+            >
+              {toastAction.label}
+            </button>
+          )}
         </div>
       )}
     </div>

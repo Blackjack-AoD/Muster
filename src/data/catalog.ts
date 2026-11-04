@@ -53,7 +53,8 @@ export class Context {
     f.sharedInfoGroups.forEach(walk);
     for (const p of f.sharedProfiles) this.profileIdx.set(p.id, p);
     for (const r of f.sharedRules) this.ruleIdx.set(r.id, r);
-    for (const pt of f.profileTypes) this.profileColumns.set(pt.id, { name: pt.name, columns: pt.columns.map((c) => c.name) });
+    for (const pt of f.profileTypes)
+      this.profileColumns.set(pt.id, { name: pt.name, columns: pt.columns.map((c) => c.name) });
   }
 
   get(id: string) {
@@ -141,7 +142,7 @@ export class Context {
 
   /** Find an option by key beneath a node (searches inside groups). */
   findOption(parent: EntryNode | null, key: string, roots?: Opt[]): Opt | undefined {
-    const list = parent ? this.options(parent) : roots ?? [];
+    const list = parent ? this.options(parent) : (roots ?? []);
     const stack = [...list];
     while (stack.length) {
       const o = stack.pop()!;
@@ -203,9 +204,10 @@ export class Context {
     const own = n.costs.find((c) => c.typeId === ptsId)?.value ?? 0;
     let total = own;
     if (depth < 8) {
-      const minOf = (o: Opt) => o.node.constraints
-        .filter((c) => c.type === 'min' && c.field === 'selections' && c.scope === 'parent' && !c.percentValue)
-        .reduce((m, c) => Math.max(m, c.value), 0);
+      const minOf = (o: Opt) =>
+        o.node.constraints
+          .filter((c) => c.type === 'min' && c.field === 'selections' && c.scope === 'parent' && !c.percentValue)
+          .reduce((m, c) => Math.max(m, c.value), 0);
       const visible = (o: Opt) => !o.node.hidden;
       const cost = (o: Opt): number => {
         if (o.kind === 'entry') return this.startCost(o.node, ptsId, depth + 1);
@@ -220,7 +222,10 @@ export class Context {
         for (const o of opts) {
           if (!visible(o)) continue;
           const min = minOf(o);
-          if (o.kind === 'entry') { if (min > 0) total += min * cost(o); continue; }
+          if (o.kind === 'entry') {
+            if (min > 0) total += min * cost(o);
+            continue;
+          }
           // group: mandatory picks inside it, plus the group's own minimum
           const inner = o.members.filter((m) => visible(m) && minOf(m) > 0);
           walk(inner);
