@@ -78,7 +78,6 @@ export class Evaluator {
   total = 0;
   pointsTypeId = '';
   private bySel = new Map<string, RSel>();
-  private effCache = new Map<string, Eff>();
 
   constructor(public roster: Roster, private contexts: Map<string, Context>) {
     this.build();

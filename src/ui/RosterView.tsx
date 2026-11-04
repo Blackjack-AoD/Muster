@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { back, go } from '../app';
+import { go } from '../app';
 import { addSel, forceRootOptions, locate, removeSel, uid, unavailable, type Evaluator, type Issue, type RForce, type RSel, type Roster, type Sel } from '../data/engine';
 import type { Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
 import { deleteRoster, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
-import { Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
+import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
@@ -455,19 +455,19 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
     <Sheet title="Add detachment" onClose={onClose}>
       <div class="label">Army</div>
       <button class="pick" onClick={() => setPicking(true)}>
-        <span><b>{catalogueName(repos, ctl.roster.repo, catId!)}</b><small>Tap to change</small></span><Icon name="chev" />
+        <span><b>{catalogueName(repos, ctl.roster.repo, catId)}</b><small>Tap to change</small></span><Icon name="chev" />
       </button>
       <div class="label">Detachment</div>
       {!forces ? <Loading /> : (
         <div class="pick-list compact">
           {forces.map((f) => (
             <button class="pick" onClick={async () => {
-              const ctx = await getContext(repo, catId!);
-              const contexts = new Map(ctl.contexts).set(catId!, ctx);
+              const ctx = await getContext(repo, catId);
+              const contexts = new Map(ctl.contexts).set(catId, ctx);
               ctl.mutate((r) => {
                 const fu = uid();
-                r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId!, selections: [] });
-                try { setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId!)); } catch (e) { console.warn('set-up skipped', e); }
+                r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId, selections: [] });
+                try { setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId)); } catch (e) { console.warn('set-up skipped', e); }
               });
               onClose();
             }}><span><b>{f.name}</b></span><Icon name="plus" /></button>

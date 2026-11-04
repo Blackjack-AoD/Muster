@@ -64,7 +64,7 @@ Muster is an offline phone app for building army lists from BattleScribe data. I
 - Don't drop bad data silently. If the app can't honour something in a list or data file, it warns. Missing wargear that vanishes with no warning is a bug.
 
 ### Style
-There's no linter, so match the file you're in: 2 spaces, single quotes, semicolons, trailing commas, lines up to about 120 characters. Name functions that change something with a verb (`saveRoster`) and those that return a value after the value (`forceRootOptions`). A comment says why, not what.
+`mise run lint` checks the code, not its format, so match the file you're in: 2 spaces, single quotes, semicolons, trailing commas, lines up to about 120 characters. Name functions that change something with a verb (`saveRoster`) and those that return a value after the value (`forceRootOptions`). A comment says why, not what.
 
 ## Rules specific to Muster
 
@@ -104,6 +104,7 @@ Always use mise tasks, which pin Node and install dependencies:
 
 ```
 mise run test        # unit tests
+mise run lint        # type-aware lint; warnings are existing debt, don't add to them
 mise run typecheck   # src/ and the tests
 mise run build       # type-check and build
 mise run coverage    # unit tests with coverage
@@ -131,7 +132,7 @@ Ask in order:
 
 ## Before you finish
 
-- `mise run typecheck`, `mise run test` and `mise run build` all pass. Report what you actually ran, with results, including anything that failed or that you skipped.
+- `mise run lint`, `mise run typecheck`, `mise run test` and `mise run build` all pass, with no new lint warnings. Report what you actually ran, with results, including anything that failed or that you skipped.
 - Each new test failed before your change, and failed for the right reason.
 - No new `any`, and any new `as` or `!` is justified.
 - Stored formats are unchanged, or the change has a migration and a test.

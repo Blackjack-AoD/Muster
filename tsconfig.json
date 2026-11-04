@@ -7,6 +7,10 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["vite/client"]

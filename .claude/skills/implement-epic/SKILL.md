@@ -72,7 +72,7 @@ Do `implement-issue` steps 2b, 2c and 5 for the first issue of each stream. Then
 git fetch origin
 git rebase origin/main
 git rev-parse --short HEAD                     # the base SHA
-mise run test && mise run typecheck            # the baseline
+mise run lint && mise run test && mise run typecheck    # the baseline
 for w in <stream names>; do
   git worktree add -q -b <w> .claude/worktrees/<w> main
   (cd .claude/worktrees/<w> && mise trust -q && mise run install)

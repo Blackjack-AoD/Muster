@@ -1,0 +1,20 @@
+{
+  "plugins": [
+    "typescript"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "scripts/*.cjs",
+    "scripts/compare.ts",
+    "scripts/test-engine.ts"
+  ],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "warn",
+    "typescript/no-floating-promises": "warn",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-unnecessary-type-assertion": "error"
+  }
+}

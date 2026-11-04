@@ -27,6 +27,11 @@ description = "Run the unit tests and report coverage"
 depends = ["install"]
 run = "npm run test:coverage"
 
+[tasks.lint]
+description = "Lint src/ and the sweep"
+depends = ["install"]
+run = "npm run lint"
+
 [tasks.build]
 description = "Type-check and build into dist/"
 depends = ["install"]

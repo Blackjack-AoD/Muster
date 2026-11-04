@@ -62,7 +62,7 @@ git fetch origin
 git rev-list --left-right --count main...origin/main   # left = yours unpushed, right = theirs unpulled
 git rebase origin/main                                 # nothing to do when the right-hand count is 0
 git rev-parse HEAD                                     # the base SHA, used in steps 7 and 8
-mise run test && mise run typecheck
+mise run lint && mise run test && mise run typecheck
 ```
 
 Local `main` must stay a descendant of `origin/main`. If there's uncommitted work in the way, don't stash or discard it: ask.
@@ -146,7 +146,7 @@ Read every new file in full. The report is the agent's account of its work, not 
 - **A decision made rather than raised.** Scan for *worth a reviewer's eye*, *flagging*, *the spec doesn't say*, *deliberately*, *I chose*. Each is a decision to put to the user, however well argued. A wrong decision that passes tests is the expensive kind. When the user answers, delete the paragraph: the test pins it.
 - **A precedent being distinguished:** *"X does it this way, but that doesn't apply because…"*. Read both precedents yourself before accepting that.
 - **Scope creep:** files the criterion didn't call for, a helper added in passing, an abstraction with one caller.
-- **New `any`, `as` or `!`,** and any change to a stored format.
+- **New `any`, `as` or `!`, new lint warnings,** and any change to a stored format.
 - **A mutation check's exemption:** the file it exercises must not be in the diff. *"Already correct"* is the tell: send it back.
 
 **c) Handle DECISION NEEDED**
@@ -165,7 +165,7 @@ A block is the mechanism working, never the agent failing. Your own brief is one
 
 ```bash
 git -C "$WT" rebase main
-(cd "$WT" && mise run test && mise run typecheck)
+(cd "$WT" && mise run lint && mise run test && mise run typecheck)
 ```
 
 If a check fails, find the cause first, then send the agent the fix to make, up to three tries. If it's still failing, stop and ask the user. A failure that appears only after the rebase isn't flaky: two pieces of work have met.
@@ -215,7 +215,7 @@ From the main checkout, on `main`:
 
 ```bash
 git status --short
-mise run typecheck && mise run test && mise run build
+mise run lint && mise run typecheck && mise run test && mise run build
 ```
 
 A failure here is this issue's, because step 3 proved `main` green at the base SHA. Fix it with a fresh agent in a worktree, as a `test:` and implementation pair, land it, and run this step again.

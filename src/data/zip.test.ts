@@ -65,7 +65,7 @@ describe('dataFileText', () => {
     expect(await dataFileText('a.cat', new TextEncoder().encode(xml))).toBe(xml);
   });
   it('accepts an ArrayBuffer', async () => {
-    expect(await dataFileText('a.cat', new TextEncoder().encode(xml).buffer as ArrayBuffer)).toBe(xml);
+    expect(await dataFileText('a.cat', new TextEncoder().encode(xml).buffer)).toBe(xml);
   });
   it('unpacks a .catz', async () => {
     expect(await dataFileText('a.catz', await makeZip([{ name: 'a.cat', text: xml }]))).toBe(xml);
