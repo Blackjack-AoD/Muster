@@ -17,6 +17,16 @@ description = "Type-check src/"
 depends = ["install"]
 run = "npx tsc -p ."
 
+[tasks.test]
+description = "Run the unit tests"
+depends = ["install"]
+run = "npm test"
+
+[tasks.coverage]
+description = "Run the unit tests and report coverage"
+depends = ["install"]
+run = "npm run test:coverage"
+
 [tasks.build]
 description = "Type-check and build into dist/"
 depends = ["install"]
@@ -28,7 +38,7 @@ depends = ["build"]
 run = "npm run preview"
 
 [tasks.sweep]
-description = "Add every unit of every army: mise run sweep <data-dir> [army filter]"
+description = "Look for unit test cases in real data: mise run sweep <data-dir> [army filter]"
 depends = ["install"]
 run = "npm run sweep --"
 

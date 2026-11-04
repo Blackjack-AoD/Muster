@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "tsc -p . && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:engine": "tsx scripts/test-engine.ts",
     "sweep": "tsx scripts/sweep.ts"
   },
@@ -16,11 +18,14 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "@vitest/coverage-v8": "^5.1.0",
     "@xmldom/xmldom": "^0.9.12",
+    "fake-indexeddb": "^6.2.7",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0"
   },
   "private": true,
   "type": "module"
