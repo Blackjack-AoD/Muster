@@ -6,6 +6,7 @@ import { getContext, systemsOf } from '../data/library';
 import { deleteRoster, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
+import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
 import { rosterText, shareText } from './exporter';
@@ -224,7 +225,6 @@ function reUid(s: Sel): Sel {
   return s;
 }
 
-const SWIPE = 90; // px to trigger
 
 /** Tap to open. Swipe left to delete (with Undo), swipe right to duplicate. */
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
@@ -329,6 +329,20 @@ function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: s
   return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
 }
 
+function PickRow({ name, pts, added, onTap, onSwipe }: { name: string; pts: number; added: number; onTap: () => void; onSwipe: () => void }) {
+  const { dx, handlers, tap } = useSwipe({ onRight: onSwipe });
+  return (
+    <div class={'pick-swipe' + (dx ? ' active' : '')}>
+      <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true"><Icon name="plus" size={18} /> Add with standard options</div>
+      <button class={'pick' + (dx ? ' dragging' : '')} style={dx ? { transform: `translateX(${dx}px)` } : undefined}
+        onClick={tap(onTap)} {...handlers}>
+        <span><b>{name}</b></span>
+        <span class="pick-pts">{fmtN(pts)}{added > 0 && <small class="pick-added" aria-label={`${added} added`}> ×{added}</small>}</span>
+      </button>
+    </div>
+  );
+}
+
 function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; cat?: string; onClose: () => void }) {
   const [q, setQ] = useState('');
   const options = useMemo(() => {
@@ -350,20 +364,25 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
     onClose();
     go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
   };
+  // swipe right: add with standard options and stay here; counts shown only while this list is open
+  const [quick, setQuick] = useState<Record<string, number>>({});
+  const quickAdd = (o: Opt, catId?: string) => {
+    ctl.mutate((r) => { addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId); });
+    setQuick((m) => ({ ...m, [o.key]: (m[o.key] ?? 0) + 1 }));
+  };
 
   return (
     <Sheet title={cat ? `Add ${cleanCat(rf.ctx.categoryName(cat))}` : 'Add unit'} onClose={onClose} full>
       <div class="search"><Icon name="search" size={18} /><input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
       {!shown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
+      {shown.length > 0 && <p class="muted small pad-x pick-hint">Tap to add and open a unit. Swipe right to add it with its standard options.</p>}
       {[...groups].map(([c, items]) => (
         <div key={c}>
           {!cat && <div class="list-label">{cleanCat(rf.ctx.categoryName(c)) || 'Other'}</div>}
           <div class="pick-list">
             {items.map(({ o, eff, cat: oc }) => (
-              <button class="pick" onClick={() => add(o, oc)}>
-                <span><b>{eff.name}</b></span>
-                <span class="pick-pts">{fmtN(startPts(rf, o, eff, pt))}</span>
-              </button>
+              <PickRow key={o.key} name={eff.name} pts={startPts(rf, o, eff, pt)} added={quick[o.key] ?? 0}
+                onTap={() => add(o, oc)} onSwipe={() => quickAdd(o, oc)} />
             ))}
           </div>
         </div>

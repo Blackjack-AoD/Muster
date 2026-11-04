@@ -507,3 +507,17 @@ input:focus { border-color: var(--brass-dim); }
 .sub-head .icon { color: var(--brass); }
 .subopts { margin: 4px 0 8px 10px; padding-left: 10px; border-left: 2px solid var(--brass-dim); }
 .strip .statblock, .profiles .statblock { margin: 0; }
+
+/* add-unit list: swipe right to add with standard options */
+.pick-hint { margin: 2px 0 8px; }
+.pick-swipe { position: relative; background: var(--card); }
+.pick-swipe .pick { position: relative; z-index: 1; width: 100%; touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: transform 0.18s ease; }
+.pick-swipe .pick.dragging { transition: none; }
+.ps-bg {
+  position: absolute; inset: 0; display: none; align-items: center; gap: 8px; padding: 0 16px;
+  background: rgba(201, 164, 92, 0.18); color: var(--brass2); font-weight: 600; font-size: 14px;
+}
+.pick-swipe.active .ps-bg { display: flex; }
+.ps-bg { opacity: 0.6; }
+.ps-bg.armed { opacity: 1; }
+.pick-added { font-size: 0.72em; font-weight: 600; color: var(--brass); margin-left: 2px; }
