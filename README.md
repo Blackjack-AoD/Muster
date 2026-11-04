@@ -17,6 +17,8 @@ mise tasks                                 # list every task
 mise run dev                               # local dev server
 mise run test                              # unit tests
 mise run coverage                          # unit tests with a coverage report
+mise run format                            # format the code with Prettier
+mise run format-check                      # check formatting without changing anything
 mise run lint                              # type-aware lint with oxlint
 mise run typecheck                         # type-check src/ and the tests
 mise run build                             # type-check and build into dist/

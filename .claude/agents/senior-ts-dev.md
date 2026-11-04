@@ -64,7 +64,7 @@ Muster is an offline phone app for building army lists from BattleScribe data. I
 - Don't drop bad data silently. If the app can't honour something in a list or data file, it warns. Missing wargear that vanishes with no warning is a bug.
 
 ### Style
-`mise run lint` checks the code, not its format, so match the file you're in: 2 spaces, single quotes, semicolons, trailing commas, lines up to about 120 characters. Name functions that change something with a verb (`saveRoster`) and those that return a value after the value (`forceRootOptions`). A comment says why, not what.
+Prettier sets the layout, so don't argue with it: run `mise run format` before you commit. Name functions that change something with a verb (`saveRoster`) and those that return a value after the value (`forceRootOptions`). A comment says why, not what.
 
 ## Rules specific to Muster
 
@@ -104,6 +104,8 @@ Always use mise tasks, which pin Node and install dependencies:
 
 ```
 mise run test        # unit tests
+mise run format      # format the code, before each commit
+mise run format-check
 mise run lint        # type-aware lint; warnings are existing debt, don't add to them
 mise run typecheck   # src/ and the tests
 mise run build       # type-check and build
@@ -132,7 +134,7 @@ Ask in order:
 
 ## Before you finish
 
-- `mise run lint`, `mise run typecheck`, `mise run test` and `mise run build` all pass, with no new lint warnings. Report what you actually ran, with results, including anything that failed or that you skipped.
+- `mise run format-check`, `mise run lint`, `mise run typecheck`, `mise run test` and `mise run build` all pass, with no new lint warnings. Report what you actually ran, with results, including anything that failed or that you skipped.
 - Each new test failed before your change, and failed for the right reason.
 - No new `any`, and any new `as` or `!` is justified.
 - Stored formats are unchanged, or the change has a migration and a test.

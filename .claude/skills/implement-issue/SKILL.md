@@ -62,7 +62,7 @@ git fetch origin
 git rev-list --left-right --count main...origin/main   # left = yours unpushed, right = theirs unpulled
 git rebase origin/main                                 # nothing to do when the right-hand count is 0
 git rev-parse HEAD                                     # the base SHA, used in steps 7 and 8
-mise run lint && mise run test && mise run typecheck
+mise run format-check && mise run lint && mise run test && mise run typecheck
 ```
 
 Local `main` must stay a descendant of `origin/main`. If there's uncommitted work in the way, don't stash or discard it: ask.
@@ -165,7 +165,7 @@ A block is the mechanism working, never the agent failing. Your own brief is one
 
 ```bash
 git -C "$WT" rebase main
-(cd "$WT" && mise run lint && mise run test && mise run typecheck)
+(cd "$WT" && mise run format-check && mise run lint && mise run test && mise run typecheck)
 ```
 
 If a check fails, find the cause first, then send the agent the fix to make, up to three tries. If it's still failing, stop and ask the user. A failure that appears only after the rebase isn't flaky: two pieces of work have met.
@@ -215,7 +215,7 @@ From the main checkout, on `main`:
 
 ```bash
 git status --short
-mise run lint && mise run typecheck && mise run test && mise run build
+mise run format-check && mise run lint && mise run typecheck && mise run test && mise run build
 ```
 
 A failure here is this issue's, because step 3 proved `main` green at the base SHA. Fix it with a fresh agent in a worktree, as a `test:` and implementation pair, land it, and run this step again.

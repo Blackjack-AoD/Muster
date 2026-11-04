@@ -1,6 +1,6 @@
 # Check your words before they leave
 
-Do this before each commit and each `gh` command that posts text. A quick read doesn't find these: count, and search.
+Run `mise run format` first. Do this before each commit and each `gh` command that posts text. A quick read doesn't find these: count, and search.
 
 ## How to write
 

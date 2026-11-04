@@ -24,7 +24,7 @@ git log --oneline origin/main..main                                       # what
 git push origin main
 ```
 
-If the push is rejected, or the right count isn't 0: `git rebase origin/main`, `mise run lint && mise run typecheck && mise run test && mise run build`, and push again. Never force-push. If a check fails, stop.
+If the push is rejected, or the right count isn't 0: `git rebase origin/main`, `mise run format-check && mise run lint && mise run typecheck && mise run test && mise run build`, and push again. Never force-push. If a check fails, stop.
 
 ## 2. Confirm the deploy
 
