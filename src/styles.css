@@ -521,3 +521,4 @@ input:focus { border-color: var(--brass-dim); }
 .ps-bg { opacity: 0.6; }
 .ps-bg.armed { opacity: 1; }
 .pick-added { font-size: 0.72em; font-weight: 600; color: var(--brass); margin-left: 2px; }
+.rules-head { margin: 22px 16px 4px; font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--brass); }

@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
 import { addSel, locate, removeSel, uid, unavailable, type RSel, type Sel } from '../data/engine';
-import type { Profile } from '../data/model';
+import type { Profile, Rule } from '../data/model';
 import type { RosterCtl } from '../store';
 import { Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
@@ -471,18 +471,30 @@ export function ProfileTable({ profiles }: { profiles: Profile[] }) {
 
 export function Rules({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
   const rules = ctl.ev.rulesFor(rs);
+  // rules on the army's set-up (Legion, Allegiance...) apply to every unit; list them after the unit's own
+  const unitLike = rs.node.type === 'unit' || rs.node.type === 'model';
+  const own = new Set(rules.map((r) => r.name));
+  const army = unitLike ? ctl.ev.armyRules(rs.force).filter((r) => !own.has(r.name)) : [];
   const [q, setQ] = useState('');
-  if (!rules.length) return <p class="muted pad">No special rules listed.</p>;
-  const shown = rules.filter((r) => (r.name + ' ' + r.description).toLowerCase().includes(q.toLowerCase()));
+  if (!rules.length && !army.length) return <p class="muted pad">No special rules listed.</p>;
+  const match = (r: Rule) => (r.name + ' ' + r.description).toLowerCase().includes(q.toLowerCase());
+  const item = (r: Rule) => (
+    <details class="rule">
+      <summary>{r.name}</summary>
+      <p>{r.description || <span class="muted">No description in the data.</span>}</p>
+    </details>
+  );
+  const shownArmy = army.filter(match);
   return (
     <div class="rules">
-      {rules.length > 8 && <div class="search"><Icon name="search" size={18} /><input placeholder="Search rules" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>}
-      {shown.map((r) => (
-        <details class="rule">
-          <summary>{r.name}</summary>
-          <p>{r.description || <span class="muted">No description in the data.</span>}</p>
-        </details>
-      ))}
+      {rules.length + army.length > 8 && <div class="search"><Icon name="search" size={18} /><input placeholder="Search rules" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>}
+      {rules.filter(match).map(item)}
+      {shownArmy.length > 0 && (
+        <>
+          <h3 class="rules-head">Army-wide rules</h3>
+          {shownArmy.map(item)}
+        </>
+      )}
     </div>
   );
 }

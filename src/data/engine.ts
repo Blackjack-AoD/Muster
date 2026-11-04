@@ -411,8 +411,16 @@ export class Evaluator {
       }
       for (const r of rf.roots) this.validateSel(r);
     }
+    // a list-wide limit is checked from every unit that has the entry: say it once
+    const seenMsg = new Set<string>();
+    this.issues = issues.filter((i) => {
+      const k = i.level + '|' + i.message;
+      if (seenMsg.has(k)) return false;
+      seenMsg.add(k);
+      return true;
+    });
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
-      issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
+      this.issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
     }
   }
 
@@ -476,12 +484,14 @@ export class Evaluator {
   }
 
   private report(c: Constraint, n: number, name: string, forceUid?: string, selUid?: string) {
+    // say where a wide limit applies ("one per 1,000 points" style caps live at list level)
+    const where = c.scope === 'roster' ? ' in the list' : c.scope === 'force' ? ' in this detachment' : '';
     const unit = c.field === 'selections' ? '' : ' pts';
     if (c.type === 'min' && c.value > 0 && n < c.value) {
-      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: needs at least ${fmt(c.value)}${unit} (has ${fmt(n)})` });
+      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: needs at least ${fmt(c.value)}${unit}${where} (has ${fmt(n)})` });
     }
     if (c.type === 'max' && c.value >= 0 && n > c.value) {
-      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: at most ${fmt(c.value)}${unit} allowed (has ${fmt(n)})` });
+      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: at most ${fmt(c.value)}${unit} allowed${where} (has ${fmt(n)})` });
     }
   }
 
@@ -534,6 +544,17 @@ export class Evaluator {
     return out;
   }
 
+  /** rules on a force's set-up entries (e.g. the Legion's "Legiones Astartes" rule), which apply to the whole army */
+  armyRules(rf: RForce): Rule[] {
+    const out: Rule[] = [];
+    const seen = new Set<string>();
+    for (const r of rf.roots) {
+      if (r.node.type === 'unit' || r.node.type === 'model') continue;
+      for (const x of this.rulesFor(r)) if (!seen.has(x.name)) { seen.add(x.name); out.push(x); }
+    }
+    return out;
+  }
+
   ruleEff(r: Rule, w: Where): Rule | null {
     if (!r.modifiers.length) return r.hidden ? null : r;
     const q: Rule = { ...r };
@@ -573,7 +594,15 @@ export class Evaluator {
     const visit = (r: RSel) => {
       const w: Where = { self: r, parent: r.parent, force: r.force };
       const list: Rule[] = [...r.node.rules];
-      for (const l of r.node.infoLinks) {
+      const links = [...r.node.infoLinks];
+      // rules that come with a category (e.g. "Independent Character", "Character")
+      for (const catId of r.eff.categories) {
+        const cat = ctx.get(catId);
+        if (!cat || cat.tag !== 'categoryEntry') continue;
+        list.push(...cat.rules);
+        links.push(...cat.infoLinks);
+      }
+      for (const l of links) {
         if (l.type !== 'rule') continue;
         const rr = ctx.rule(l.targetId);
         if (rr) list.push({ ...rr, name: l.name || rr.name, hidden: rr.hidden || l.hidden, modifiers: [...rr.modifiers, ...l.modifiers] });
@@ -594,6 +623,11 @@ export class Evaluator {
 /** an option whose max is 0 can't be taken right now (data uses this instead of hiding) */
 export function unavailable(eff: Eff) {
   return eff.constraints.some((c) => c.type === 'max' && c.value === 0 && c.field === 'selections');
+}
+
+/** switched off by the option's own limit (as opposed to a list-wide cap that's currently 0) */
+export function unavailableHere(eff: Eff) {
+  return eff.constraints.some((c) => c.type === 'max' && c.value === 0 && c.field === 'selections' && c.scope === 'parent');
 }
 
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
@@ -737,8 +771,11 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
     const walk = (opts: Opt[]): boolean => {
       for (const o of opts) {
         const eff = ev.optionEff(o, rs, rs.force);
-        if (eff.hidden || unavailable(eff)) continue;
+        if (eff.hidden) continue;
         const { min, max } = ev.limits(o, rs, rs.force, eff);
+        // something the unit must take (e.g. a Praetor's Master of the Legion) is added even when a list-wide cap
+        // is 0 right now ("one per 1,000 points"): the cap shows as an issue instead. Choices are still skipped.
+        if (o.kind === 'entry' ? (min < 1 ? unavailable(eff) : unavailableHere(eff)) : unavailable(eff)) continue;
         if (o.kind === 'entry') {
           const have = countKey((k) => k === o.key);
           if (addChild(o, Math.min(min, max < 0 ? min : max) - have)) changed = true;
