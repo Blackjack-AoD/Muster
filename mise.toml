@@ -1,0 +1,37 @@
+[tools]
+node = "22"
+
+[tasks.install]
+description = "Install dependencies (skipped when the lockfile hasn't changed)"
+run = "npm ci"
+sources = ["package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks.dev]
+description = "Start the local dev server"
+depends = ["install"]
+run = "npm run dev"
+
+[tasks.typecheck]
+description = "Type-check src/"
+depends = ["install"]
+run = "npx tsc -p ."
+
+[tasks.build]
+description = "Type-check and build into dist/"
+depends = ["install"]
+run = "npm run build"
+
+[tasks.preview]
+description = "Serve the production build from dist/"
+depends = ["build"]
+run = "npm run preview"
+
+[tasks.sweep]
+description = "Add every unit of every army: mise run sweep <data-dir> [army filter]"
+depends = ["install"]
+run = "npm run sweep --"
+
+[tasks.clean]
+description = "Remove dist/ and node_modules/"
+run = "rm -rf dist node_modules"
