@@ -102,12 +102,7 @@ export interface CategoryLink {
   modifiers: Modifier[];
 }
 
-export type NodeTag =
-  | 'selectionEntry'
-  | 'selectionEntryGroup'
-  | 'entryLink'
-  | 'forceEntry'
-  | 'categoryEntry';
+export type NodeTag = 'selectionEntry' | 'selectionEntryGroup' | 'entryLink' | 'forceEntry' | 'categoryEntry';
 
 export interface EntryNode {
   id: string;

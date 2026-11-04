@@ -54,7 +54,9 @@ describe('errors', () => {
 describe('storage', () => {
   const stub = (persisted: boolean) => {
     const persist = vi.fn(async () => true);
-    vi.stubGlobal('navigator', { storage: { persisted: async () => persisted, persist, estimate: async () => ({ usage: 5, quota: 10 }) } });
+    vi.stubGlobal('navigator', {
+      storage: { persisted: async () => persisted, persist, estimate: async () => ({ usage: 5, quota: 10 }) },
+    });
     return persist;
   };
   it('asks for persistent storage once', async () => {

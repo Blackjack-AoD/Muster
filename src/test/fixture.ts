@@ -5,12 +5,16 @@ import { Evaluator, addSel, forceRootOptions, type Roster } from '../data/engine
 import type { DataFile } from '../data/model';
 import { parseDataFile } from '../data/parse';
 
-export const parseXml = (xml: string) => parseDataFile(new DOMParser().parseFromString(xml, 'text/xml').documentElement as unknown as Element);
+export const parseXml = (xml: string) =>
+  parseDataFile(new DOMParser().parseFromString(xml, 'text/xml').documentElement as unknown as Element);
 
-export const COST_TYPES = '<costTypes><costType id="pts" name="pts" defaultCostLimit="2000"/><costType id="pl" name="PL" defaultCostLimit="-1"/></costTypes>';
+export const COST_TYPES =
+  '<costTypes><costType id="pts" name="pts" defaultCostLimit="2000"/><costType id="pl" name="PL" defaultCostLimit="-1"/></costTypes>';
 
-export const gameSystem = (inner = '') => parseXml(`<gameSystem id="gst" name="Test Game" revision="1">${COST_TYPES}${inner}</gameSystem>`);
-export const catalogue = (inner = '', id = 'cat', attrs = '') => parseXml(`<catalogue id="${id}" name="Test Army" revision="1" gameSystemId="gst" ${attrs}>${inner}</catalogue>`);
+export const gameSystem = (inner = '') =>
+  parseXml(`<gameSystem id="gst" name="Test Game" revision="1">${COST_TYPES}${inner}</gameSystem>`);
+export const catalogue = (inner = '', id = 'cat', attrs = '') =>
+  parseXml(`<catalogue id="${id}" name="Test Army" revision="1" gameSystemId="gst" ${attrs}>${inner}</catalogue>`);
 
 export const FORCE = '<forceEntries><forceEntry id="det" name="Detachment"/></forceEntries>';
 
@@ -37,8 +41,14 @@ export function world(units: string, o: WorldOptions = {}) {
   const contexts = new Map([[cat.id, ctx]]);
   const fe = ctx.forceEntries()[0];
   const roster: Roster = {
-    uid: 'r', name: 'Test list', repo: 'test/repo', gameSystemId: gst.id, costLimit: o.costLimit ?? 0,
-    forces: [{ uid: 'f1', forceEntryId: fe.id, catalogueId: cat.id, selections: [] }], created: 0, updated: 0,
+    uid: 'r',
+    name: 'Test list',
+    repo: 'test/repo',
+    gameSystemId: gst.id,
+    costLimit: o.costLimit ?? 0,
+    forces: [{ uid: 'f1', forceEntryId: fe.id, catalogueId: cat.id, selections: [] }],
+    created: 0,
+    updated: 0,
   };
   const root = (name: string, forceEntry = fe) => {
     const opt = forceRootOptions(ctx, forceEntry).find((o) => o.node.name === name);
@@ -61,19 +71,43 @@ export function world(units: string, o: WorldOptions = {}) {
   };
   const ev = () => new Evaluator(roster, contexts);
   return {
-    gst, cat, ctx, contexts, roster, ev, root, beneath,
+    gst,
+    cat,
+    ctx,
+    contexts,
+    roster,
+    ev,
+    root,
+    beneath,
     /** add a root unit, filling its mandatory defaults */
     add: (name: string, number = 1, forceUid = 'f1') => {
       const opt = root(name);
-      return addSel(roster, contexts, forceUid, null, opt, number, opt.node.categoryLinks.find((c) => c.primary)?.targetId);
+      return addSel(
+        roster,
+        contexts,
+        forceUid,
+        null,
+        opt,
+        number,
+        opt.node.categoryLinks.find((c) => c.primary)?.targetId,
+      );
     },
     /** add an option beneath a selection */
     pick: (parentUid: string, name: string, number = 1) =>
       addSel(roster, contexts, 'f1', parentUid, beneath(parentUid, name), number),
     /** a second detachment of the same catalogue */
-    addForce: (uid = 'f2') => { roster.forces.push({ uid, forceEntryId: fe.id, catalogueId: cat.id, selections: [] }); return uid; },
+    addForce: (uid = 'f2') => {
+      roster.forces.push({ uid, forceEntryId: fe.id, catalogueId: cat.id, selections: [] });
+      return uid;
+    },
     pts: (selUid: string) => ev().find(selUid)!.total,
-    errors: () => ev().issues.filter((i) => i.level === 'error').map((i) => i.message),
-    warnings: () => ev().issues.filter((i) => i.level === 'warn').map((i) => i.message),
+    errors: () =>
+      ev()
+        .issues.filter((i) => i.level === 'error')
+        .map((i) => i.message),
+    warnings: () =>
+      ev()
+        .issues.filter((i) => i.level === 'warn')
+        .map((i) => i.message),
   };
 }

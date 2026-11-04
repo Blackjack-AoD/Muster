@@ -1,8 +1,20 @@
 // Parse BattleScribe XML (.gst/.cat) into the light model.
 // Works with any W3C-style DOM (browser DOMParser or @xmldom/xmldom in tests).
 import type {
-  CategoryLink, Characteristic, Condition, ConditionGroup, Constraint, Cost, DataFile,
-  EntryNode, InfoLink, Modifier, NodeTag, Profile, Repeat, Rule,
+  CategoryLink,
+  Characteristic,
+  Condition,
+  ConditionGroup,
+  Constraint,
+  Cost,
+  DataFile,
+  EntryNode,
+  InfoLink,
+  Modifier,
+  NodeTag,
+  Profile,
+  Repeat,
+  Rule,
 } from './model';
 
 type El = Element;
@@ -69,7 +81,7 @@ function condition(el: El): Condition {
 
 function conditionGroup(el: El): ConditionGroup {
   return {
-    type: (a(el, 'type', 'and') as 'and' | 'or'),
+    type: a(el, 'type', 'and') as 'and' | 'or',
     conditions: list(el, 'conditions', 'condition').map(condition),
     groups: list(el, 'conditionGroups', 'conditionGroup').map(conditionGroup),
   };
@@ -129,9 +141,11 @@ function profile(el: El): Profile {
     typeName: a(el, 'typeName'),
     hidden: b(el, 'hidden'),
     page: a(el, 'page') || undefined,
-    characteristics: list(el, 'characteristics', 'characteristic').map(
-      (c): Characteristic => ({ name: a(c, 'name'), typeId: a(c, 'typeId'), value: text(c) }),
-    ),
+    characteristics: list(el, 'characteristics', 'characteristic').map((c): Characteristic => ({
+      name: a(c, 'name'),
+      typeId: a(c, 'typeId'),
+      value: text(c),
+    })),
     modifiers: modifiers(el),
   };
 }
@@ -212,7 +226,8 @@ export function parseDataFile(root: El): DataFile {
   const kind = (root.localName || root.nodeName) === 'gameSystem' ? 'gameSystem' : 'catalogue';
   const shared: EntryNode[] = [];
   for (const c of list(root, 'sharedSelectionEntries', 'selectionEntry')) shared.push(entry(c, 'selectionEntry'));
-  for (const c of list(root, 'sharedSelectionEntryGroups', 'selectionEntryGroup')) shared.push(entry(c, 'selectionEntryGroup'));
+  for (const c of list(root, 'sharedSelectionEntryGroups', 'selectionEntryGroup'))
+    shared.push(entry(c, 'selectionEntryGroup'));
   const rootEntries: EntryNode[] = [];
   for (const c of list(root, 'selectionEntries', 'selectionEntry')) rootEntries.push(entry(c, 'selectionEntry'));
   for (const c of list(root, 'entryLinks', 'entryLink')) rootEntries.push(entry(c, 'entryLink'));
@@ -224,7 +239,9 @@ export function parseDataFile(root: El): DataFile {
     gameSystemId: a(root, 'gameSystemId') || undefined,
     library: b(root, 'library'),
     costTypes: list(root, 'costTypes', 'costType').map((c) => ({
-      id: a(c, 'id'), name: a(c, 'name'), defaultCostLimit: num(c, 'defaultCostLimit', -1),
+      id: a(c, 'id'),
+      name: a(c, 'name'),
+      defaultCostLimit: num(c, 'defaultCostLimit', -1),
     })),
     categoryEntries: list(root, 'categoryEntries', 'categoryEntry').map((c) => entry(c, 'categoryEntry')),
     forceEntries: list(root, 'forceEntries', 'forceEntry').map((c) => entry(c, 'forceEntry')),
@@ -234,17 +251,30 @@ export function parseDataFile(root: El): DataFile {
     sharedRules: list(root, 'sharedRules', 'rule').map(rule),
     sharedInfoGroups: list(root, 'sharedInfoGroups', 'infoGroup').map((c) => entry(c, 'selectionEntry')),
     catalogueLinks: list(root, 'catalogueLinks', 'catalogueLink').map((c) => ({
-      targetId: a(c, 'targetId'), name: a(c, 'name'), importRootEntries: b(c, 'importRootEntries'),
+      targetId: a(c, 'targetId'),
+      name: a(c, 'name'),
+      importRootEntries: b(c, 'importRootEntries'),
     })),
     profileTypes: list(root, 'profileTypes', 'profileType').map((p) => ({
-      id: a(p, 'id'), name: a(p, 'name'),
-      columns: list(p, 'characteristicTypes', 'characteristicType').map((c) => ({ id: a(c, 'id'), name: a(c, 'name') })),
+      id: a(p, 'id'),
+      name: a(p, 'name'),
+      columns: list(p, 'characteristicTypes', 'characteristicType').map((c) => ({
+        id: a(c, 'id'),
+        name: a(c, 'name'),
+      })),
     })),
   };
 }
 
 /** Quick header read without a full parse (used for the library listing). */
-export function readHeader(xml: string): { kind: 'gameSystem' | 'catalogue'; id: string; name: string; revision: number; gameSystemId?: string; library: boolean } | null {
+export function readHeader(xml: string): {
+  kind: 'gameSystem' | 'catalogue';
+  id: string;
+  name: string;
+  revision: number;
+  gameSystemId?: string;
+  library: boolean;
+} | null {
   const m = xml.slice(0, 4000).match(/<(gameSystem|catalogue)\b([^>]*)>/);
   if (!m) return null;
   const attrs = m[2];
@@ -260,5 +290,10 @@ export function readHeader(xml: string): { kind: 'gameSystem' | 'catalogue'; id:
 }
 
 export function decodeXml(s: string) {
-  return s.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }

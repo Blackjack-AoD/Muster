@@ -66,20 +66,28 @@ describe('modifiers', () => {
     expect(w.pts(w.add('Squad'))).toBe(100);
   });
   it('can give a cost to an entry that had none of that type', () => {
-    const w = world('<selectionEntry id="u" name="Squad" type="unit"><modifiers><modifier type="increment" field="pts" value="5"/></modifiers></selectionEntry>');
+    const w = world(
+      '<selectionEntry id="u" name="Squad" type="unit"><modifiers><modifier type="increment" field="pts" value="5"/></modifiers></selectionEntry>',
+    );
     expect(w.pts(w.add('Squad'))).toBe(5);
   });
   it('applies modifiers in file order', () => {
-    const w = world(unit('u', 'Squad', 100, mods(
-      '<modifier type="set" field="pts" value="10"/>',
-      '<modifier type="increment" field="pts" value="1"/>',
-    )));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        100,
+        mods('<modifier type="set" field="pts" value="10"/>', '<modifier type="increment" field="pts" value="1"/>'),
+      ),
+    );
     expect(w.pts(w.add('Squad'))).toBe(11);
   });
 
   it('sets and appends a name', () => {
-    const w = world(unit('a', 'Alpha', 0, mods('<modifier type="set" field="name" value="Omega"/>')) +
-      unit('b', 'Beta', 0, mods('<modifier type="append" field="name" value="(Elite)"/>')));
+    const w = world(
+      unit('a', 'Alpha', 0, mods('<modifier type="set" field="name" value="Omega"/>')) +
+        unit('b', 'Beta', 0, mods('<modifier type="append" field="name" value="(Elite)"/>')),
+    );
     const [a, b] = [w.add('Alpha'), w.add('Beta')];
     expect(w.ev().find(a)!.eff.name).toBe('Omega');
     expect(w.ev().find(b)!.eff.name).toBe('Beta (Elite)');
@@ -92,12 +100,21 @@ describe('modifiers', () => {
   });
 
   it('adds, removes, and changes the primary category', () => {
-    const links = '<categoryLinks><categoryLink id="l1" targetId="troops" primary="true"/><categoryLink id="l2" targetId="elite" primary="false"/></categoryLinks>';
-    const w = world(unit('u', 'Squad', 0, links + mods(
-      '<modifier type="add" field="category" value="heavy"/>',
-      '<modifier type="remove" field="category" value="elite"/>',
-      '<modifier type="set-primary" field="category" value="hq"/>',
-    )));
+    const links =
+      '<categoryLinks><categoryLink id="l1" targetId="troops" primary="true"/><categoryLink id="l2" targetId="elite" primary="false"/></categoryLinks>';
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        links +
+          mods(
+            '<modifier type="add" field="category" value="heavy"/>',
+            '<modifier type="remove" field="category" value="elite"/>',
+            '<modifier type="set-primary" field="category" value="hq"/>',
+          ),
+      ),
+    );
     const u = w.add('Squad');
     const e = w.ev().find(u)!.eff;
     expect([...e.categories].sort()).toEqual(['heavy', 'hq', 'troops']);
@@ -108,7 +125,7 @@ describe('modifiers', () => {
     const links = '<categoryLinks><categoryLink id="l1" targetId="troops" primary="true"/></categoryLinks>';
     const w = world(
       unit('a', 'Alpha', 0, links + mods('<modifier type="unset-primary" field="category" value="troops"/>')) +
-      unit('b', 'Beta', 0, links + mods('<modifier type="unset-primary" field="category" value="other"/>')),
+        unit('b', 'Beta', 0, links + mods('<modifier type="unset-primary" field="category" value="other"/>')),
     );
     const eff = (name: string) => {
       const opt = w.root(name);
@@ -119,9 +136,22 @@ describe('modifiers', () => {
   });
 
   it('changes a constraint value by its id', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0,
-      cons('<constraint id="gun-max" type="max" value="1" field="selections" scope="parent"/>') +
-      mods('<modifier type="increment" field="gun-max" value="2"/>')))));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(
+          entry(
+            'g',
+            'Gun',
+            0,
+            cons('<constraint id="gun-max" type="max" value="1" field="selections" scope="parent"/>') +
+              mods('<modifier type="increment" field="gun-max" value="2"/>'),
+          ),
+        ),
+      ),
+    );
     const u = w.add('Squad');
     const ev = w.ev();
     expect(ev.limits(w.beneath(u, 'Gun'), ev.find(u)!, ev.forces[0]).max).toBe(3);
@@ -133,9 +163,14 @@ describe('modifiers', () => {
   });
 
   describe('repeats', () => {
-    const squad = (repeat: string) => unit('u', 'Squad', 100,
-      mods(`<modifier type="increment" field="pts" value="10"><repeats>${repeat}</repeats></modifier>`) +
-      children(entry('m', 'Model', 0)));
+    const squad = (repeat: string) =>
+      unit(
+        'u',
+        'Squad',
+        100,
+        mods(`<modifier type="increment" field="pts" value="10"><repeats>${repeat}</repeats></modifier>`) +
+          children(entry('m', 'Model', 0)),
+      );
     const withModels = (repeat: string, n: number) => {
       const w = world(squad(repeat));
       const u = w.add('Squad');
@@ -144,11 +179,13 @@ describe('modifiers', () => {
     };
 
     it('applies once per full step', () => {
-      const r = '<repeat value="2" repeats="1" field="selections" scope="self" childId="m" includeChildSelections="true"/>';
+      const r =
+        '<repeat value="2" repeats="1" field="selections" scope="self" childId="m" includeChildSelections="true"/>';
       expect([0, 1, 2, 3, 4].map((n) => withModels(r, n))).toEqual([100, 100, 110, 110, 120]);
     });
     it('rounds partial steps up when asked', () => {
-      const r = '<repeat value="2" repeats="1" field="selections" scope="self" childId="m" includeChildSelections="true" roundUp="true"/>';
+      const r =
+        '<repeat value="2" repeats="1" field="selections" scope="self" childId="m" includeChildSelections="true" roundUp="true"/>';
       expect([0, 1, 2, 3].map((n) => withModels(r, n))).toEqual([100, 110, 110, 120]);
     });
     it('applies several times per step', () => {
@@ -162,28 +199,38 @@ describe('modifiers', () => {
   });
 
   describe('modifier groups', () => {
-    const inGroup = (group: string) => world(
-      unit('flag', 'Flag', 0) + unit('u', 'Squad', 100, `<modifierGroups>${group}</modifierGroups>`),
+    const inGroup = (group: string) =>
+      world(unit('flag', 'Flag', 0) + unit('u', 'Squad', 100, `<modifierGroups>${group}</modifierGroups>`));
+    const has = conds(
+      '<condition type="atLeast" value="1" field="selections" scope="force" childId="flag" includeChildSelections="true"/>',
     );
-    const has = conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="flag" includeChildSelections="true"/>');
 
     it("apply the group's conditions to every modifier inside", () => {
-      const w = inGroup(`<modifierGroup>${has}${mods('<modifier type="increment" field="pts" value="1"/>', '<modifier type="increment" field="pts" value="2"/>')}</modifierGroup>`);
+      const w = inGroup(
+        `<modifierGroup>${has}${mods('<modifier type="increment" field="pts" value="1"/>', '<modifier type="increment" field="pts" value="2"/>')}</modifierGroup>`,
+      );
       const u = w.add('Squad');
       expect(w.pts(u)).toBe(100);
       w.add('Flag');
       expect(w.pts(u)).toBe(103);
     });
     it('require both the group and the modifier conditions', () => {
-      const never = conds('<condition type="equalTo" value="9" field="selections" scope="force" childId="flag" includeChildSelections="true"/>');
-      const w = inGroup(`<modifierGroup>${has}<modifiers><modifier type="increment" field="pts" value="1">${never}</modifier></modifiers></modifierGroup>`);
+      const never = conds(
+        '<condition type="equalTo" value="9" field="selections" scope="force" childId="flag" includeChildSelections="true"/>',
+      );
+      const w = inGroup(
+        `<modifierGroup>${has}<modifiers><modifier type="increment" field="pts" value="1">${never}</modifier></modifiers></modifierGroup>`,
+      );
       const u = w.add('Squad');
       w.add('Flag');
       expect(w.pts(u)).toBe(100);
     });
     it('nest, inheriting repeats from the group', () => {
-      const repeat = '<repeats><repeat value="1" repeats="1" field="selections" scope="force" childId="flag"/></repeats>';
-      const w = inGroup(`<modifierGroup>${repeat}<modifierGroups><modifierGroup>${mods('<modifier type="increment" field="pts" value="10"/>')}</modifierGroup></modifierGroups></modifierGroup>`);
+      const repeat =
+        '<repeats><repeat value="1" repeats="1" field="selections" scope="force" childId="flag"/></repeats>';
+      const w = inGroup(
+        `<modifierGroup>${repeat}<modifierGroups><modifierGroup>${mods('<modifier type="increment" field="pts" value="10"/>')}</modifierGroup></modifierGroups></modifierGroup>`,
+      );
       const u = w.add('Squad');
       w.add('Flag', 3);
       expect(w.pts(u)).toBe(130);
@@ -193,18 +240,47 @@ describe('modifiers', () => {
 
 describe('conditions', () => {
   /** Squad costs 1 extra when the condition holds */
-  const guarded = (condition: string, others = unit('x', 'Other', 10)) => unit('u', 'Squad', 0,
-    `<modifiers><modifier type="increment" field="pts" value="1">${conds(condition)}</modifier></modifiers>`) + others;
+  const guarded = (condition: string, others = unit('x', 'Other', 10)) =>
+    unit(
+      'u',
+      'Squad',
+      0,
+      `<modifiers><modifier type="increment" field="pts" value="1">${conds(condition)}</modifier></modifiers>`,
+    ) + others;
   const holds = (w: ReturnType<typeof world>, u: string) => w.pts(u) === 1;
 
   describe('comparisons against the number of selections', () => {
     const cases: [string, string, boolean[]][] = [
-      ['lessThan', '<condition type="lessThan" value="1" field="selections" scope="force" childId="x"/>', [true, false, false]],
-      ['greaterThan', '<condition type="greaterThan" value="1" field="selections" scope="force" childId="x"/>', [false, false, true]],
-      ['equalTo', '<condition type="equalTo" value="1" field="selections" scope="force" childId="x"/>', [false, true, false]],
-      ['notEqualTo', '<condition type="notEqualTo" value="1" field="selections" scope="force" childId="x"/>', [true, false, true]],
-      ['atLeast', '<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>', [false, true, true]],
-      ['atMost', '<condition type="atMost" value="1" field="selections" scope="force" childId="x"/>', [true, true, false]],
+      [
+        'lessThan',
+        '<condition type="lessThan" value="1" field="selections" scope="force" childId="x"/>',
+        [true, false, false],
+      ],
+      [
+        'greaterThan',
+        '<condition type="greaterThan" value="1" field="selections" scope="force" childId="x"/>',
+        [false, false, true],
+      ],
+      [
+        'equalTo',
+        '<condition type="equalTo" value="1" field="selections" scope="force" childId="x"/>',
+        [false, true, false],
+      ],
+      [
+        'notEqualTo',
+        '<condition type="notEqualTo" value="1" field="selections" scope="force" childId="x"/>',
+        [true, false, true],
+      ],
+      [
+        'atLeast',
+        '<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>',
+        [false, true, true],
+      ],
+      [
+        'atMost',
+        '<condition type="atMost" value="1" field="selections" scope="force" childId="x"/>',
+        [true, true, false],
+      ],
     ];
     it.each(cases)('%s', (_, condition, expected) => {
       const results = [0, 1, 2].map((n) => {
@@ -216,17 +292,26 @@ describe('conditions', () => {
       expect(results).toEqual(expected);
     });
     it('treats an unknown comparison as false', () => {
-      const w = world(guarded('<condition type="approximately" value="0" field="selections" scope="force" childId="x"/>'));
+      const w = world(
+        guarded('<condition type="approximately" value="0" field="selections" scope="force" childId="x"/>'),
+      );
       expect(holds(w, w.add('Squad'))).toBe(false);
     });
   });
 
   describe('condition groups', () => {
-    const group = (type: string) => unit('a', 'A', 0) + unit('b', 'B', 0) + unit('u', 'Squad', 0,
-      `<modifiers><modifier type="increment" field="pts" value="1"><conditionGroups><conditionGroup type="${type}">${conds(
-        '<condition type="atLeast" value="1" field="selections" scope="force" childId="a"/>',
-        '<condition type="atLeast" value="1" field="selections" scope="force" childId="b"/>',
-      )}</conditionGroup></conditionGroups></modifier></modifiers>`);
+    const group = (type: string) =>
+      unit('a', 'A', 0) +
+      unit('b', 'B', 0) +
+      unit(
+        'u',
+        'Squad',
+        0,
+        `<modifiers><modifier type="increment" field="pts" value="1"><conditionGroups><conditionGroup type="${type}">${conds(
+          '<condition type="atLeast" value="1" field="selections" scope="force" childId="a"/>',
+          '<condition type="atLeast" value="1" field="selections" scope="force" childId="b"/>',
+        )}</conditionGroup></conditionGroups></modifier></modifiers>`,
+      );
 
     it('or needs any one', () => {
       const w = world(group('or'));
@@ -244,13 +329,21 @@ describe('conditions', () => {
       expect(holds(w, u)).toBe(true);
     });
     it('nest', () => {
-      const xml = unit('a', 'A', 0) + unit('b', 'B', 0) + unit('c', 'C', 0) + unit('u', 'Squad', 0,
-        `<modifiers><modifier type="increment" field="pts" value="1"><conditionGroups><conditionGroup type="and">${
-          conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="a"/>')
-        }<conditionGroups><conditionGroup type="or">${conds(
-          '<condition type="atLeast" value="1" field="selections" scope="force" childId="b"/>',
-          '<condition type="atLeast" value="1" field="selections" scope="force" childId="c"/>',
-        )}</conditionGroup></conditionGroups></conditionGroup></conditionGroups></modifier></modifiers>`);
+      const xml =
+        unit('a', 'A', 0) +
+        unit('b', 'B', 0) +
+        unit('c', 'C', 0) +
+        unit(
+          'u',
+          'Squad',
+          0,
+          `<modifiers><modifier type="increment" field="pts" value="1"><conditionGroups><conditionGroup type="and">${conds(
+            '<condition type="atLeast" value="1" field="selections" scope="force" childId="a"/>',
+          )}<conditionGroups><conditionGroup type="or">${conds(
+            '<condition type="atLeast" value="1" field="selections" scope="force" childId="b"/>',
+            '<condition type="atLeast" value="1" field="selections" scope="force" childId="c"/>',
+          )}</conditionGroup></conditionGroups></conditionGroup></conditionGroups></modifier></modifiers>`,
+        );
       const w = world(xml);
       const u = w.add('Squad');
       w.add('C');
@@ -263,11 +356,18 @@ describe('conditions', () => {
   describe('what is counted', () => {
     /** a Squad holding a Model holding a Gun, with the guarded Marker unit alongside */
     const nested = (condition: string, where: 'root' | 'child' = 'root') => {
-      const marker = entry('marker', 'Marker', 0, `<modifiers><modifier type="increment" field="pts" value="1">${conds(condition)}</modifier></modifiers>`);
+      const marker = entry(
+        'marker',
+        'Marker',
+        0,
+        `<modifiers><modifier type="increment" field="pts" value="1">${conds(condition)}</modifier></modifiers>`,
+      );
       const model = entry('m', 'Model', 0, children(entry('g', 'Gun', 0)));
-      return world(where === 'root'
-        ? unit('squad', 'Squad', 0, children(model)) + marker.replace('type="upgrade"', 'type="unit"')
-        : unit('squad', 'Squad', 0, children(model, marker)));
+      return world(
+        where === 'root'
+          ? unit('squad', 'Squad', 0, children(model)) + marker.replace('type="upgrade"', 'type="unit"')
+          : unit('squad', 'Squad', 0, children(model, marker)),
+      );
     };
     const fill = (w: ReturnType<typeof world>) => {
       const s = w.add('Squad');
@@ -276,8 +376,17 @@ describe('conditions', () => {
     };
 
     it('scope self looks at its own children', () => {
-      const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0)) + mods(
-        `<modifier type="increment" field="pts" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="self" childId="g"/>')}</modifier>`)));
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          children(entry('g', 'Gun', 0)) +
+            mods(
+              `<modifier type="increment" field="pts" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="self" childId="g"/>')}</modifier>`,
+            ),
+        ),
+      );
       const u = w.add('Squad');
       expect(w.pts(u)).toBe(0);
       w.pick(u, 'Gun');
@@ -304,13 +413,17 @@ describe('conditions', () => {
       expect(w.pts(mark)).toBe(0);
     });
     it('a deep count multiplies through the selections above', () => {
-      const w = nested('<condition type="equalTo" value="6" field="selections" scope="force" childId="g" includeChildSelections="true"/>');
+      const w = nested(
+        '<condition type="equalTo" value="6" field="selections" scope="force" childId="g" includeChildSelections="true"/>',
+      );
       const mark = w.add('Marker');
       fill(w);
       expect(w.pts(mark)).toBe(1);
     });
     it('a deep count does not double count below a match', () => {
-      const w = nested('<condition type="equalTo" value="2" field="selections" scope="force" childId="any" includeChildSelections="true"/>');
+      const w = nested(
+        '<condition type="equalTo" value="2" field="selections" scope="force" childId="any" includeChildSelections="true"/>',
+      );
       const mark = w.add('Marker');
       expect(w.pts(mark)).toBe(0); // one selection so far, the Marker itself
       w.add('Marker');
@@ -329,7 +442,9 @@ describe('conditions', () => {
       expect(holds(w, u)).toBe(false);
     });
     it('scope primary-catalogue looks across forces of this army', () => {
-      const w = world(guarded('<condition type="atLeast" value="1" field="selections" scope="primary-catalogue" childId="x"/>'));
+      const w = world(
+        guarded('<condition type="atLeast" value="1" field="selections" scope="primary-catalogue" childId="x"/>'),
+      );
       const u = w.add('Squad');
       w.add('Other', 1, w.addForce());
       expect(holds(w, u)).toBe(true);
@@ -338,8 +453,17 @@ describe('conditions', () => {
       const troops = '<categoryLinks><categoryLink id="l" targetId="troops" primary="true"/></categoryLinks>';
       const hq = '<categoryLinks><categoryLink id="l" targetId="hq" primary="true"/></categoryLinks>';
       const w = world(
-        unit('u', 'Squad', 0, troops + mods(`<modifier type="increment" field="pts" value="1">${conds('<condition type="greaterThan" value="1" field="selections" scope="primary-category" childId="any"/>')}</modifier>`)) +
-        unit('x', 'Other', 0, troops) + unit('y', 'Boss', 0, hq),
+        unit(
+          'u',
+          'Squad',
+          0,
+          troops +
+            mods(
+              `<modifier type="increment" field="pts" value="1">${conds('<condition type="greaterThan" value="1" field="selections" scope="primary-category" childId="any"/>')}</modifier>`,
+            ),
+        ) +
+          unit('x', 'Other', 0, troops) +
+          unit('y', 'Boss', 0, hq),
       );
       const u = w.add('Squad');
       w.add('Boss');
@@ -368,8 +492,12 @@ describe('conditions', () => {
       expect(holds(w, u)).toBe(false);
     });
     it('matches by category', () => {
-      const w = world(guarded('<condition type="atLeast" value="1" field="selections" scope="force" childId="elite"/>',
-        unit('x', 'Other', 0, '<categoryLinks><categoryLink id="l" targetId="elite"/></categoryLinks>')));
+      const w = world(
+        guarded(
+          '<condition type="atLeast" value="1" field="selections" scope="force" childId="elite"/>',
+          unit('x', 'Other', 0, '<categoryLinks><categoryLink id="l" targetId="elite"/></categoryLinks>'),
+        ),
+      );
       const u = w.add('Squad');
       w.add('Other');
       expect(holds(w, u)).toBe(true);
@@ -395,8 +523,12 @@ describe('conditions', () => {
     });
     it('measures points as a percentage', () => {
       const share = (others: number) => {
-        const w = world(guarded('<condition type="atLeast" value="50" field="pts" scope="parent" childId="x" percentValue="true"/>',
-          unit('x', 'Other', 30) + unit('y', 'Filler', 70)));
+        const w = world(
+          guarded(
+            '<condition type="atLeast" value="50" field="pts" scope="parent" childId="x" percentValue="true"/>',
+            unit('x', 'Other', 30) + unit('y', 'Filler', 70),
+          ),
+        );
         w.add('Other', others);
         w.add('Filler');
         return holds(w, w.add('Squad'));
@@ -405,7 +537,9 @@ describe('conditions', () => {
       expect(share(3)).toBe(true); // 90 of 160
     });
     it('a percentage of nothing is zero', () => {
-      const w = world(guarded('<condition type="atMost" value="0" field="pts" scope="parent" childId="x" percentValue="true"/>'));
+      const w = world(
+        guarded('<condition type="atMost" value="0" field="pts" scope="parent" childId="x" percentValue="true"/>'),
+      );
       expect(holds(w, w.add('Squad'))).toBe(true);
     });
 
@@ -421,12 +555,31 @@ describe('conditions', () => {
       const b = before.add('Squad');
       expect(after.pts(a)).toBe(before.pts(b));
     });
-
   });
 
   describe('instanceOf', () => {
-    const inside = (condition: string, extra = '') => unit('s', 'Squad', 0, extra + children(entry('m', 'Model', 0, children(
-      entry('g', 'Gun', 0, mods(`<modifier type="increment" field="pts" value="1">${conds(condition)}</modifier>`))))));
+    const inside = (condition: string, extra = '') =>
+      unit(
+        's',
+        'Squad',
+        0,
+        extra +
+          children(
+            entry(
+              'm',
+              'Model',
+              0,
+              children(
+                entry(
+                  'g',
+                  'Gun',
+                  0,
+                  mods(`<modifier type="increment" field="pts" value="1">${conds(condition)}</modifier>`),
+                ),
+              ),
+            ),
+          ),
+      );
     const gun = (xml: string) => {
       const w = world(xml);
       const s = w.add('Squad');
@@ -435,42 +588,97 @@ describe('conditions', () => {
     };
 
     it('self matches the selection itself', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="self" childId="g"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="self" childId="m"/>'))).toBe(0);
+      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="self" childId="g"/>'))).toBe(
+        1,
+      );
+      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="self" childId="m"/>'))).toBe(
+        0,
+      );
     });
     it('parent matches the direct parent only', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="parent" childId="m"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="parent" childId="s"/>'))).toBe(0);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="parent" childId="m"/>')),
+      ).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="parent" childId="s"/>')),
+      ).toBe(0);
     });
     it('ancestor matches any level above', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="s"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="zzz"/>'))).toBe(0);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="s"/>')),
+      ).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="zzz"/>')),
+      ).toBe(0);
     });
     it('ancestor matches a category of an ancestor', () => {
       const cat = '<categoryLinks><categoryLink id="l" targetId="elite"/></categoryLinks>';
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="elite"/>', cat))).toBe(1);
+      expect(
+        gun(
+          inside('<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="elite"/>', cat),
+        ),
+      ).toBe(1);
     });
     it('notInstanceOf inverts', () => {
-      expect(gun(inside('<condition type="notInstanceOf" value="1" field="selections" scope="ancestor" childId="s"/>'))).toBe(0);
-      expect(gun(inside('<condition type="notInstanceOf" value="1" field="selections" scope="ancestor" childId="zzz"/>'))).toBe(1);
+      expect(
+        gun(inside('<condition type="notInstanceOf" value="1" field="selections" scope="ancestor" childId="s"/>')),
+      ).toBe(0);
+      expect(
+        gun(inside('<condition type="notInstanceOf" value="1" field="selections" scope="ancestor" childId="zzz"/>')),
+      ).toBe(1);
     });
     it('force matches the force entry and the catalogue', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="det"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="cat"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="zzz"/>'))).toBe(0);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="det"/>')),
+      ).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="cat"/>')),
+      ).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="force" childId="zzz"/>')),
+      ).toBe(0);
     });
     it('primary-catalogue matches the catalogue', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="primary-catalogue" childId="cat"/>'))).toBe(1);
-      expect(gun(inside('<condition type="notInstanceOf" value="1" field="selections" scope="primary-catalogue" childId="zzz"/>'))).toBe(1);
+      expect(
+        gun(
+          inside('<condition type="instanceOf" value="1" field="selections" scope="primary-catalogue" childId="cat"/>'),
+        ),
+      ).toBe(1);
+      expect(
+        gun(
+          inside(
+            '<condition type="notInstanceOf" value="1" field="selections" scope="primary-catalogue" childId="zzz"/>',
+          ),
+        ),
+      ).toBe(1);
     });
     it('roster matches any force and the game system', () => {
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="roster" childId="gst"/>'))).toBe(1);
-      expect(gun(inside('<condition type="instanceOf" value="1" field="selections" scope="roster" childId="det"/>'))).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="roster" childId="gst"/>')),
+      ).toBe(1);
+      expect(
+        gun(inside('<condition type="instanceOf" value="1" field="selections" scope="roster" childId="det"/>')),
+      ).toBe(1);
     });
     it('self works for an option not yet selected', () => {
-      const w = world(unit('s', 'Squad', 0, children(entry('g', 'Gun', 0,
-        `<categoryLinks><categoryLink id="l" targetId="elite"/></categoryLinks>` +
-        mods(`<modifier type="set" field="hidden" value="true">${conds('<condition type="instanceOf" value="1" field="selections" scope="self" childId="elite"/>')}</modifier>`)))));
+      const w = world(
+        unit(
+          's',
+          'Squad',
+          0,
+          children(
+            entry(
+              'g',
+              'Gun',
+              0,
+              `<categoryLinks><categoryLink id="l" targetId="elite"/></categoryLinks>` +
+                mods(
+                  `<modifier type="set" field="hidden" value="true">${conds('<condition type="instanceOf" value="1" field="selections" scope="self" childId="elite"/>')}</modifier>`,
+                ),
+            ),
+          ),
+        ),
+      );
       const s = w.add('Squad');
       const ev = w.ev();
       expect(ev.optionEff(w.beneath(s, 'Gun'), ev.find(s)!, ev.forces[0]).hidden).toBe(true);
@@ -520,52 +728,96 @@ describe('validation', () => {
     expect(w.errors()).toEqual(['Squad › Weapons: at most 1 allowed (has 2)']);
   });
   it('checks a hidden child only when it was actually taken', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(min(1)), 'type="upgrade" hidden="true"'))));
+    const w = world(
+      unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(min(1)), 'type="upgrade" hidden="true"'))),
+    );
     w.add('Squad');
     expect(w.errors()).toEqual([]);
   });
   it('checks a max across the force for selections anywhere', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0,
-      cons('<constraint id="c" type="max" value="1" field="selections" scope="force" includeChildSelections="true"/>')))));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(
+          entry(
+            'g',
+            'Gun',
+            0,
+            cons(
+              '<constraint id="c" type="max" value="1" field="selections" scope="force" includeChildSelections="true"/>',
+            ),
+          ),
+        ),
+      ),
+    );
     w.pick(w.add('Squad'), 'Gun');
     expect(w.errors()).toEqual([]);
     w.pick(w.add('Squad'), 'Gun');
     expect(w.errors()).toContain('Gun: at most 1 allowed (has 2)');
   });
   it('checks a max across the roster for selections anywhere', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0,
-      cons('<constraint id="c" type="max" value="1" field="selections" scope="roster" includeChildSelections="true"/>')))));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(
+          entry(
+            'g',
+            'Gun',
+            0,
+            cons(
+              '<constraint id="c" type="max" value="1" field="selections" scope="roster" includeChildSelections="true"/>',
+            ),
+          ),
+        ),
+      ),
+    );
     w.pick(w.add('Squad'), 'Gun');
     const f2 = w.addForce();
     w.pick(w.add('Squad', 1, f2), 'Gun');
     expect(w.errors()).toContain('Gun: at most 1 allowed (has 2)');
   });
   it('checks limits on root units within a force', () => {
-    const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="force"/>')));
+    const w = world(
+      unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="force"/>')),
+    );
     w.add('Boss');
     expect(w.errors()).toEqual([]);
     w.add('Boss');
     expect(w.errors()).toEqual(['Boss: at most 1 allowed (has 2)']);
   });
   it('checks limits on root units across a roster', () => {
-    const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="roster"/>')));
+    const w = world(
+      unit('u', 'Boss', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="roster"/>')),
+    );
     w.add('Boss');
     w.add('Boss', 1, w.addForce());
     expect(w.errors()).toContain('Boss: at most 1 allowed (has 2)');
   });
   it('requires mandatory root units', () => {
-    const w = world(unit('u', 'Boss', 0, cons('<constraint id="c" type="min" value="1" field="selections" scope="force"/>')));
+    const w = world(
+      unit('u', 'Boss', 0, cons('<constraint id="c" type="min" value="1" field="selections" scope="force"/>')),
+    );
     expect(w.errors()).toEqual(['Boss: needs at least 1 (has 0)']);
   });
   it('checks points limits on a root unit', () => {
-    const w = world(unit('u', 'Boss', 30, cons('<constraint id="c" type="max" value="50" field="pts" scope="force"/>')));
+    const w = world(
+      unit('u', 'Boss', 30, cons('<constraint id="c" type="max" value="50" field="pts" scope="force"/>')),
+    );
     w.add('Boss', 2);
     expect(w.errors()).toEqual(['Boss: at most 50 pts allowed (has 60)']);
   });
   it('checks percentage limits against the current total', () => {
     const w = world(
-      unit('u', 'Boss', 30, cons('<constraint id="c" type="max" value="25" field="pts" scope="roster" percentValue="true"/>')) +
-      unit('x', 'Other', 70),
+      unit(
+        'u',
+        'Boss',
+        30,
+        cons('<constraint id="c" type="max" value="25" field="pts" scope="roster" percentValue="true"/>'),
+      ) + unit('x', 'Other', 70),
     );
     w.add('Other');
     w.add('Boss');
@@ -574,7 +826,16 @@ describe('validation', () => {
     expect(w.errors()).toEqual([]);
   });
   it('warns about a unit that has become hidden', () => {
-    const w = world(unit('u', 'Squad', 0, mods(`<modifier type="set" field="hidden" value="true">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}</modifier>`)) + unit('x', 'Other', 0));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        mods(
+          `<modifier type="set" field="hidden" value="true">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}</modifier>`,
+        ),
+      ) + unit('x', 'Other', 0),
+    );
     w.add('Squad');
     w.add('Other');
     expect(w.warnings()).toEqual(['Squad is not available with the current choices']);
@@ -635,7 +896,10 @@ describe('validation', () => {
       expect(ev.categoryLimits(ev.forces[0], 'tr')).toEqual({ min: 0, max: -1, n: 0, bad: false });
     });
     it('lets the data change a slot with a modifier', () => {
-      const raised = FOC.replace('<categoryLink id="l-hq" name="HQ" targetId="hq">', '<categoryLink id="l-hq" name="HQ" targetId="hq"><modifiers><modifier type="increment" field="hq-max" value="1"/></modifiers>');
+      const raised = FOC.replace(
+        '<categoryLink id="l-hq" name="HQ" targetId="hq">',
+        '<categoryLink id="l-hq" name="HQ" targetId="hq"><modifiers><modifier type="increment" field="hq-max" value="1"/></modifiers>',
+      );
       const w = world(units, { gst: raised });
       w.add('Boss', 3);
       expect(w.ev().categoryLimits(w.ev().forces[0], 'hq').max).toBe(3);
@@ -657,13 +921,21 @@ describe('validation', () => {
       expect(w.errors()).toContain('Troops: at most 10 pts allowed (has 12)');
     });
     it('counts a unit only in the category it was added under when the data gives no primary', () => {
-      const w = world(unit('t', 'Troop', 0, '<categoryLinks><categoryLink id="l" targetId="tr"/></categoryLinks>'), { gst: FOC });
+      const w = world(unit('t', 'Troop', 0, '<categoryLinks><categoryLink id="l" targetId="tr"/></categoryLinks>'), {
+        gst: FOC,
+      });
       const opt = w.root('Troop');
       addSel(w.roster, w.contexts, 'f1', null, opt, 1, 'tr');
       expect(w.ev().categoryLimits(w.ev().forces[0], 'tr').n).toBe(1);
     });
     it('offers only units whose primary category is in the force', () => {
-      const w = world(units + unit('z', 'Stranger', 0, inCat('nope')) + unit('y', 'Fallback', 0, '<categoryLinks><categoryLink id="l" targetId="tr"/></categoryLinks>') + unit('n', 'Nameless', 0), { gst: FOC });
+      const w = world(
+        units +
+          unit('z', 'Stranger', 0, inCat('nope')) +
+          unit('y', 'Fallback', 0, '<categoryLinks><categoryLink id="l" targetId="tr"/></categoryLinks>') +
+          unit('n', 'Nameless', 0),
+        { gst: FOC },
+      );
       const names = forceRootOptions(w.ctx, w.ctx.forceEntries()[0]).map((o) => o.node.name);
       expect(names).toEqual(['Boss', 'Troop', 'Fallback']);
     });
@@ -696,10 +968,18 @@ describe('limits for the option picker', () => {
     expect(limits('')).toEqual({ min: 0, max: -1 });
   });
   it('takes the tightest of several', () => {
-    expect(limits('<constraint id="a" type="max" value="5" field="selections" scope="parent"/><constraint id="b" type="max" value="2" field="selections" scope="parent"/>').max).toBe(2);
+    expect(
+      limits(
+        '<constraint id="a" type="max" value="5" field="selections" scope="parent"/><constraint id="b" type="max" value="2" field="selections" scope="parent"/>',
+      ).max,
+    ).toBe(2);
   });
   it('ignores limits at other scopes and on other fields', () => {
-    expect(limits('<constraint id="a" type="max" value="1" field="selections" scope="force"/><constraint id="b" type="max" value="1" field="pts" scope="parent"/>')).toEqual({ min: 0, max: -1 });
+    expect(
+      limits(
+        '<constraint id="a" type="max" value="1" field="selections" scope="force"/><constraint id="b" type="max" value="1" field="pts" scope="parent"/>',
+      ),
+    ).toEqual({ min: 0, max: -1 });
   });
 
   // BUG: -1 means unlimited, but when it comes second it beats a real limit, and when first it doesn't.
@@ -711,14 +991,24 @@ describe('limits for the option picker', () => {
   });
 
   describe('room beyond the parent', () => {
-    const gun = (scope: string) => unit('u', 'Squad', 0, children(entry('g', 'Gun', 0,
-      cons(`<constraint id="c" type="max" value="1" field="selections" scope="${scope}"/>`))));
+    const gun = (scope: string) =>
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(
+          entry('g', 'Gun', 0, cons(`<constraint id="c" type="max" value="1" field="selections" scope="${scope}"/>`)),
+        ),
+      );
 
     it('runs out at a force limit', () => {
       const w = world(gun('force'));
       const a = w.add('Squad');
       const b = w.add('Squad');
-      const room = () => { const ev = w.ev(); return ev.roomBeyondParent(w.beneath(b, 'Gun'), ev.find(b)!, ev.forces[0]); };
+      const room = () => {
+        const ev = w.ev();
+        return ev.roomBeyondParent(w.beneath(b, 'Gun'), ev.find(b)!, ev.forces[0]);
+      };
       expect(room()).toBe(true);
       w.pick(a, 'Gun');
       expect(room()).toBe(false);
@@ -734,7 +1024,8 @@ describe('limits for the option picker', () => {
   });
 
   it('calls an option with a max of 0 unavailable', () => {
-    const eff = (type: string, value: number, field = 'selections') => ({ constraints: [{ type, value, field }] }) as unknown as Eff;
+    const eff = (type: string, value: number, field = 'selections') =>
+      ({ constraints: [{ type, value, field }] }) as unknown as Eff;
     expect(unavailable(eff('max', 0))).toBe(true);
     expect(unavailable(eff('max', 1))).toBe(false);
     expect(unavailable(eff('min', 0))).toBe(false);
@@ -759,8 +1050,12 @@ describe('selected', () => {
 
 describe('adding a unit fills in what it must have', () => {
   const names = (w: ReturnType<typeof world>, uid: string) =>
-    w.ev().find(uid)!.children.map((c) => `${c.sel.number}x ${c.eff.name}`);
-  const group = (inner: string, attrs = '') => `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
+    w
+      .ev()
+      .find(uid)!
+      .children.map((c) => `${c.sel.number}x ${c.eff.name}`);
+  const group = (inner: string, attrs = '') =>
+    `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
 
   it('takes the minimum of a mandatory child', () => {
     const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(5))))));
@@ -775,28 +1070,51 @@ describe('adding a unit fills in what it must have', () => {
     expect(names(w, w.add('Squad'))).toEqual(['3x Model']);
   });
   it('fills in nested mandatory children', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(1)) + children(entry('g', 'Gun', 0, cons(min(1))))))));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(entry('m', 'Model', 0, cons(min(1)) + children(entry('g', 'Gun', 0, cons(min(1)))))),
+      ),
+    );
     const u = w.add('Squad');
-    expect(w.ev().find(u)!.children[0].children.map((c) => c.eff.name)).toEqual(['Gun']);
+    expect(
+      w
+        .ev()
+        .find(u)!
+        .children[0].children.map((c) => c.eff.name),
+    ).toEqual(['Gun']);
   });
   it('skips a hidden mandatory child', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(1)), 'type="model" hidden="true"'))));
+    const w = world(
+      unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(1)), 'type="model" hidden="true"'))),
+    );
     expect(names(w, w.add('Squad'))).toEqual([]);
   });
   it('uses the default of a mandatory group', () => {
-    const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + children(entry('a', 'Axe', 0), entry('b', 'Bow', 9)), 'defaultSelectionEntryId="b"')));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        group(cons(min(1)) + children(entry('a', 'Axe', 0), entry('b', 'Bow', 9)), 'defaultSelectionEntryId="b"'),
+      ),
+    );
     expect(names(w, w.add('Squad'))).toEqual(['1x Bow']);
   });
   it('lets a modifier change the default', () => {
-    const inner = cons(min(1)) + mods('<modifier type="set" field="defaultSelectionEntryId" value="a"/>') + children(entry('a', 'Axe', 9), entry('b', 'Bow', 1));
+    const inner =
+      cons(min(1)) +
+      mods('<modifier type="set" field="defaultSelectionEntryId" value="a"/>') +
+      children(entry('a', 'Axe', 9), entry('b', 'Bow', 1));
     const w = world(unit('u', 'Squad', 0, group(inner, 'defaultSelectionEntryId="b"')));
     expect(names(w, w.add('Squad'))).toEqual(['1x Axe']);
   });
   it('takes the cheapest option after modifiers when there is no default', () => {
-    const inner = cons(min(1)) + children(
-      entry('a', 'Axe', 1, mods('<modifier type="set" field="pts" value="50"/>')),
-      entry('b', 'Bow', 5),
-    );
+    const inner =
+      cons(min(1)) +
+      children(entry('a', 'Axe', 1, mods('<modifier type="set" field="pts" value="50"/>')), entry('b', 'Bow', 5));
     const w = world(unit('u', 'Squad', 0, group(inner)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Bow']);
   });
@@ -806,7 +1124,8 @@ describe('adding a unit fills in what it must have', () => {
     expect(names(w, w.add('Squad'))).toEqual(['1x Axe', '1x Bow']);
   });
   it('ignores hidden options when picking', () => {
-    const inner = cons(min(1)) + children(entry('a', 'Axe', 0, '', 'type="upgrade" hidden="true"'), entry('b', 'Bow', 5));
+    const inner =
+      cons(min(1)) + children(entry('a', 'Axe', 0, '', 'type="upgrade" hidden="true"'), entry('b', 'Bow', 5));
     const w = world(unit('u', 'Squad', 0, group(inner)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Bow']);
   });
@@ -816,7 +1135,12 @@ describe('adding a unit fills in what it must have', () => {
     expect(names(w, w.add('Squad'))).toEqual(['1x Axe']);
   });
   it('respects a limit elsewhere in the force when choosing', () => {
-    const limited = entry('a', 'Axe', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="force" includeChildSelections="true"/>'));
+    const limited = entry(
+      'a',
+      'Axe',
+      0,
+      cons('<constraint id="c" type="max" value="1" field="selections" scope="force" includeChildSelections="true"/>'),
+    );
     const inner = cons(min(1)) + children(limited, entry('b', 'Bow', 5));
     const w = world(unit('u', 'Squad', 0, group(inner)));
     w.add('Squad');
@@ -824,24 +1148,48 @@ describe('adding a unit fills in what it must have', () => {
   });
   it('re-checks limits after each pick, because a pick can change them', () => {
     const flag = entry('a', 'Armour', 0, cons(min(1)));
-    const follow = entry('b', 'Bonus', 0,
+    const follow = entry(
+      'b',
+      'Bonus',
+      0,
       cons('<constraint id="b-min" type="min" value="0" field="selections" scope="parent"/>') +
-      mods(`<modifier type="set" field="b-min" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="parent" childId="a"/>')}</modifier>`));
+        mods(
+          `<modifier type="set" field="b-min" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="parent" childId="a"/>')}</modifier>`,
+        ),
+    );
     const w = world(unit('u', 'Squad', 0, children(flag, follow)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Armour', '1x Bonus']);
   });
   it('revisits children, because a later pick can unlock something in an earlier one', () => {
-    const sword = entry('sw', 'Sword', 0,
+    const sword = entry(
+      'sw',
+      'Sword',
+      0,
       cons('<constraint id="g-min" type="min" value="0" field="selections" scope="parent"/>') +
-      mods(`<modifier type="set" field="g-min" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="gun" includeChildSelections="true"/>')}</modifier>`));
+        mods(
+          `<modifier type="set" field="g-min" value="1">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="gun" includeChildSelections="true"/>')}</modifier>`,
+        ),
+    );
     const sarge = entry('s', 'Sergeant', 0, cons(min(1)) + children(sword));
     const trooper = entry('t', 'Trooper', 0, cons(min(1)) + children(entry('gun', 'Gun', 0, cons(min(1)))));
     const w = world(unit('u', 'Squad', 0, children(sarge, trooper)));
     const u = w.add('Squad');
-    expect(w.ev().find(u)!.children[0].children.map((c) => c.eff.name)).toEqual(['Sword']);
+    expect(
+      w
+        .ev()
+        .find(u)!
+        .children[0].children.map((c) => c.eff.name),
+    ).toEqual(['Sword']);
   });
   it('stops a chain of mandatory entries that links back to itself', () => {
-    const w = world(unit('u', 'Squad', 0, '<entryLinks><entryLink id="l" targetId="u" type="selectionEntry"><constraints><constraint id="c" type="min" value="1" field="selections" scope="parent"/></constraints></entryLink></entryLinks>'));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        '<entryLinks><entryLink id="l" targetId="u" type="selectionEntry"><constraints><constraint id="c" type="min" value="1" field="selections" scope="parent"/></constraints></entryLink></entryLinks>',
+      ),
+    );
     expect(() => w.add('Squad')).not.toThrow();
   });
 });
@@ -863,7 +1211,9 @@ describe('roster edits', () => {
     expect(w.roster.forces[0].selections).toHaveLength(1);
   });
   it('remembers the category a unit was added under', () => {
-    const w = world(unit('u', 'Squad', 0, '<categoryLinks><categoryLink id="l" targetId="troops" primary="true"/></categoryLinks>'));
+    const w = world(
+      unit('u', 'Squad', 0, '<categoryLinks><categoryLink id="l" targetId="troops" primary="true"/></categoryLinks>'),
+    );
     const uid = addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen');
     expect(w.ev().find(uid)!.eff.primary).toBe('chosen');
   });
@@ -896,8 +1246,10 @@ describe('defaultMember', () => {
 });
 
 describe('profiles and rules for display', () => {
-  const stat = (name: string, attrs: string, mod = '') => `<profiles><profile id="p-${name}" name="${name}" typeId="t" typeName="Unit" ${attrs}><characteristics><characteristic name="Move" typeId="mv">6"</characteristic><characteristic name="Save" typeId="sv">3+</characteristic></characteristics>${mod}</profile></profiles>`;
-  const rule = (name: string, attrs = '', mod = '') => `<rules><rule id="r-${name}" name="${name}" ${attrs}><description>Text of ${name}</description>${mod}</rule></rules>`;
+  const stat = (name: string, attrs: string, mod = '') =>
+    `<profiles><profile id="p-${name}" name="${name}" typeId="t" typeName="Unit" ${attrs}><characteristics><characteristic name="Move" typeId="mv">6"</characteristic><characteristic name="Save" typeId="sv">3+</characteristic></characteristics>${mod}</profile></profiles>`;
+  const rule = (name: string, attrs = '', mod = '') =>
+    `<rules><rule id="r-${name}" name="${name}" ${attrs}><description>Text of ${name}</description>${mod}</rule></rules>`;
   const shared = `<sharedProfiles><profile id="sp" name="Shared Stat" typeId="t" typeName="Unit"><characteristics><characteristic name="Move" typeId="mv">8"</characteristic></characteristics></profile></sharedProfiles>
     <sharedRules><rule id="sr" name="Shared Rule"><description>Shared text</description></rule></sharedRules>`;
   const profilesOf = (inner: string, o = {}) => {
@@ -913,14 +1265,32 @@ describe('profiles and rules for display', () => {
     return ev.rulesFor(ev.find(u)!);
   };
 
-  it('lists a unit\'s profiles and those of its selected children', () => {
-    const w = world(unit('u', 'Squad', 0, stat('A', '') + children(entry('g', 'Gun', 0, cons(min(1)) + stat('B', '')), entry('z', 'Spare', 0, stat('C', '')))));
+  it("lists a unit's profiles and those of its selected children", () => {
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        stat('A', '') +
+          children(entry('g', 'Gun', 0, cons(min(1)) + stat('B', '')), entry('z', 'Spare', 0, stat('C', ''))),
+      ),
+    );
     const u = w.add('Squad');
     const ev = w.ev();
     expect(ev.profilesFor(ev.find(u)!).map((p) => p.name)).toEqual(['A', 'B']);
   });
   it('shows a repeated profile once', () => {
-    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(min(1)) + stat('A', '')), entry('h', 'Gun2', 0, cons(min(1)) + stat('A', '')))));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        children(
+          entry('g', 'Gun', 0, cons(min(1)) + stat('A', '')),
+          entry('h', 'Gun2', 0, cons(min(1)) + stat('A', '')),
+        ),
+      ),
+    );
     const u = w.add('Squad');
     const ev = w.ev();
     expect(ev.profilesFor(ev.find(u)!)).toHaveLength(1);
@@ -934,10 +1304,16 @@ describe('profiles and rules for display', () => {
     expect(profilesOf(link('name="" hidden="true"'), { cat: shared })).toEqual([]);
   });
   it('skips a link to a profile that does not exist, and links of other types', () => {
-    expect(profilesOf('<infoLinks><infoLink id="il" targetId="nope" type="profile"/><infoLink id="i2" targetId="sr" type="rule"/></infoLinks>', { cat: shared })).toEqual([]);
+    expect(
+      profilesOf(
+        '<infoLinks><infoLink id="il" targetId="nope" type="profile"/><infoLink id="i2" targetId="sr" type="rule"/></infoLinks>',
+        { cat: shared },
+      ),
+    ).toEqual([]);
   });
   it('applies modifiers to characteristics', () => {
-    const p = (m: string) => profilesOf(stat('A', '', mods(m)))[0].characteristics.find((c) => c.typeId === 'sv')!.value;
+    const p = (m: string) =>
+      profilesOf(stat('A', '', mods(m)))[0].characteristics.find((c) => c.typeId === 'sv')!.value;
     expect(p('<modifier type="set" field="sv" value="2+"/>')).toBe('2+');
     expect(p('<modifier type="append" field="sv" value="(invuln)"/>')).toBe('3+ (invuln)');
     expect(p('<modifier type="increment" field="sv" value="1"/>')).toBe('4+');
@@ -961,15 +1337,22 @@ describe('profiles and rules for display', () => {
     expect(ev.find(u)!.node.profiles[0].characteristics[1].value).toBe('3+');
   });
   it('skips a modifier on a profile when its condition fails', () => {
-    const m = mods(`<modifier type="set" field="sv" value="2+">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="nope"/>')}</modifier>`);
+    const m = mods(
+      `<modifier type="set" field="sv" value="2+">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="nope"/>')}</modifier>`,
+    );
     expect(profilesOf(stat('A', '', m))[0].characteristics[1].value).toBe('3+');
   });
 
   it('lists rules, once each by name, from selected children too', () => {
-    const w = world(unit('u', 'Squad', 0, rule('A') + children(
-      entry('g', 'Gun', 0, cons(min(1)) + rule('A')),
-      entry('h', 'Hat', 0, cons(min(1)) + rule('B')),
-    )));
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        rule('A') +
+          children(entry('g', 'Gun', 0, cons(min(1)) + rule('A')), entry('h', 'Hat', 0, cons(min(1)) + rule('B'))),
+      ),
+    );
     const u = w.add('Squad');
     const ev = w.ev();
     expect(ev.rulesFor(ev.find(u)!).map((r) => r.name)).toEqual(['A', 'B']);
@@ -978,7 +1361,10 @@ describe('profiles and rules for display', () => {
     expect(rulesOf(rule('A', 'hidden="true"'))).toEqual([]);
   });
   it('follows rule links, using the link name', () => {
-    const rs = rulesOf('<infoLinks><infoLink id="il" name="Renamed" targetId="sr" type="rule"/><infoLink id="i2" targetId="nope" type="rule"/><infoLink id="i3" targetId="sp" type="profile"/></infoLinks>', { cat: shared });
+    const rs = rulesOf(
+      '<infoLinks><infoLink id="il" name="Renamed" targetId="sr" type="rule"/><infoLink id="i2" targetId="nope" type="rule"/><infoLink id="i3" targetId="sp" type="profile"/></infoLinks>',
+      { cat: shared },
+    );
     expect(rs.map((r) => r.name)).toEqual(['Renamed']);
     expect(rs[0].description).toBe('Shared text');
   });
@@ -991,7 +1377,9 @@ describe('profiles and rules for display', () => {
     expect(rulesOf(rule('A', '', mods('<modifier type="set" field="hidden" value="true"/>')))).toEqual([]);
   });
   it('can reveal a hidden rule with a modifier', () => {
-    expect(rulesOf(rule('A', 'hidden="true"', mods('<modifier type="set" field="hidden" value="false"/>')))).toHaveLength(1);
+    expect(
+      rulesOf(rule('A', 'hidden="true"', mods('<modifier type="set" field="hidden" value="false"/>'))),
+    ).toHaveLength(1);
   });
 });
 

@@ -79,7 +79,10 @@ export class Evaluator {
   pointsTypeId = '';
   private bySel = new Map<string, RSel>();
 
-  constructor(public roster: Roster, private contexts: Map<string, Context>) {
+  constructor(
+    public roster: Roster,
+    private contexts: Map<string, Context>,
+  ) {
     this.build();
   }
 
@@ -97,7 +100,8 @@ export class Evaluator {
       const ctx = this.contexts.get(f.catalogueId);
       if (!ctx) continue;
       this.pointsTypeId = ctx.pointsType()?.id ?? '';
-      const entry = ctx.get(f.forceEntryId) ?? { id: f.forceEntryId, name: 'Force', children: [] } as unknown as EntryNode;
+      const entry =
+        ctx.get(f.forceEntryId) ?? ({ id: f.forceEntryId, name: 'Force', children: [] } as unknown as EntryNode);
       const rf: RForce = { force: f, ctx, entry, roots: [], broken: [], total: 0 };
       const roots = rootOptionsCached(ctx);
       for (const s of f.selections) {
@@ -121,7 +125,13 @@ export class Evaluator {
 
   private buildSel(s: Sel, opt: Opt, parent: RSel | null, force: RForce): RSel {
     const rs: RSel = {
-      sel: s, opt, node: opt.node, parent, force, children: [], total: 0,
+      sel: s,
+      opt,
+      node: opt.node,
+      parent,
+      force,
+      children: [],
+      total: 0,
       eff: { name: opt.node.name, hidden: false, costs: new Map(), constraints: [], categories: new Set() },
     };
     this.bySel.set(s.uid, rs);
@@ -182,8 +192,10 @@ export class Evaluator {
       case 'category':
         if (m.type === 'add') eff.categories.add(v);
         else if (m.type === 'remove') eff.categories.delete(v);
-        else if (m.type === 'set-primary') { eff.categories.add(v); eff.primary = v; }
-        else if (m.type === 'unset-primary' && eff.primary === v) eff.primary = undefined;
+        else if (m.type === 'set-primary') {
+          eff.categories.add(v);
+          eff.primary = v;
+        } else if (m.type === 'unset-primary' && eff.primary === v) eff.primary = undefined;
         return;
     }
     if (eff.costs.has(m.field) || this.isCostType(m.field)) {
@@ -229,13 +241,20 @@ export class Evaluator {
     }
     const v = this.measure(c, w);
     switch (c.type) {
-      case 'lessThan': return v < c.value;
-      case 'greaterThan': return v > c.value;
-      case 'equalTo': return v === c.value;
-      case 'notEqualTo': return v !== c.value;
-      case 'atLeast': return v >= c.value;
-      case 'atMost': return v <= c.value;
-      default: return false;
+      case 'lessThan':
+        return v < c.value;
+      case 'greaterThan':
+        return v > c.value;
+      case 'equalTo':
+        return v === c.value;
+      case 'notEqualTo':
+        return v !== c.value;
+      case 'atLeast':
+        return v >= c.value;
+      case 'atMost':
+        return v <= c.value;
+      default:
+        return false;
     }
   }
 
@@ -245,8 +264,13 @@ export class Evaluator {
     switch (c.scope) {
       case 'self':
         if (w.self) return selfMatch(w.self);
-        return !!w.opt && (w.opt.node.id === id || w.opt.node.linkId === id || w.opt.groupIds.includes(id) ||
-          w.opt.node.categoryLinks.some((l) => l.targetId === id));
+        return (
+          !!w.opt &&
+          (w.opt.node.id === id ||
+            w.opt.node.linkId === id ||
+            w.opt.groupIds.includes(id) ||
+            w.opt.node.categoryLinks.some((l) => l.targetId === id))
+        );
       case 'parent':
         return w.parent ? selfMatch(w.parent) : this.forceMatches(w.force, id);
       case 'force':
@@ -278,7 +302,8 @@ export class Evaluator {
       return fs.filter((f) => this.forceMatches(f, c.childId)).length;
     }
     const containers = this.scopeContainers(c.scope, w);
-    const deep = c.includeChildSelections || c.scope === 'force' || c.scope === 'roster' ? c.includeChildSelections : false;
+    const deep =
+      c.includeChildSelections || c.scope === 'force' || c.scope === 'roster' ? c.includeChildSelections : false;
     const isCost = c.field !== 'selections';
     let total = 0;
     for (const items of containers) total += this.countIn(items, c.childId, deep, isCost ? c.field : null);
@@ -381,7 +406,12 @@ export class Evaluator {
     const issues = this.issues;
     for (const rf of this.forces) {
       const fname = rf.entry.name;
-      if (rf.broken.length) issues.push({ level: 'warn', forceUid: rf.force.uid, message: `${rf.broken.length} unit(s) no longer exist in the data and were skipped` });
+      if (rf.broken.length)
+        issues.push({
+          level: 'warn',
+          forceUid: rf.force.uid,
+          message: `${rf.broken.length} unit(s) no longer exist in the data and were skipped`,
+        });
       // force-org: category limits
       for (const cl of rf.entry.categoryLinks) {
         const w: Where = { self: null, parent: null, force: rf };
@@ -403,10 +433,20 @@ export class Evaluator {
           const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
           if (c.scope !== 'roster' && c.scope !== 'force' && c.scope !== 'parent') continue;
           const field = c.field === 'selections' ? null : c.field;
-          const n = containers.reduce((t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field), 0);
+          const n = containers.reduce(
+            (t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field),
+            0,
+          );
           this.report(this.pct(c, containers), n, `${eff.name}`, rf.force.uid, have[0]?.sel.uid);
         }
-        if (eff.hidden && have.length) for (const h of have) issues.push({ level: 'warn', forceUid: rf.force.uid, selUid: h.sel.uid, message: `${eff.name} is not available with the current choices` });
+        if (eff.hidden && have.length)
+          for (const h of have)
+            issues.push({
+              level: 'warn',
+              forceUid: rf.force.uid,
+              selUid: h.sel.uid,
+              message: `${eff.name} is not available with the current choices`,
+            });
       }
       for (const r of rf.roots) this.validateSel(r);
     }
@@ -435,7 +475,13 @@ export class Evaluator {
   }
 
   private effectiveConstraints(cons: Constraint[], mods: Modifier[], w: Where) {
-    const eff: Eff = { name: '', hidden: false, costs: new Map(), constraints: cons.map((c) => ({ ...c })), categories: new Set() };
+    const eff: Eff = {
+      name: '',
+      hidden: false,
+      costs: new Map(),
+      constraints: cons.map((c) => ({ ...c })),
+      categories: new Set(),
+    };
     for (const m of mods) {
       const t = this.modTimes(m, w);
       if (t) this.applyMod(eff, m, t);
@@ -447,7 +493,8 @@ export class Evaluator {
     if (c.field !== 'selections' && !this.isCostType(c.field)) return;
     const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
     const n = containers.reduce(
-      (t, items) => t + this.countCat(items, catId, c.includeChildSelections, c.field === 'selections' ? null : c.field),
+      (t, items) =>
+        t + this.countCat(items, catId, c.includeChildSelections, c.field === 'selections' ? null : c.field),
       0,
     );
     this.report(this.pct(c, containers), n, name, rf.force.uid);
@@ -477,10 +524,20 @@ export class Evaluator {
   private report(c: Constraint, n: number, name: string, forceUid?: string, selUid?: string) {
     const unit = c.field === 'selections' ? '' : ' pts';
     if (c.type === 'min' && c.value > 0 && n < c.value) {
-      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: needs at least ${fmt(c.value)}${unit} (has ${fmt(n)})` });
+      this.issues.push({
+        level: 'error',
+        forceUid,
+        selUid,
+        message: `${name}: needs at least ${fmt(c.value)}${unit} (has ${fmt(n)})`,
+      });
     }
     if (c.type === 'max' && c.value >= 0 && n > c.value) {
-      this.issues.push({ level: 'error', forceUid, selUid, message: `${name}: at most ${fmt(c.value)}${unit} allowed (has ${fmt(n)})` });
+      this.issues.push({
+        level: 'error',
+        forceUid,
+        selUid,
+        message: `${name}: at most ${fmt(c.value)}${unit} allowed (has ${fmt(n)})`,
+      });
     }
   }
 
@@ -497,7 +554,8 @@ export class Evaluator {
           else if (c.scope === 'force' || c.scope === 'roster') {
             const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rs.force.roots];
             const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
-            if (c.type === 'max' && c.value >= 0 && total > c.value && n) this.report(c, total, eff.name, rs.force.force.uid, rs.sel.uid);
+            if (c.type === 'max' && c.value >= 0 && total > c.value && n)
+              this.report(c, total, eff.name, rs.force.force.uid, rs.sel.uid);
           }
         }
         if (o.kind === 'group') walk(o.members);
@@ -519,7 +577,13 @@ export class Evaluator {
       for (const l of r.node.infoLinks) {
         if (l.type !== 'profile') continue;
         const p = ctx.profile(l.targetId);
-        if (p) list.push({ ...p, name: l.name || p.name, hidden: p.hidden || l.hidden, modifiers: [...p.modifiers, ...l.modifiers] });
+        if (p)
+          list.push({
+            ...p,
+            name: l.name || p.name,
+            hidden: p.hidden || l.hidden,
+            modifiers: [...p.modifiers, ...l.modifiers],
+          });
       }
       for (const p of list) {
         const eff = this.profileEff(p, w);
@@ -538,9 +602,13 @@ export class Evaluator {
     const q: Rule = { ...r };
     for (const m of r.modifiers) {
       if (!this.modTimes(m, w)) continue;
-      if (m.field === 'hidden') { if (m.type === 'set') q.hidden = m.value === 'true'; }
-      else if (m.field === 'name') q.name = m.type === 'append' ? `${q.name} ${m.value}` : m.type === 'set' ? m.value : q.name;
-      else if (m.field === 'description') q.description = m.type === 'append' ? `${q.description} ${m.value}`.trim() : m.type === 'set' ? m.value : q.description;
+      if (m.field === 'hidden') {
+        if (m.type === 'set') q.hidden = m.value === 'true';
+      } else if (m.field === 'name')
+        q.name = m.type === 'append' ? `${q.name} ${m.value}` : m.type === 'set' ? m.value : q.name;
+      else if (m.field === 'description')
+        q.description =
+          m.type === 'append' ? `${q.description} ${m.value}`.trim() : m.type === 'set' ? m.value : q.description;
     }
     return q.hidden ? null : q;
   }
@@ -551,8 +619,14 @@ export class Evaluator {
     for (const m of p.modifiers) {
       const t = this.modTimes(m, w);
       if (!t) continue;
-      if (m.field === 'hidden') { if (m.type === 'set') q.hidden = m.value === 'true'; continue; }
-      if (m.field === 'name') { q.name = m.type === 'append' ? `${q.name} ${m.value}` : m.value; continue; }
+      if (m.field === 'hidden') {
+        if (m.type === 'set') q.hidden = m.value === 'true';
+        continue;
+      }
+      if (m.field === 'name') {
+        q.name = m.type === 'append' ? `${q.name} ${m.value}` : m.value;
+        continue;
+      }
       const ch = q.characteristics.find((c) => c.typeId === m.field);
       if (!ch) continue;
       if (m.type === 'set') ch.value = m.value;
@@ -575,7 +649,13 @@ export class Evaluator {
       for (const l of r.node.infoLinks) {
         if (l.type !== 'rule') continue;
         const rr = ctx.rule(l.targetId);
-        if (rr) list.push({ ...rr, name: l.name || rr.name, hidden: rr.hidden || l.hidden, modifiers: [...rr.modifiers, ...l.modifiers] });
+        if (rr)
+          list.push({
+            ...rr,
+            name: l.name || rr.name,
+            hidden: rr.hidden || l.hidden,
+            modifiers: [...rr.modifiers, ...l.modifiers],
+          });
       }
       for (const x0 of list) {
         const x = this.ruleEff(x0, w);
@@ -626,11 +706,16 @@ export function rootOptionsCached(ctx: Context) {
 function numOp(type: string, cur: number, n: number, times: number) {
   if (!Number.isFinite(n)) return cur;
   switch (type) {
-    case 'set': return n;
-    case 'increment': return cur + n * times;
-    case 'decrement': return cur - n * times;
-    case 'multiply': return cur * n;
-    default: return cur;
+    case 'set':
+      return n;
+    case 'increment':
+      return cur + n * times;
+    case 'decrement':
+      return cur - n * times;
+    case 'multiply':
+      return cur * n;
+    default:
+      return cur;
   }
 }
 
@@ -666,7 +751,13 @@ export function removeSel(roster: Roster, selUid: string) {
  * Returns the new selection uid.
  */
 export function addSel(
-  roster: Roster, contexts: Map<string, Context>, forceUid: string, parentUid: string | null, opt: Opt, number = 1, categoryId?: string,
+  roster: Roster,
+  contexts: Map<string, Context>,
+  forceUid: string,
+  parentUid: string | null,
+  opt: Opt,
+  number = 1,
+  categoryId?: string,
 ): string {
   const force = roster.forces.find((f) => f.uid === forceUid)!;
   const s: Sel = { uid: uid(), key: opt.key, number, children: [] };
@@ -695,19 +786,23 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
     const addChild = (o: Opt, n: number) => {
       if (n <= 0) return false;
       const ex = rs.sel.children.find((c) => c.key === o.key && !c.children.length);
-      if (ex) { ex.number += n; return true; }
+      if (ex) {
+        ex.number += n;
+        return true;
+      }
       const child: Sel = { uid: uid(), key: o.key, number: n, children: [] };
       rs.sel.children.push(child);
       added.push(child.uid);
       return true;
     };
-    const visibleOf = (g: Opt) => g.members.filter((m) => {
-      const e = ev.optionEff(m, rs, rs.force);
-      return !e.hidden && !unavailable(e);
-    });
+    const visibleOf = (g: Opt) =>
+      g.members.filter((m) => {
+        const e = ev.optionEff(m, rs, rs.force);
+        return !e.hidden && !unavailable(e);
+      });
     const pts = ev.pointsTypeId;
     // cost after modifiers (a link can make a 'free' weapon cost points)
-    const cost = (m: Opt) => (m.kind === 'entry' ? ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0 : 0);
+    const cost = (m: Opt) => (m.kind === 'entry' ? (ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0) : 0);
     const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
     /** one entry inside group g (searching nested groups) that can take another selection */
     const pickIn = (g: Opt, d = 0): Opt | undefined => {

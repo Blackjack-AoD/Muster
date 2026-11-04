@@ -5,7 +5,11 @@ import type { RSel } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { catalogueName, systemName } from './Lists';
 
-export interface SnapProfile { name: string; type: string; chars: [string, string][] }
+export interface SnapProfile {
+  name: string;
+  type: string;
+  chars: [string, string][];
+}
 export interface SnapUnit {
   name: string;
   cat: string;
@@ -16,7 +20,10 @@ export interface SnapUnit {
   rules: string[];
 }
 export interface SnapForce {
-  name: string; army: string; pts: number; units: SnapUnit[];
+  name: string;
+  army: string;
+  pts: number;
+  units: SnapUnit[];
   /** set-up choices shown as one line, e.g. "Allegiance: Traitor" */
   setup?: string[];
 }
@@ -55,28 +62,41 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
       cat: u.eff.primary ? clean(u.force.ctx.categoryName(u.eff.primary)) : '',
       pts: u.total,
       gear,
-      profiles: ev.profilesFor(u).map((p) => ({ name: p.name, type: p.typeName, chars: p.characteristics.map((c) => [c.name, c.value] as [string, string]) })),
+      profiles: ev.profilesFor(u).map((p) => ({
+        name: p.name,
+        type: p.typeName,
+        chars: p.characteristics.map((c) => [c.name, c.value] as [string, string]),
+      })),
       rules: rules.map((r) => r.name),
     };
   };
   const forces: SnapForce[] = ev.forces.map((rf) => {
     // units in force-org order (HQ, Troops...), set-up entries first as they appear
     const order = rf.entry.categoryLinks.map((c) => c.targetId);
-    const rank = (u: RSel) => { const i = order.indexOf(u.eff.primary ?? ''); return i < 0 ? 999 : i; };
+    const rank = (u: RSel) => {
+      const i = order.indexOf(u.eff.primary ?? '');
+      return i < 0 ? 999 : i;
+    };
     // set-up entries (Legion, Allegiance, Rite of War...) aren't units: summarise their choices instead
     const isUnit = (u: RSel) => u.node.type === 'unit' || u.node.type === 'model' || u.total > 0;
-    const setup = rf.roots.filter((u) => !isUnit(u)).map((u) => {
-      const picks = u.children.map((c) => c.eff.name).filter((n) => !/\b(on|off)$/i.test(n));
-      const label = clean(u.eff.name);
-      if (picks.length) return `${label}: ${picks.join(', ')}`;
-      // entries with nothing chosen inside: just the name, unless it's a switch panel (Expanded Army Lists)
-      return u.children.length ? '' : label;
-    }).filter(Boolean);
+    const setup = rf.roots
+      .filter((u) => !isUnit(u))
+      .map((u) => {
+        const picks = u.children.map((c) => c.eff.name).filter((n) => !/\b(on|off)$/i.test(n));
+        const label = clean(u.eff.name);
+        if (picks.length) return `${label}: ${picks.join(', ')}`;
+        // entries with nothing chosen inside: just the name, unless it's a switch panel (Expanded Army Lists)
+        return u.children.length ? '' : label;
+      })
+      .filter(Boolean);
     return {
       name: clean(rf.entry.name),
       army: catalogueName(repos, roster.repo, rf.force.catalogueId).replace(/^\d{4}\s*-\s*/, ''),
       pts: rf.total,
-      units: rf.roots.filter(isUnit).sort((a, b) => rank(a) - rank(b)).map(unit),
+      units: rf.roots
+        .filter(isUnit)
+        .sort((a, b) => rank(a) - rank(b))
+        .map(unit),
       setup,
     };
   });
@@ -113,7 +133,8 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 const MAX_LINK_DATA = 24_000;
 
 export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withRules: boolean }> {
-  const pack = async (x: Snapshot) => b64url(await pipe(new TextEncoder().encode(JSON.stringify(x)), new CompressionStream('deflate-raw')));
+  const pack = async (x: Snapshot) =>
+    b64url(await pipe(new TextEncoder().encode(JSON.stringify(x)), new CompressionStream('deflate-raw')));
   const full = await pack(s);
   if (full.length <= MAX_LINK_DATA || !s.rules?.length) return { data: full, withRules: !!s.rules?.length };
   return { data: await pack({ ...s, rules: undefined }), withRules: false };

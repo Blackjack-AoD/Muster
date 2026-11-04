@@ -15,17 +15,28 @@ describe('xmlText', () => {
 
 describe('extractRules', () => {
   it('finds rules, with their text', () => {
-    expect(extractRules('<rules><rule id="1" name="Fearless"><description>Never &amp; ever</description></rule></rules>')).toEqual([{ name: 'Fearless', description: 'Never & ever' }]);
+    expect(
+      extractRules('<rules><rule id="1" name="Fearless"><description>Never &amp; ever</description></rule></rules>'),
+    ).toEqual([{ name: 'Fearless', description: 'Never & ever' }]);
   });
   it('keeps hidden rules', () => {
     expect(extractRules('<rule name="A" hidden="true"><description>x</description></rule>')).toHaveLength(1);
   });
   it('handles a rule with no text', () => {
-    expect(extractRules('<rule name="A"/><rule name="B"><description/></rule><rule name="C"><description>c</description></rule>'))
-      .toEqual([{ name: 'A', description: '' }, { name: 'B', description: '' }, { name: 'C', description: 'c' }]);
+    expect(
+      extractRules(
+        '<rule name="A"/><rule name="B"><description/></rule><rule name="C"><description>c</description></rule>',
+      ),
+    ).toEqual([
+      { name: 'A', description: '' },
+      { name: 'B', description: '' },
+      { name: 'C', description: 'c' },
+    ]);
   });
   it('unwraps CDATA', () => {
-    expect(extractRules('<rule name="A"><description><![CDATA[Text]]></description></rule>')[0].description).toBe('Text');
+    expect(extractRules('<rule name="A"><description><![CDATA[Text]]></description></rule>')[0].description).toBe(
+      'Text',
+    );
   });
   it('skips a rule with no name', () => {
     expect(extractRules('<rule id="1"><description>x</description></rule>')).toEqual([]);
@@ -39,7 +50,12 @@ describe('extractRules', () => {
 });
 
 describe('compendium', () => {
-  const file = (path: string, name: string, sha = 'x') => ({ path, sha, size: 0, header: { kind: 'catalogue', id: path, name, revision: 1, library: false } });
+  const file = (path: string, name: string, sha = 'x') => ({
+    path,
+    sha,
+    size: 0,
+    header: { kind: 'catalogue', id: path, name, revision: 1, library: false },
+  });
   const put = async (repo: string, files: Record<string, string>) => {
     for (const [path, xml] of Object.entries(files)) await db.putFile(repo, path, xml);
   };
@@ -66,7 +82,9 @@ describe('compendium', () => {
   });
   it('keeps a rule that only has empty wording', async () => {
     await put('c/3', { g: rule('A', '') });
-    expect((await compendium('c/3', sys('c/3', ['g', 'G'])))[0].versions).toEqual([{ description: '', sources: ['G'] }]);
+    expect((await compendium('c/3', sys('c/3', ['g', 'G'])))[0].versions).toEqual([
+      { description: '', sources: ['G'] },
+    ]);
   });
   it('skips files that are not stored', async () => {
     expect(await compendium('c/4', sys('c/4', ['gone', 'G']))).toEqual([]);

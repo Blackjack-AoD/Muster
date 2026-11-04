@@ -25,7 +25,8 @@ const attr = (attrs: string, n: string) => attrs.match(new RegExp(`\\b${n}="([^"
 /** XML text → plain text, including numeric entities (&#8217; etc.) */
 export function xmlText(s: string) {
   return decodeXml(
-    s.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    s
+      .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
       .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d))),
   ).trim();
 }
@@ -61,17 +62,20 @@ export async function compendium(repo: string, sys: SystemInfo): Promise<CompRul
       if (!e) byName.set(nk, (e = { name: r.name, versions: new Map() }));
       const dk = r.description.replace(/\s+/g, ' ').toLowerCase();
       const v = e.versions.get(dk);
-      if (v) { if (!v.sources.includes(source)) v.sources.push(source); }
-      else e.versions.set(dk, { description: r.description, sources: [source] });
+      if (v) {
+        if (!v.sources.includes(source)) v.sources.push(source);
+      } else e.versions.set(dk, { description: r.description, sources: [source] });
     }
   }
-  const list: CompRule[] = [...byName.values()].map(({ name, versions }) => {
-    // drop empty wordings when real text exists; most widely used wording first
-    let vs = [...versions.values()];
-    if (vs.some((v) => v.description)) vs = vs.filter((v) => v.description);
-    vs.sort((a, b) => b.sources.length - a.sources.length);
-    return { name, versions: vs, hay: (name + '\n' + vs.map((v) => v.description).join('\n')).toLowerCase() };
-  }).sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+  const list: CompRule[] = [...byName.values()]
+    .map(({ name, versions }) => {
+      // drop empty wordings when real text exists; most widely used wording first
+      let vs = [...versions.values()];
+      if (vs.some((v) => v.description)) vs = vs.filter((v) => v.description);
+      vs.sort((a, b) => b.sources.length - a.sources.length);
+      return { name, versions: vs, hay: (name + '\n' + vs.map((v) => v.description).join('\n')).toLowerCase() };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
   cache.set(key, list);
   return list;
 }

@@ -93,6 +93,7 @@ export async function contextsFor(roster: Roster, repos: RepoState[]): Promise<M
   const repo = repos.find((r) => r.repo === roster.repo);
   if (!repo) throw new Error(`Data for ${roster.repo} isn't on this phone. Sync it on the Data tab.`);
   const out = new Map<string, Context>();
-  for (const f of roster.forces) if (!out.has(f.catalogueId)) out.set(f.catalogueId, await getContext(repo, f.catalogueId));
+  for (const f of roster.forces)
+    if (!out.has(f.catalogueId)) out.set(f.catalogueId, await getContext(repo, f.catalogueId));
   return out;
 }
