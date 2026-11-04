@@ -6,6 +6,7 @@ import { UnitPage } from './ui/UnitPage';
 import { Library } from './ui/Library';
 import { DataView } from './ui/DataView';
 import { Games } from './ui/Games';
+import { SharedView, SheetPage } from './ui/ArmySheet';
 import { Compendium } from './ui/Library';
 import { Icon } from './ui/Icon';
 
@@ -51,6 +52,8 @@ export function App() {
   let page;
   let tab = 'lists';
   if (!ready) page = <div class="center-fill"><div class="spinner" /></div>;
+  else if (parts[0] === 'view' && parts[1]) page = <SharedView data={parts[1]} />;
+  else if (parts[0] === 'r' && parts[1] && parts[2] === 'sheet') page = <SheetPage rosterUid={parts[1]} />;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'u') page = <UnitPage rosterUid={parts[1]} selUid={parts[3]} />;
   else if (parts[0] === 'r' && parts[1]) page = <RosterView uid={parts[1]} />;
   else if (parts[0] === 'games') {
@@ -67,7 +70,7 @@ export function App() {
     page = <DataView />;
   } else page = <Lists />;
 
-  const showNav = !(parts[0] === 'r' && parts[1]) && !(parts[0] === 'lib' && parts[4]);
+  const showNav = !(parts[0] === 'r' && parts[1]) && !(parts[0] === 'lib' && parts[4]) && parts[0] !== 'view';
   return (
     <div class={'app' + (showNav ? ' has-nav' : '')}>
       {page}

@@ -8,6 +8,8 @@ import '@fontsource/cinzel/latin-700.css';
 import './styles.css';
 import { App } from './app';
 import { init } from './store';
+import { registerServiceWorker } from './update';
 
 render(<App />, document.getElementById('app')!);
 init();
+registerServiceWorker();

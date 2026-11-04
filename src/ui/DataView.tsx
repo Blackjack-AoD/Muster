@@ -6,6 +6,7 @@ import { importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } fro
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
 import { shareBackup } from './exporter';
+import { APP_VERSION, BUILD_TIME, checkForUpdate, resetAppCache } from '../update';
 
 const mb = (b: number) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
 
@@ -149,6 +150,8 @@ export function DataView() {
       </div>
       <p class="muted small pad-x">Lists live only on this phone. Back them up now and then, or to move them to a friend's phone.</p>
 
+      <AppUpdate online={online} />
+
       {usage && (
         <p class="muted small pad-x">
           Storage used: {mb(usage.used)}{usage.quota ? ` of ${mb(usage.quota)}` : ''}. {usage.persisted ? 'Protected from automatic clean-up.' : 'The browser may clear this if the phone runs very low on space; installing the app helps.'}
@@ -156,5 +159,44 @@ export function DataView() {
       )}
       <div class="foot-space" />
     </div>
+  );
+}
+
+function AppUpdate({ online }: { online: boolean }) {
+  const [status, setStatus] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const built = BUILD_TIME ? new Date(BUILD_TIME).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const check = async () => {
+    setBusy(true);
+    setStatus('Checking…');
+    const r = await checkForUpdate();
+    setBusy(r === 'updating');
+    setStatus({
+      updating: 'New version found. Installing, the app will restart by itself in a moment…',
+      latest: "You're on the latest version.",
+      offline: "You're offline. Connect to check for updates.",
+      unsupported: "This browser can't check for updates. Close and reopen the app, or reload the page.",
+      error: "Couldn't reach the update server. Try again shortly.",
+    }[r]);
+  };
+  return (
+    <>
+      <div class="list-label">App</div>
+      <div class="pad-x">
+        <div class="row gap">
+          <button class="btn grow" disabled={busy || !online} onClick={check}><Icon name="sync" /> Check for updates</button>
+        </div>
+        <p class="muted small">
+          Muster {APP_VERSION}{built ? ` · built ${built}` : ''}. {status ?? 'Updates also install by themselves when you open the app with a connection.'}
+        </p>
+        <details class="reset">
+          <summary class="muted small">Update stuck?</summary>
+          <p class="muted small">This clears the app's saved copy of itself and downloads it fresh. Your lists and army data stay on the phone.</p>
+          <button class="btn wide danger" disabled={!online} onClick={() => {
+            if (confirm('Reload a fresh copy of the app? Your lists and data are kept.')) resetAppCache();
+          }}>Reload a fresh copy</button>
+        </details>
+      </div>
+    </>
   );
 }

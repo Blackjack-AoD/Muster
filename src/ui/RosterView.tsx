@@ -396,6 +396,7 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
         <label>Points limit<input type="number" inputMode="numeric" value={limit} onInput={(e) => setLimit(e.currentTarget.value)} onBlur={save} /></label>
       </div>
       <div class="menu">
+        <button onClick={() => { save(); onClose(); go(`/r/${ctl.roster.uid}/sheet`, true); }}><Icon name="book" /> Army sheet: print, PDF or share link</button>
         <button onClick={() => { save(); shareText(rosterText(ctl, repos), ctl.roster.name); }}><Icon name="share" /> Share as text</button>
         <button onClick={async () => {
           save();
