@@ -13,7 +13,7 @@ depends = ["install"]
 run = "npm run dev"
 
 [tasks.typecheck]
-description = "Type-check src/"
+description = "Type-check src/ and the journeys"
 depends = ["install"]
 run = "npx tsc -p ."
 
