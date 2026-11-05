@@ -1,7 +1,7 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState } from './data/db';
-import { Evaluator, isRecord, uid, type Roster } from './data/engine';
+import { Evaluator, isRecord, uid, type Force, type Roster, type Sel } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
 import { DEFAULT_REPOS, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
@@ -188,12 +188,38 @@ function isRoster(r: unknown): r is Roster {
   );
 }
 
+function copySel(s: Sel): Sel {
+  const copy: Sel = { uid: s.uid, key: s.key, number: s.number, children: s.children.map(copySel) };
+  if (s.categoryId !== undefined) copy.categoryId = s.categoryId;
+  return copy;
+}
+
+const copyForce = (f: Force): Force => ({
+  uid: f.uid,
+  forceEntryId: f.forceEntryId,
+  catalogueId: f.catalogueId,
+  selections: f.selections.map(copySel),
+});
+
+/** A backup can carry anything in a field no release wrote, so only the fields of the type get stored. */
+const copyRoster = (r: Roster): Roster => ({
+  uid: r.uid,
+  name: r.name,
+  repo: r.repo,
+  gameSystemId: r.gameSystemId,
+  costLimit: r.costLimit,
+  forces: r.forces.map(copyForce),
+  created: r.created,
+  updated: r.updated,
+});
+
 /** Returns how many lists it restored. Anything that isn't a list is skipped. */
 export async function importRosters(list: readonly unknown[]): Promise<number> {
   const lists = list.filter(isRoster);
   for (const r of lists) {
-    if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
-    await db.putRoster(r);
+    const copy = copyRoster(r);
+    if (state.rosters.some((x) => x.uid === copy.uid)) copy.uid = uid();
+    await db.putRoster(copy);
   }
   // storage still holds the old copy of a list whose save failed, and only memory has the edit
   const stored = (await db.rosters()).filter((r) => !state.unsaved.has(r.uid));
