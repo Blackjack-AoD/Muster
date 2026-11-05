@@ -179,13 +179,24 @@ describe('restoring a backup', () => {
     expect((await db.rosters()).map((r) => r.uid)).toEqual(expect.arrayContaining(['r1', 'r2']));
     expect(await stored('x')).toEqual([]);
   });
+  /** A selection directly in a force is level 1, and each child is one level down. */
+  const nested = (levels: number) => {
+    let top: unknown = SEL;
+    for (let level = 1; level < levels; level++) top = { ...SEL, children: [top] };
+    return top;
+  };
+  it('restores a list nested exactly 32 levels', async () => {
+    const deepest = { ...withSel(nested(32)), uid: 'deepest' };
+    expect(await importRosters([deepest])).toBe(1);
+    expect(await stored('deepest')).toEqual([deepest]);
+  });
   it.each([
+    ['one level too deep', 33],
     ['too deep to store', 3_000],
     ['too deep for the stack', 100_000],
-  ])('skips a list nested %s and restores the rest', async (_what, depth) => {
-    let deepest: unknown = SEL;
-    for (let i = 0; i < depth; i++) deepest = { ...SEL, children: [deepest] };
-    expect(await importRosters([roster('d1'), withSel(deepest), roster('d2')])).toBe(2);
+  ])('skips a list nested %s and restores the rest', async (_what, levels) => {
+    const tooDeep = { ...withSel(nested(levels)), uid: `deep${levels}` };
+    expect(await importRosters([roster('d1'), tooDeep, roster('d2')])).toBe(2);
     expect(await stored('d1')).toHaveLength(1);
     expect(await stored('d2')).toHaveLength(1);
     expect(await stored('x')).toEqual([]);
