@@ -1,6 +1,6 @@
 // Army sheet: every unit with its points, wargear, stats and rules, plus a rules reference.
 // Shown from a list (with Print / Share), and from a shared link (no game data needed).
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useErrorBoundary, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import { toast, useRosterCtl, useStore } from '../store';
 import { Loading, TopBar, fmtN } from './common';
@@ -181,17 +181,21 @@ export function SheetPage({ rosterUid }: { rosterUid: string }) {
 /** A list someone shared as a link: shown without needing any game data. */
 export function SharedView({ data }: { data: string }) {
   const [snap, setSnap] = useState<Snapshot>();
-  const [err, setErr] = useState<string>();
+  const [undecodable, setUndecodable] = useState(false);
+  // a link can unpack cleanly and still hold a list the sheet can't draw
+  const [undrawable] = useErrorBoundary();
   useEffect(() => {
     decodeSnapshot(data)
       .then(setSnap)
-      .catch(() => setErr("This link doesn't contain a readable list. It may have been cut short when it was sent."));
+      .catch(() => setUndecodable(true));
   }, [data]);
-  if (err)
+  if (undecodable || undrawable)
     return (
       <div class="page">
         <TopBar title="Shared list" />
-        <p class="error-text pad">{err}</p>
+        <p class="error-text pad">
+          This link doesn't contain a readable list. It may have been cut short when it was sent.
+        </p>
       </div>
     );
   if (!snap)
