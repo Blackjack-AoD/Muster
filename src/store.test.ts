@@ -93,7 +93,7 @@ describe('restoring a backup', () => {
   it('counts the lists it restored', async () => {
     expect(await importRosters([roster('i3'), null, roster('i4')])).toBe(2);
   });
-  it('opens a list in the shape of the first release', async () => {
+  it('restores a list in the shape of the first release', async () => {
     const oldest = {
       uid: 'oldest',
       name: 'Old Guard',
