@@ -194,7 +194,13 @@ export function DataView() {
 
       <div class="list-label">Your lists</div>
       <div class="pad-x row gap">
-        <button class="btn grow" disabled={!rosters.length} onClick={() => shareBackup(rosters)}>
+        <button
+          class="btn grow"
+          disabled={!rosters.length}
+          onClick={() => {
+            shareBackup(rosters).catch((e) => toast(failureMessage('share', e)));
+          }}
+        >
           <Icon name="share" /> Back up {rosters.length} list{rosters.length === 1 ? '' : 's'}
         </button>
         <label class="btn grow file-btn">

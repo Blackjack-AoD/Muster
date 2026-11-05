@@ -14,7 +14,7 @@ import {
   type Roster,
   type Sel,
 } from '../data/engine';
-import type { Opt } from '../data/catalog';
+import type { Context, Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
 import { deleteRoster, failureMessage, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
@@ -632,7 +632,12 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
               name: ctl.roster.name + ' (copy)',
               created: Date.now(),
             };
-            await saveRoster(copy);
+            try {
+              await saveRoster(copy);
+            } catch (e) {
+              toast(failureMessage('copy this list', e));
+              return;
+            }
             onClose();
             go(`/r/${copy.uid}`, true);
             toast('List duplicated');
@@ -644,7 +649,12 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
           class="danger"
           onClick={async () => {
             if (!confirm(`Delete "${ctl.roster.name}"? This can't be undone.`)) return;
-            await deleteRoster(ctl.roster.uid);
+            try {
+              await deleteRoster(ctl.roster.uid);
+            } catch (e) {
+              toast(failureMessage('delete this list', e));
+              return;
+            }
             onClose();
             go('/', true);
           }}
@@ -732,7 +742,13 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
             <button
               class="pick"
               onClick={async () => {
-                const ctx = await getContext(repo, catId);
+                let ctx: Context;
+                try {
+                  ctx = await getContext(repo, catId);
+                } catch (e) {
+                  toast(failureMessage('load this army', e));
+                  return;
+                }
                 const contexts = new Map(ctl.contexts).set(catId, ctx);
                 ctl.mutate((r) => {
                   const fu = uid();
