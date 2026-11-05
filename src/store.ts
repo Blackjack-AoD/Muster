@@ -12,8 +12,8 @@ interface State {
   rosters: Roster[];
   sync: Record<string, SyncProgress>;
   toast?: string;
-  /** optional button on the toast, e.g. Undo */
-  toastAction?: { label: string; run: () => void };
+  /** optional button on the toast, e.g. Undo; failedSave holds the uid of a list that hasn't saved */
+  toastAction?: { label: string; run: () => void; failedSave?: string };
   /** active game: "<repo>|<game system id>", or undefined for all games */
   game?: string;
 }
@@ -47,11 +47,11 @@ export function useStore<T>(sel: (s: State) => T): T {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(msg: string, action?: { label: string; run: () => void }) {
+export function toast(msg: string, action?: State['toastAction']) {
   set({ toast: msg, toastAction: action });
   clearTimeout(toastTimer);
-  if (action) return;
-  toastTimer = setTimeout(() => set({ toast: undefined, toastAction: undefined }), 2600);
+  if (action?.failedSave) return;
+  toastTimer = setTimeout(() => set({ toast: undefined, toastAction: undefined }), action ? 5000 : 2600);
 }
 export function dismissToast() {
   clearTimeout(toastTimer);
@@ -126,7 +126,7 @@ function saveEdit(r: Roster) {
     const latest = state.rosters.find((x) => x.uid === r.uid);
     if (latest) saveEdit(latest);
   };
-  saveRoster(r).catch(() => toast("Couldn't save this list", { label: 'Retry', run: retry }));
+  saveRoster(r).catch(() => toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid }));
 }
 
 // ---------- roster controller ----------
