@@ -134,8 +134,8 @@ export class Context {
     }
     // honour the data's sortIndex; anything without one keeps file order, after the indexed ones
     if (out.some((o) => o.node.sortIndex != null)) {
-      const pos = new Map(out.map((o, i) => [o, i]));
-      out.sort((x, y) => (x.node.sortIndex ?? Infinity) - (y.node.sortIndex ?? Infinity) || pos.get(x)! - pos.get(y)!);
+      const rank = (o: Opt) => o.node.sortIndex ?? Infinity;
+      out.sort((x, y) => (rank(x) === rank(y) ? 0 : rank(x) - rank(y)));
     }
     return out;
   }
@@ -144,8 +144,7 @@ export class Context {
   findOption(parent: EntryNode | null, key: string, roots?: Opt[]): Opt | undefined {
     const list = parent ? this.options(parent) : (roots ?? []);
     const stack = [...list];
-    while (stack.length) {
-      const o = stack.pop()!;
+    for (let o = stack.pop(); o; o = stack.pop()) {
       if (o.key === key) return o;
       if (o.kind === 'group') stack.push(...o.members);
     }
