@@ -148,6 +148,9 @@ describe('DataView', () => {
 
   describe('a reload the player starts', () => {
     const UNSAVED_WARNING = "A list has an edit that isn't saved, and reloading loses it. Carry on?";
+    const UPDATE_WAITS = "A list has an edit that isn't saved. The update waits until it saves. Carry on?";
+    const RESTARTS_SOON = /the app will restart by itself in a moment/;
+    const RESTARTS_ONCE_SAVED = /the app will restart by itself once the edit has saved/;
     const FRESH_COPY_QUESTION = 'Reload a fresh copy of the app? Your lists and data are kept.';
     const AUTO_CHECK_NOTE = /Checks automatically once a week/;
     const NO_SERVICE_WORKER = /This browser can't check for updates/;
@@ -158,6 +161,13 @@ describe('DataView', () => {
       return ask;
     };
     const pressReload = () => fireEvent.click(screen.getByText('Reload a fresh copy'));
+    const expectStatus = (words: RegExp) => waitFor(() => expect(document.body.textContent).toMatch(words));
+    /** The server has a new version, still installing. */
+    const stubNewVersion = () => {
+      const registration = { installing: new EventTarget(), waiting: null, update: async () => {} };
+      const serviceWorker = { getRegistration: async () => registration };
+      vi.stubGlobal('navigator', { onLine: true, serviceWorker });
+    };
 
     async function openWithUnsavedEdit() {
       vi.stubGlobal('confirm', () => true);
@@ -179,7 +189,7 @@ describe('DataView', () => {
 
       await press('Check for updates');
 
-      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+      expect(ask.mock.calls).toEqual([[UPDATE_WAITS]]);
       await db.rosters();
       screen.getByText(AUTO_CHECK_NOTE);
     });
@@ -190,8 +200,29 @@ describe('DataView', () => {
 
       await press('Check for updates');
 
-      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+      expect(ask.mock.calls).toEqual([[UPDATE_WAITS]]);
       await screen.findByText(NO_SERVICE_WORKER);
+    });
+
+    it('says the app restarts once the edit has saved when an update is held', async () => {
+      await openWithUnsavedEdit();
+      answerConfirm(true);
+      stubNewVersion();
+
+      await press('Check for updates');
+
+      await expectStatus(RESTARTS_ONCE_SAVED);
+      expect(document.body.textContent).not.toMatch(RESTARTS_SOON);
+    });
+
+    it('says the app restarts in a moment when no edit holds the update', async () => {
+      await renderScreen(<App />);
+      answerConfirm(false);
+      stubNewVersion();
+
+      await press('Check for updates');
+
+      await expectStatus(RESTARTS_SOON);
     });
 
     it('Check for updates asks nothing with every edit saved', async () => {
