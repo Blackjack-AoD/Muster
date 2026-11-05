@@ -3,6 +3,7 @@ import {
   Evaluator,
   addSel,
   defaultMember,
+  displayName,
   duplicateSel,
   fmt,
   forceRootOptions,
@@ -2268,6 +2269,42 @@ describe('duplicateSel', () => {
     const { w } = squad();
     expect(duplicateSel(w.roster, 'gone')).toBeNull();
     expect(w.roster.forces[0].selections).toHaveLength(2);
+  });
+
+  it('gives a copy of a root unit no custom name and no saved unit to follow', () => {
+    const { w, u } = squad();
+    const original = present(locate(w.roster, u), 'the squad').sel;
+    original.name = 'Squad Thrax';
+    original.saved = 'thrax';
+    const copy = duplicateSel(w.roster, u);
+    expect(copy).not.toHaveProperty('name');
+    expect(copy).not.toHaveProperty('saved');
+    expect([original.name, original.saved]).toEqual(['Squad Thrax', 'thrax']);
+  });
+
+  it('keeps the custom name on a model split off from its group', () => {
+    const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model'))));
+    const model = w.pick(w.add('Squad'), 'Model', 3);
+    present(locate(w.roster, model), 'the models').sel.name = 'Brother Thrax';
+    expect(duplicateSel(w.roster, model)?.name).toBe('Brother Thrax');
+  });
+});
+
+describe('displayName', () => {
+  const squad = () => {
+    const w = world(unit('u', 'Breacher Squad'));
+    return { w, u: w.add('Breacher Squad') };
+  };
+
+  it('gives the custom name over the data name', () => {
+    const { w, u } = squad();
+    present(locate(w.roster, u), 'the squad').sel.name = 'Squad Thrax';
+    expect(displayName(w.sel(u))).toBe('Squad Thrax');
+  });
+
+  it('gives the data name when there is no custom name', () => {
+    const { w, u } = squad();
+    expect(displayName(w.sel(u))).toBe('Breacher Squad');
   });
 });
 

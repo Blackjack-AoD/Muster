@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
-import { uid as newUid, type Roster, type Sel } from './data/engine';
+import { Evaluator, displayName, uid as newUid, type Roster, type Sel } from './data/engine';
 import { setUpForce } from './data/setup';
 import {
   deleteRoster,
@@ -17,7 +17,7 @@ import {
   syncAll,
   toast,
 } from './store';
-import { SWORD, children, sergeant, unit, world } from './test/fixture';
+import { SWORD, children, present, sergeant, unit, world } from './test/fixture';
 
 const roster = (uid: string, name = 'List') =>
   ({ uid, name, repo: 'r', gameSystemId: 'g', costLimit: 0, forces: [], created: 0, updated: 0 }) as Roster;
@@ -138,6 +138,24 @@ describe('restoring a backup', () => {
     expect(await importRosters([nested])).toBe(1);
     expect(await stored('nested')).toEqual([nested]);
   });
+  it('keeps custom names and saved-unit links on units and models', async () => {
+    const model = { uid: 'm', key: 'e/m', number: 1, name: 'Brother Thrax', children: [] };
+    const named = {
+      ...roster('named'),
+      forces: [
+        {
+          uid: 'f',
+          forceEntryId: 'det',
+          catalogueId: 'cat',
+          selections: [
+            { uid: 'u', key: 'e', number: 1, categoryId: 'hq', name: 'Squad Thrax', saved: 'thrax', children: [model] },
+          ],
+        },
+      ],
+    };
+    expect(await importRosters([named])).toBe(1);
+    expect(await stored('named')).toEqual([named]);
+  });
   const FORCE = { uid: 'f', forceEntryId: 'det', catalogueId: 'cat', selections: [] };
   const SEL = { uid: 's', key: 'e', number: 1, children: [] };
   const withSel = (selection: unknown) => ({
@@ -177,6 +195,12 @@ describe('restoring a backup', () => {
     ['a selection with children that are text', withSel({ ...SEL, children: 'none' })],
     ['a selection with a category that is a number', withSel({ ...SEL, categoryId: 7 })],
     ['a selection with a category that is null', withSel({ ...SEL, categoryId: null })],
+    ['a selection with a name that is a number', withSel({ ...SEL, name: 7 })],
+    ['a selection with a name that is null', withSel({ ...SEL, name: null })],
+    ['a selection with a saved unit that is a number', withSel({ ...SEL, saved: 7 })],
+    ['a selection with a saved unit that is null', withSel({ ...SEL, saved: null })],
+    ['a nested selection with a name that is an object', withSel({ ...SEL, children: [{ ...SEL, name: {} }] })],
+    ['a nested selection with a saved unit that is an object', withSel({ ...SEL, children: [{ ...SEL, saved: {} }] })],
     ['a nested selection that is null', withSel({ ...SEL, children: [null] })],
     ['a selection two levels down with no key', withSel({ ...SEL, children: [{ ...SEL, children: [{ uid: 's' }] }] })],
   ])('skips a list with %s', async (_what, broken) => {
@@ -194,15 +218,16 @@ describe('restoring a backup', () => {
       ${children(sergeant(children(SWORD)))}`,
     );
     /** A list as the app writes it: the set-up adds a root selection, and adding a unit fills its defaults. */
-    const realList = (listUid: string) => {
+    const realWorld = (listUid: string) => {
       const w = world(SQUAD, { costLimit: 2000 });
       w.roster.uid = listUid;
       w.roster.created = 1700000000000;
       w.roster.updated = 1700000000001;
       setUpForce(w.roster, w.contexts, 'f1', 'Test Army');
       w.add('Tactical Squad', 2);
-      return JSON.parse(JSON.stringify(w.roster)) as Roster;
+      return w;
     };
+    const realList = (listUid: string) => JSON.parse(JSON.stringify(realWorld(listUid).roster)) as Roster;
     const junkSel = (s: Sel): unknown => ({ ...s, junk: 'sel', children: s.children.map(junkSel) });
     const withJunk = (r: Roster) => ({
       ...r,
@@ -222,6 +247,27 @@ describe('restoring a backup', () => {
       const [restored] = await stored('nocategory');
       const child = restored?.forces[0]?.selections.at(-1)?.children[0];
       expect(Object.keys(child ?? {}).sort()).toEqual(['children', 'key', 'number', 'uid']);
+    });
+    it('adds no custom name or saved-unit link to a list that had none', async () => {
+      const list = realList('unnamed');
+      await importRosters([withJunk(list)]);
+      const [restored] = await stored('unnamed');
+      const keys = new Set<string>();
+      const collect = (s: Sel) => {
+        Object.keys(s).forEach((k) => keys.add(k));
+        s.children.forEach(collect);
+      };
+      restored?.forces.forEach((f) => f.selections.forEach(collect));
+      expect([...keys].sort()).toEqual(['categoryId', 'children', 'key', 'number', 'uid']);
+    });
+    it('opens a restored list with the points and names it had', async () => {
+      const w = realWorld('reopened');
+      const shown = (ev: Evaluator) => ev.forces[0]?.roots.map((u) => [displayName(u), u.total]);
+      const before = shown(w.ev());
+      expect(before).toContainEqual(['Tactical Squad', 250]);
+      await importRosters([JSON.parse(JSON.stringify(w.roster))]);
+      const [restored] = await stored('reopened');
+      expect(shown(new Evaluator(present(restored, 'the restored list'), w.contexts))).toEqual(before);
     });
   });
   it('restores the rest of a backup past a selection that is null', async () => {

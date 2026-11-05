@@ -9,6 +9,10 @@ export interface Sel {
   children: Sel[];
   /** root selections: category it was added under */
   categoryId?: string;
+  /** the player's name for this unit or model */
+  name?: string;
+  /** root selections: id of the saved unit this is a copy of */
+  saved?: string;
 }
 export interface Force {
   uid: string;
@@ -961,6 +965,11 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
   const copy = giveNewUids(structuredClone(loc.sel));
   loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
   return copy;
+}
+
+/** The name to show for a selection. */
+export function displayName(_rs: RSel): string {
+  return '';
 }
 
 /**
