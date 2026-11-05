@@ -191,7 +191,7 @@ function isSnapshot(s: unknown): s is Snapshot {
   );
 }
 
-/** Reads chunk by chunk, so a link past the limit stops there rather than filling memory first. */
+/** Stops reading at the limit, but a browser can inflate a whole input chunk before it hands any of it back. */
 async function inflate(bytes: Uint8Array): Promise<string> {
   const reader = inStream(bytes).pipeThrough(new DecompressionStream('deflate-raw')).getReader();
   const decoder = new TextDecoder();
