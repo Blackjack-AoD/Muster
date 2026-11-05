@@ -149,6 +149,7 @@ export async function importRosters(list: readonly unknown[]) {
     await db.putRoster(r);
   }
   const stored = await db.rosters();
+  // storage still holds the old copy of a list whose save failed, and Retry reads memory
   const failed = state.toastAction?.failedSave;
   const unsaved = failed ? state.rosters.find((r) => r.uid === failed) : undefined;
   set({ rosters: unsaved ? [...stored.filter((r) => r.uid !== failed), unsaved] : stored });
