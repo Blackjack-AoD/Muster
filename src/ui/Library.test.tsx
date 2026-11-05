@@ -2,6 +2,7 @@
 import { fireEvent, screen, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
+import { db, type SavedUnit } from '../data/db';
 import { unit } from '../test/fixture';
 import { expectError, failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
@@ -25,8 +26,9 @@ beforeEach(async () => {
   openHash('#/lib');
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
 });
 
 describe('Library', () => {
@@ -110,5 +112,46 @@ describe('Library', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Rules' }));
 
     await expectError('Storage is gone');
+  });
+
+  describe('Saved units', () => {
+    const TAC = unit('tac', 'Tactical Squad', 100);
+    const saved = (id: string, name: string, o: Partial<SavedUnit> = {}): SavedUnit => ({
+      id,
+      name,
+      repo: 'test/repo',
+      gameSystemId: 'gst',
+      catalogueId: 'cat',
+      key: 'tac',
+      categoryId: '',
+      build: { uid: 's-' + id, key: 'tac', number: 1, children: [] },
+      created: 1,
+      updated: 1,
+      ...o,
+    });
+
+    /** The army's unit list, with these saved units on the phone. */
+    async function openArmy(units: readonly SavedUnit[]) {
+      for (const u of units) await db.putSavedUnit(u);
+      await renderScreen(<App />, { files: worldFiles(TAC) });
+      fireEvent.click(screen.getByRole('link', { name: 'Test Army' }));
+      await screen.findByRole('link', { name: /Tactical Squad/ });
+    }
+
+    const savedNames = () =>
+      [...(screen.queryByRole('group', { name: 'Saved units' })?.querySelectorAll('b') ?? [])].map(
+        (b) => b.textContent,
+      );
+
+    it('lists first the saved units of this army file, and none from another army or repo', async () => {
+      await openArmy([
+        saved('thrax', 'Squad Thrax'),
+        saved('orks', 'Da Boyz', { catalogueId: 'orks' }),
+        saved('elsewhere', 'Squad Elsewhere', { repo: 'other/repo' }),
+      ]);
+
+      expect(savedNames()).toEqual(['Squad Thrax']);
+      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual(['Saved units', 'Other']);
+    });
   });
 });
