@@ -276,6 +276,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   const sel = force?.selections.find((s) => s.uid === rs.sel.uid);
   if (!force || !sel) throw new Error('Only a unit of this list can be saved.');
   const now = Date.now();
+  const { name: _name, saved: _saved, ...build } = structuredClone(sel);
   const saved: SavedUnit = {
     id: uid(),
     name,
@@ -285,7 +286,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
     key: sel.key,
     // as the Add unit sheet groups a unit with no category
     categoryId: rs.eff.primary ?? '',
-    build: structuredClone(sel),
+    build,
     created: now,
     updated: now,
   };
