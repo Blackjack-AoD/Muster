@@ -3,7 +3,7 @@ import { go } from '../app';
 import type { RepoState } from '../data/db';
 import { Evaluator, uid, type Roster } from '../data/engine';
 import { activeSystems, getContext, rosterGameKey, systemsOf, gameKey, type SystemInfo } from '../data/library';
-import { addRoster, failureMessage, toast, useStore } from '../store';
+import { addRoster, failureMessage, failureReason, toast, useStore } from '../store';
 import { setUpForce } from '../data/setup';
 import type { Context } from '../data/catalog';
 import { Empty, Link, Loading, Sheet, TopBar, ago, fmtN } from './common';
@@ -194,7 +194,7 @@ function NewListDetails({
           setForceId(forces[0]?.id);
           setLimit(String(lim));
         })
-        .catch((e) => setState({ error: (e as Error).message }));
+        .catch((e: unknown) => setState({ error: failureReason(e) }));
     }, 30);
   }, [catId]);
 

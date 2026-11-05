@@ -4,7 +4,7 @@ import type { Context, Opt } from '../data/catalog';
 import { addSel, rootOptionsCached, uid, type Roster, type RSel } from '../data/engine';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
-import { useRosterCtl, useStore } from '../store';
+import { failureReason, useRosterCtl, useStore } from '../store';
 import { Empty, Link, Loading, Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
@@ -127,7 +127,7 @@ export function Compendium() {
       () =>
         compendium(active.repo, active)
           .then(setRules)
-          .catch((e) => setErr((e as Error).message)),
+          .catch((e: unknown) => setErr(failureReason(e))),
       30,
     );
   }, [active && gameKey(active), active?.gst.sha]);
@@ -252,7 +252,7 @@ function useCtx(repoName: string, catId: string) {
       () =>
         getContext(repo, catId)
           .then(setCtx)
-          .catch((e) => setErr((e as Error).message)),
+          .catch((e: unknown) => setErr(failureReason(e))),
       30,
     );
   }, [repoName, catId, repo?.commit]);

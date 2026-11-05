@@ -60,9 +60,14 @@ export function dismissToast() {
   set({ toast: undefined, toastAction: undefined });
 }
 
+/** The reason a failure gives, which can be any value. */
+export function failureReason(e: unknown): string {
+  return e instanceof Error || e instanceof DOMException ? e.message : String(e);
+}
+
 /** What to tell the player when something failed: "Couldn't <action>: <the reason given>". */
 export function failureMessage(action: string, e: unknown): string {
-  return `Couldn't ${action}: ${e instanceof Error || e instanceof DOMException ? e.message : String(e)}`;
+  return `Couldn't ${action}: ${failureReason(e)}`;
 }
 
 export async function init() {
@@ -248,7 +253,7 @@ export function useRosterCtl(
     setTimeout(() => {
       contextsFor(local, repos)
         .then((c) => live && setContexts(c))
-        .catch((e) => live && setError((e as Error).message));
+        .catch((e: unknown) => live && setError(failureReason(e)));
     }, 30);
     return () => void (live = false);
   }, [catKey, repos]);
