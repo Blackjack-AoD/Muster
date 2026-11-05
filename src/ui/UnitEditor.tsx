@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
-import { addSel, locate, removeSel, uid, unavailable, type RSel, type Sel } from '../data/engine';
+import { addSel, duplicateSel, issuesOn, locate, removeSel, unavailable, type RSel, type Sel } from '../data/engine';
 import type { Profile, Rule } from '../data/model';
 import type { RosterCtl } from '../store';
 import { Pts, TopBar, fmtN } from './common';
@@ -22,7 +22,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
     );
   }
   const isRoot = !rs.parent;
-  const issues = ctl.ev.issues.filter((i) => i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)));
+  const issues = issuesOn(ctl.ev, rs);
   const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
   const unitLike = rs.node.type === 'unit' || rs.node.type === 'model';
   // set-up entries (e.g. Expanded Army Lists) often have no profiles or rules: then there's only Options, and no tabs
@@ -83,11 +83,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
               <button
                 class="btn"
                 onClick={() => {
-                  ctl.mutate((r) => {
-                    const loc = locate(r, rs.sel.uid);
-                    if (!loc) return;
-                    loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, reUid(structuredClone(loc.sel)));
-                  });
+                  ctl.mutate((r) => duplicateSel(r, rs.sel.uid));
                   back(backTo);
                 }}
               >
@@ -167,15 +163,6 @@ function hasVisibleOptions(ctl: RosterCtl, rs: RSel) {
     const e = ctl.ev.optionEff(o, rs, rs.force);
     return (!e.hidden && !unavailable(e)) || ctl.ev.selected(o, rs, rs.force).length > 0;
   });
-}
-
-function under(r: RSel, selUid: string): boolean {
-  return r.children.some((c) => c.sel.uid === selUid || under(c, selUid));
-}
-function reUid(s: Sel): Sel {
-  s.uid = uid();
-  s.children.forEach(reUid);
-  return s;
 }
 
 /** Compact headline stats (unit profiles) on the options tab. */
@@ -520,9 +507,8 @@ function splitOne(ctl: RosterCtl, rs: RSel) {
     const loc = locate(r, rs.sel.uid);
     if (!loc || loc.sel.number < 2) return;
     loc.sel.number--;
-    const copy = reUid(structuredClone(loc.sel));
-    copy.number = 1;
-    loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
+    const copy = duplicateSel(r, rs.sel.uid);
+    if (copy) copy.number = 1;
   });
 }
 

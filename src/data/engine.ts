@@ -846,8 +846,11 @@ function entryGone(rf: RForce): boolean {
   return !rf.ctx.get(rf.force.forceEntryId);
 }
 
-export function issuesOn(_ev: Evaluator, _rs: RSel): Issue[] {
-  return [];
+const holds = (rs: RSel, selUid: string): boolean => rs.sel.uid === selUid || rs.children.some((c) => holds(c, selUid));
+
+/** The issues on a selection and on anything beneath it. */
+export function issuesOn(ev: Evaluator, rs: RSel): Issue[] {
+  return ev.issues.filter((i) => i.selUid && holds(rs, i.selUid));
 }
 
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
@@ -922,8 +925,19 @@ export function removeSel(roster: Roster, selUid: string) {
   if (r) r.list.splice(r.list.indexOf(r.sel), 1);
 }
 
-export function duplicateSel(_roster: Roster, _selUid: string): Sel | null {
-  return null;
+function giveNewUids(s: Sel): Sel {
+  s.uid = uid();
+  s.children.forEach(giveNewUids);
+  return s;
+}
+
+/** A copy of a selection, with new uids throughout, placed straight after it. */
+export function duplicateSel(roster: Roster, selUid: string): Sel | null {
+  const loc = locate(roster, selUid);
+  if (!loc) return null;
+  const copy = giveNewUids(structuredClone(loc.sel));
+  loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
+  return copy;
 }
 
 /**

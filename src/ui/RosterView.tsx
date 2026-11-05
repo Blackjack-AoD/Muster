@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { go } from '../app';
 import {
   addSel,
+  duplicateSel,
   forceRootOptions,
+  issuesOn,
   locate,
   removeSel,
   uid,
@@ -12,7 +14,6 @@ import {
   type RForce,
   type RSel,
   type Roster,
-  type Sel,
 } from '../data/engine';
 import type { Context, Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
@@ -316,15 +317,9 @@ function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: O
   );
 }
 
-function reUid(s: Sel): Sel {
-  s.uid = uid();
-  s.children.forEach(reUid);
-  return s;
-}
-
 /** Tap to open. Swipe left to delete (with Undo), swipe right to duplicate. */
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
-  const issues = ctl.ev.issues.filter((i) => i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)));
+  const issues = issuesOn(ctl.ev, u);
   const bad = issues.some((i) => i.level === 'error');
   const noted = !bad && issues.length > 0;
   const summary = unitSummary(u);
@@ -350,11 +345,7 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
     });
   };
   const duplicate = () => {
-    ctl.mutate((r) => {
-      const loc = locate(r, u.sel.uid);
-      if (!loc) return;
-      loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, reUid(structuredClone(loc.sel)));
-    });
+    ctl.mutate((r) => duplicateSel(r, u.sel.uid));
     toast(`Duplicated ${u.eff.name}`);
   };
 
@@ -438,10 +429,6 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
       </a>
     </div>
   );
-}
-
-function isDescendant(r: RSel, selUid: string): boolean {
-  return r.children.some((c) => c.sel.uid === selUid || isDescendant(c, selUid));
 }
 
 /** price shown before adding: the unit with its standard models and gear (own cost after modifiers) */
