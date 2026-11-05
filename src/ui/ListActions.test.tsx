@@ -18,11 +18,20 @@ const refuse = (method: 'put' | 'delete') =>
 const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
 const storedUids = async () => (await db.rosters()).map((r) => r.uid);
+const uidsInMemory = () => getState().rosters.map((r) => r.uid);
 
 async function openListMenu() {
   history.replaceState(null, '', `#/r/${roster.uid}`);
   await renderScreen(<App />, { files: FILES, rosters: [roster] });
   await press('List options');
+}
+
+async function openCreateList() {
+  history.replaceState(null, '', '#/');
+  await renderScreen(<App />, { files: FILES });
+  await press('New list');
+  await press('Test Army');
+  await screen.findByRole('button', { name: 'Create list' });
 }
 
 beforeEach(() => {
@@ -60,17 +69,37 @@ describe('list actions', () => {
   });
 
   it('shows the reason in a toast when a new list fails to save, and stays where it was', async () => {
-    history.replaceState(null, '', '#/');
-    await renderScreen(<App />, { files: FILES });
-    await press('New list');
-    await press('Test Army');
-    await screen.findByRole('button', { name: 'Create list' });
+    await openCreateList();
     refuse('put');
 
     await press('Create list');
 
     await expectToast("Couldn't create this list: Storage is full");
     expect(location.hash).toBe('#/');
+    expect(await storedUids()).toEqual([]);
+  });
+
+  it('leaves a copy that fails to save off the Lists screen and out of memory', async () => {
+    await openListMenu();
+    refuse('put');
+
+    await press('Duplicate list');
+    location.hash = '#/';
+
+    await screen.findByRole('heading', { name: 'Muster' });
+    await waitFor(() => expect(screen.queryByText(`${roster.name} (copy)`)).toBeNull());
+    expect(uidsInMemory()).toEqual([roster.uid]);
+    expect(await storedUids()).toEqual([roster.uid]);
+  });
+
+  it('leaves a new list that fails to save off the Lists screen and out of memory', async () => {
+    await openCreateList();
+    refuse('put');
+
+    await press('Create list');
+
+    await waitFor(() => expect(screen.queryByText('No lists yet')).not.toBeNull());
+    expect(uidsInMemory()).toEqual([]);
     expect(await storedUids()).toEqual([]);
   });
 });
