@@ -620,6 +620,33 @@ describe('selection limits with child selections', () => {
   });
 });
 
+describe('a limit wider than the unit that holds the entry', () => {
+  const squads = (vox: string) => world(unit('squad', 'Squad', 0, children(entry('v', 'Vox', 0, vox))));
+  /** Returns the uid of the second unit, which goes over the limit. The first holds no Vox. */
+  const addCleanUnitThenOver = (w: ReturnType<typeof squads>) => {
+    w.add('Squad');
+    const over = w.add('Squad');
+    w.pick(over, 'Vox', 2);
+    return over;
+  };
+
+  it('puts a detachment limit on the unit holding the entry, not a clean unit before it', () => {
+    const w = squads(
+      cons('<constraint id="c" type="max" value="1" field="selections" scope="force" includeChildSelections="true"/>'),
+    );
+    const over = addCleanUnitThenOver(w);
+    expect(w.ev().issues.map((i) => i.selUid)).toEqual([over]);
+  });
+
+  it('puts a limit scoped to the force entry on the unit holding the entry, not a clean unit before it', () => {
+    const w = squads(
+      cons('<constraint id="c" type="max" value="1" field="selections" scope="det" includeChildSelections="true"/>'),
+    );
+    const over = addCleanUnitThenOver(w);
+    expect(w.ev().issues.map((i) => i.selUid)).toEqual([over]);
+  });
+});
+
 describe('points limits with child selections', () => {
   const squad = (limit: string) => world(unit('s', 'Squad', 100, cons(limit) + children(entry('g', 'Gear', 50))));
 
