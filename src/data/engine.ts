@@ -651,8 +651,11 @@ export class Evaluator {
   }
 
   private checkParentLimit(rs: RSel, name: string, c: Constraint, n: number) {
-    const place = { reach: 'unit', forceUid: rs.force.force.uid, selUid: rs.sel.uid } as const;
-    this.report(c, n, `${rs.eff.name} › ${name}`, place);
+    this.report(c, n, `${rs.eff.name} › ${name}`, {
+      reach: 'unit',
+      forceUid: rs.force.force.uid,
+      selUid: rs.sel.uid,
+    });
   }
 
   private checkWideLimit(rs: RSel, o: Opt, name: string, c: Constraint, n: number) {
@@ -978,6 +981,62 @@ export function addSel(
   return s.uid;
 }
 
+/** One step of `fillDefaults`: the selection it fills, read through a fresh evaluator. */
+interface Filling {
+  ev: Evaluator;
+  rs: RSel;
+}
+
+const countUnder = (rs: RSel, pred: (key: string) => boolean) =>
+  rs.sel.children.filter((c) => pred(c.key)).reduce((t, c) => t + c.number, 0);
+
+function visibleOf({ ev, rs }: Filling, g: Opt): Opt[] {
+  return g.members.filter((m) => {
+    const e = ev.optionEff(m, rs, rs.force);
+    return !e.hidden && !unavailable(e);
+  });
+}
+
+/** cost after modifiers (a link can make a 'free' weapon cost points); a group costs its cheapest offer */
+function optionCost(f: Filling, m: Opt): number {
+  if (m.kind === 'entry') return f.ev.optionEff(m, f.rs, f.rs.force).costs.get(f.ev.pointsTypeId) ?? 0;
+  const costs = visibleOf(f, m).map((x) => optionCost(f, x));
+  return costs.length ? Math.min(...costs) : 0;
+}
+
+const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
+
+/** in a capped group, a nested group that holds a pick has had its default, so the next group's comes first */
+function offeredIn({ ev, rs }: Filling, g: Opt, visible: Opt[]): Opt[] {
+  if (ev.limits(g, rs, rs.force).max < 0) return visible;
+  return visible.filter((m) => m.kind !== 'group' || countUnder(rs, (k) => k.startsWith(m.key + '/')) === 0);
+}
+
+/** one entry inside group g (searching nested groups) that can take another selection */
+function pickIn(f: Filling, g: Opt, d = 0): Opt | undefined {
+  if (d > 6) return undefined;
+  const { ev, rs } = f;
+  const visible = visibleOf(f, g);
+  const cheapest = [...visible].sort((x, y) => baseMin(x) - baseMin(y) || optionCost(f, x) - optionCost(f, y));
+  const def = defaultMember(g, offeredIn(f, g, visible), true, ev.optionEff(g, rs, rs.force).defaultId);
+  const ordered = [...(def ? [def] : []), ...cheapest];
+  // prefer nested groups that carry their own default
+  ordered.sort((x, y) => Number(y === def) - Number(x === def));
+  for (const m of ordered) {
+    const lim = ev.limits(m, rs, rs.force);
+    if (m.kind === 'entry') {
+      const cur = countUnder(rs, (k) => k === m.key);
+      if ((lim.max < 0 || cur < lim.max) && ev.roomBeyondParent(m, rs, rs.force)) return m;
+    } else {
+      const cur = countUnder(rs, (k) => k.startsWith(m.key + '/'));
+      if (lim.max >= 0 && cur >= lim.max) continue;
+      const hit = pickIn(f, m, d + 1);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
 /** revisit: also walk into children that were already there (second pass over a newly added unit) */
 function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: string, depth: number, revisit = false) {
   if (depth > 12) return;
@@ -989,8 +1048,6 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
     const rs = ev.find(selUid);
     if (!rs) return;
     const ctx = rs.force.ctx;
-    const countKey = (pred: (k: string) => boolean) =>
-      rs.sel.children.filter((c) => pred(c.key)).reduce((t, c) => t + c.number, 0);
     const addChild = (o: Opt, n: number) => {
       if (n <= 0) return false;
       const ex = rs.sel.children.find((c) => c.key === o.key && !c.children.length);
@@ -1003,46 +1060,6 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
       added.push(child.uid);
       return true;
     };
-    const visibleOf = (g: Opt) =>
-      g.members.filter((m) => {
-        const e = ev.optionEff(m, rs, rs.force);
-        return !e.hidden && !unavailable(e);
-      });
-    const pts = ev.pointsTypeId;
-    // cost after modifiers (a link can make a 'free' weapon cost points); a group costs its cheapest offer
-    const cost = (m: Opt): number => {
-      if (m.kind === 'entry') return ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0;
-      const costs = visibleOf(m).map(cost);
-      return costs.length ? Math.min(...costs) : 0;
-    };
-    const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
-    /** one entry inside group g (searching nested groups) that can take another selection */
-    const pickIn = (g: Opt, d = 0): Opt | undefined => {
-      if (d > 6) return undefined;
-      const visible = visibleOf(g);
-      const cheapest = [...visible].sort((x, y) => baseMin(x) - baseMin(y) || cost(x) - cost(y));
-      // in a capped group, a nested group that holds a pick has had its default, so the next group's comes first
-      const capped = ev.limits(g, rs, rs.force).max >= 0;
-      const held = (m: Opt) => m.kind === 'group' && countKey((k) => k.startsWith(m.key + '/')) > 0;
-      const offered = capped ? visible.filter((m) => !held(m)) : visible;
-      const def = defaultMember(g, offered, true, ev.optionEff(g, rs, rs.force).defaultId);
-      const ordered = [...(def ? [def] : []), ...cheapest];
-      // prefer nested groups that carry their own default
-      ordered.sort((x, y) => Number(y === def) - Number(x === def));
-      for (const m of ordered) {
-        const lim = ev.limits(m, rs, rs.force);
-        if (m.kind === 'entry') {
-          const cur = countKey((k) => k === m.key);
-          if ((lim.max < 0 || cur < lim.max) && ev.roomBeyondParent(m, rs, rs.force)) return m;
-        } else {
-          const cur = countKey((k) => k.startsWith(m.key + '/'));
-          if (lim.max >= 0 && cur >= lim.max) continue;
-          const hit = pickIn(m, d + 1);
-          if (hit) return hit;
-        }
-      }
-      return undefined;
-    };
     let changed = false;
     const walk = (opts: Opt[]): boolean => {
       for (const o of opts) {
@@ -1053,14 +1070,14 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
         // is 0 right now ("one per 1,000 points"): the cap shows as an issue instead. Choices are still skipped.
         if (o.kind === 'entry' ? (min < 1 ? unavailable(eff) : unavailableHere(eff)) : unavailable(eff)) continue;
         if (o.kind === 'entry') {
-          const have = countKey((k) => k === o.key);
+          const have = countUnder(rs, (k) => k === o.key);
           if (addChild(o, Math.min(min, max < 0 ? min : max) - have)) changed = true;
           continue;
         }
         if (walk(o.members)) return true;
-        const have = countKey((k) => k.startsWith(o.key + '/'));
+        const have = countUnder(rs, (k) => k.startsWith(o.key + '/'));
         if (min > have && (max < 0 || have < max)) {
-          const m = pickIn(o);
+          const m = pickIn({ ev, rs }, o);
           if (m && addChild(m, 1)) return true; // re-evaluate before picking more
         }
       }
