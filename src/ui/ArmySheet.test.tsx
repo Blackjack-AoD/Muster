@@ -88,6 +88,7 @@ describe('SharedView', () => {
   it.each([
     { broken: 'a link cut short', hash: async () => (await linkHash(SHARED)).slice(0, 30) },
     { broken: 'a link that holds no packed data', hash: async () => '#/view/not-a-list!' },
+    { broken: 'a link with a stray percent sign', hash: async () => '#/view/abc%' },
     { broken: 'a list from a newer Muster', hash: () => linkHashOf({ ...SHARED, v: 2 }) },
   ])('shows the readable error for $broken', async ({ hash }) => {
     openHash(await hash());
