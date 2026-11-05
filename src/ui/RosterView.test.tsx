@@ -269,6 +269,19 @@ describe('RosterView', () => {
       expect(await db.rosters()).toEqual([]);
     });
 
+    it('reaches Delete from Lists for a list with a slash in its uid, which restores used to allow', async () => {
+      const [[, error, damage]] = CANT_OPEN;
+      openHash('#/');
+      await renderScreen(<App />, { rosters: [{ ...damage(roster), uid: 'a/b' }] });
+      fireEvent.click(await screen.findByText('Test list'));
+
+      await showsError(error);
+      pressDelete();
+
+      await waitFor(() => expect(getState().rosters).toEqual([]));
+      expect(await db.rosters()).toEqual([]);
+    });
+
     it('keeps the list when the player says no', async () => {
       const [[, error, damage]] = CANT_OPEN;
       asked.mockReturnValue(false);
