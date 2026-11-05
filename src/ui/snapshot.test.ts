@@ -212,6 +212,16 @@ describe('share links', () => {
       ['a profile with no stats', withUnit({ profiles: [{ name: 'Servitor', type: 'Unit' }] })],
       ['a stat that is not a name and a value', withUnit({ profiles: [{ type: 'Gear', chars: [['M']] }] })],
       ['a unit with no rules', withUnit({ rules: undefined })],
+      ['a unit rule that is an object', withUnit({ rules: [{}] })],
+      ['no count of issues', { ...FULL, issues: undefined }],
+      ['a count of issues that is an object', { ...FULL, issues: {} }],
+      ['no date', { ...FULL, at: undefined }],
+      ['a date that is an object', { ...FULL, at: {} }],
+      ['a set-up line that is an object', withForce({ setup: [{}] })],
+      ['a gear line with no depth', withUnit({ gear: [{ t: 'Servo Arm' }] })],
+      ['a gear depth that is an object', withUnit({ gear: [{ d: {}, t: 'Servo Arm' }] })],
+      ['a profile with no type', withUnit({ profiles: [{ name: 'Servitor', chars: [] }] })],
+      ['a profile type that is an object', withUnit({ profiles: [{ type: {}, chars: [] }] })],
     ])('reject a list with %s', async (_what, broken) => {
       await expect(decodeSnapshot(await pack(broken))).rejects.toThrow('Not a Muster list');
     });
