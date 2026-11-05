@@ -57,14 +57,12 @@ export interface Eff {
   /** set by a defaultSelectionEntryId modifier */
   defaultId?: string;
 }
-export interface Issue {
-  level: 'error' | 'warn';
-  /** how far the issue applies: issues merge only within this */
-  reach: 'list' | 'force' | 'unit';
-  message: string;
-  forceUid?: string;
-  selUid?: string;
-}
+/** How far an issue applies, and so where it shows. Issues merge only within this. */
+type IssuePlace =
+  | { reach: 'list'; forceUid?: string; selUid?: string }
+  | { reach: 'force'; forceUid: string; selUid?: string }
+  | { reach: 'unit'; forceUid: string; selUid: string };
+export type Issue = IssuePlace & { level: 'error' | 'warn'; message: string };
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -76,8 +74,9 @@ interface Where {
   opt?: Opt;
 }
 
-/** The reach of a limit that counts across units, so it belongs to no one unit. */
-const wideReach = (c: Constraint): Issue['reach'] => (c.scope === 'roster' ? 'list' : 'force');
+/** The place of a limit that counts across units, so it belongs to no one unit. */
+const widePlace = (c: Constraint, forceUid: string, selUid?: string): IssuePlace =>
+  c.scope === 'roster' ? { reach: 'list', forceUid, selUid } : { reach: 'force', forceUid, selUid };
 
 /** Issues with the same text are one issue when this matches. */
 function reachId(i: Issue): string | undefined {
@@ -89,8 +88,8 @@ function reachId(i: Issue): string | undefined {
     case 'unit':
       return i.selUid;
     default: {
-      const unknown: never = i.reach;
-      throw new Error(`Unknown issue reach: ${String(unknown)}`);
+      const unknown: never = i;
+      throw new Error(`Unknown issue reach: ${JSON.stringify(unknown)}`);
     }
   }
 }
@@ -447,80 +446,14 @@ export class Evaluator {
 
   // ---------- validation ----------
   private validate() {
-    const issues = this.issues;
     for (const rf of this.forces) {
-      const fname = rf.entry.name;
-      if (rf.broken.length)
-        issues.push({
-          level: 'warn',
-          reach: 'force',
-          forceUid: rf.force.uid,
-          message: `${rf.broken.length} unit(s) no longer exist in the data and were skipped`,
-        });
-      // force-org: category limits
-      for (const cl of rf.entry.categoryLinks) {
-        const w: Where = { self: null, parent: null, force: rf };
-        const effCons = this.effectiveConstraints(cl.constraints, cl.modifiers, w);
-        const cat = rf.ctx.get(cl.targetId);
-        const catCons = cat ? this.effectiveConstraints(cat.constraints, cat.modifiers, w) : [];
-        const name = cl.name || cat?.name || 'Category';
-        for (const c of [...effCons, ...catCons]) this.checkForceConstraint(c, rf, cl.targetId, name, fname);
-      }
-      // root entry constraints
-      for (const o of entryGone(rf) ? [] : forceRootOptions(rf.ctx, rf.entry)) {
-        const w: Where = { self: null, parent: null, force: rf, opt: o };
-        const eff = this.effective(o.node, w);
-        // the same entry can be linked more than once (often one link is switched off): judge each link by its own picks
-        const have = rf.roots.filter((r) => r.opt.key === o.key);
-        if ((eff.hidden || unavailable(eff)) && !have.length) continue;
-        for (const c of eff.constraints) {
-          if (c.field !== 'selections' && !this.isCostType(c.field)) continue;
-          const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
-          if (c.scope !== 'roster' && c.scope !== 'force' && c.scope !== 'parent') continue;
-          const field = c.field === 'selections' ? null : c.field;
-          const n = containers.reduce(
-            (t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field),
-            0,
-          );
-          this.report(this.pct(c, containers), n, `${eff.name}`, wideReach(c), rf.force.uid, have[0]?.sel.uid);
-        }
-        if (eff.hidden && have.length && this.hiddenByOthers(o.node, w))
-          for (const h of have)
-            issues.push({
-              level: 'warn',
-              reach: 'unit',
-              forceUid: rf.force.uid,
-              selUid: h.sel.uid,
-              message: `${eff.name} is not available with the current choices`,
-            });
-      }
+      this.warnSkippedUnits(rf);
+      this.checkCategoryLimits(rf);
+      for (const o of entryGone(rf) ? [] : forceRootOptions(rf.ctx, rf.entry)) this.checkRootEntry(rf, o);
       for (const r of rf.roots) this.validateSel(r);
     }
-    for (const rf of this.forces)
-      if (entryGone(rf))
-        issues.push({
-          level: 'warn',
-          reach: 'force',
-          forceUid: rf.force.uid,
-          message: "This detachment's type is no longer in the data",
-        });
-    for (const rs of this.bySel.values())
-      if (rs.broken.length)
-        issues.push({
-          level: 'warn',
-          reach: 'unit',
-          forceUid: rs.force.force.uid,
-          selUid: rs.sel.uid,
-          message: `${rs.eff.name}: ${rs.broken.length} item(s) no longer exist in the data and were skipped`,
-        });
-    // a wide limit is checked from every unit that has the entry: say it once within its reach
-    const seen = new Set<string>();
-    this.issues = issues.filter((i) => {
-      const k = [i.level, i.reach, reachId(i), i.message].join('|');
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    this.warnGoneData();
+    this.issues = mergeByReach(this.issues);
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
       this.issues.push({
         level: 'error',
@@ -528,6 +461,75 @@ export class Evaluator {
         message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}`,
       });
     }
+  }
+
+  private warnSkippedUnits(rf: RForce) {
+    if (rf.broken.length)
+      this.issues.push({
+        level: 'warn',
+        reach: 'force',
+        forceUid: rf.force.uid,
+        message: `${rf.broken.length} unit(s) no longer exist in the data and were skipped`,
+      });
+  }
+
+  /** force-org limits on each category of a force */
+  private checkCategoryLimits(rf: RForce) {
+    for (const cl of rf.entry.categoryLinks) {
+      const w: Where = { self: null, parent: null, force: rf };
+      const effCons = this.effectiveConstraints(cl.constraints, cl.modifiers, w);
+      const cat = rf.ctx.get(cl.targetId);
+      const catCons = cat ? this.effectiveConstraints(cat.constraints, cat.modifiers, w) : [];
+      const name = cl.name || cat?.name || 'Category';
+      for (const c of [...effCons, ...catCons]) this.checkForceConstraint(c, rf, cl.targetId, name);
+    }
+  }
+
+  /** the limits on a root entry, and a warning on each pick of one that's now hidden */
+  private checkRootEntry(rf: RForce, o: Opt) {
+    const w: Where = { self: null, parent: null, force: rf, opt: o };
+    const eff = this.effective(o.node, w);
+    // the same entry can be linked more than once (often one link is switched off): judge each link by its own picks
+    const have = rf.roots.filter((r) => r.opt.key === o.key);
+    if ((eff.hidden || unavailable(eff)) && !have.length) return;
+    for (const c of eff.constraints) {
+      if (c.field !== 'selections' && !this.isCostType(c.field)) continue;
+      const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
+      if (c.scope !== 'roster' && c.scope !== 'force' && c.scope !== 'parent') continue;
+      const field = c.field === 'selections' ? null : c.field;
+      const n = containers.reduce((t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field), 0);
+      this.report(this.pct(c, containers), n, eff.name, widePlace(c, rf.force.uid, have[0]?.sel.uid));
+    }
+    if (eff.hidden && have.length && this.hiddenByOthers(o.node, w))
+      for (const h of have)
+        this.issues.push({
+          level: 'warn',
+          reach: 'unit',
+          forceUid: rf.force.uid,
+          selUid: h.sel.uid,
+          message: `${eff.name} is not available with the current choices`,
+        });
+  }
+
+  /** what a saved list holds that the data no longer has */
+  private warnGoneData() {
+    for (const rf of this.forces)
+      if (entryGone(rf))
+        this.issues.push({
+          level: 'warn',
+          reach: 'force',
+          forceUid: rf.force.uid,
+          message: "This detachment's type is no longer in the data",
+        });
+    for (const rs of this.bySel.values())
+      if (rs.broken.length)
+        this.issues.push({
+          level: 'warn',
+          reach: 'unit',
+          forceUid: rs.force.force.uid,
+          selUid: rs.sel.uid,
+          message: `${rs.eff.name}: ${rs.broken.length} item(s) no longer exist in the data and were skipped`,
+        });
   }
 
   /** Data hides an entry once one is taken, to stop a second. That doesn't make the first unavailable. */
@@ -576,7 +578,7 @@ export class Evaluator {
     return eff.constraints;
   }
 
-  private checkForceConstraint(c: Constraint, rf: RForce, catId: string, name: string, _fname: string) {
+  private checkForceConstraint(c: Constraint, rf: RForce, catId: string, name: string) {
     if (c.field !== 'selections' && !this.isCostType(c.field)) return;
     const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rf.roots];
     const n = containers.reduce(
@@ -584,7 +586,7 @@ export class Evaluator {
         t + this.countCat(items, catId, c.includeChildSelections, c.field === 'selections' ? null : c.field),
       0,
     );
-    this.report(this.pct(c, containers), n, name, wideReach(c), rf.force.uid);
+    this.report(this.pct(c, containers), n, name, widePlace(c, rf.force.uid));
   }
 
   /** percentage limits (e.g. "no more than 25% of the army's points") become absolute numbers */
@@ -608,25 +610,21 @@ export class Evaluator {
     return t;
   }
 
-  private report(c: Constraint, n: number, name: string, reach: Issue['reach'], forceUid?: string, selUid?: string) {
+  private report(c: Constraint, n: number, name: string, place: IssuePlace) {
     // say where a wide limit applies ("one per 1,000 points" style caps live at list level)
     const where = c.scope === 'roster' ? ' in the list' : c.scope === 'force' ? ' in this detachment' : '';
     const unit = c.field === 'selections' ? '' : ' pts';
     if (c.type === 'min' && c.value > 0 && n < c.value) {
       this.issues.push({
         level: 'error',
-        reach,
-        forceUid,
-        selUid,
+        ...place,
         message: `${name}: needs at least ${fmt(c.value)}${unit}${where} (has ${fmt(n)})`,
       });
     }
     if (c.type === 'max' && c.value >= 0 && n > c.value) {
       this.issues.push({
         level: 'error',
-        reach,
-        forceUid,
-        selUid,
+        ...place,
         message: `${name}: at most ${fmt(c.value)}${unit} allowed${where} (has ${fmt(n)})`,
       });
     }
@@ -642,12 +640,16 @@ export class Evaluator {
         for (const c of eff.constraints) {
           if (c.field !== 'selections') continue;
           if (c.scope === 'parent')
-            this.report(c, n, `${rs.eff.name} › ${eff.name}`, 'unit', rs.force.force.uid, rs.sel.uid);
+            this.report(c, n, `${rs.eff.name} › ${eff.name}`, {
+              reach: 'unit',
+              forceUid: rs.force.force.uid,
+              selUid: rs.sel.uid,
+            });
           else if (c.scope === 'force' || c.scope === 'roster') {
             const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rs.force.roots];
             const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
             if (c.type === 'max' && c.value >= 0 && total > c.value && n)
-              this.report(c, total, eff.name, wideReach(c), rs.force.force.uid, rs.sel.uid);
+              this.report(c, total, eff.name, widePlace(c, rs.force.force.uid, rs.sel.uid));
           } else if (rs.force.ctx.get(c.scope)) {
             // scope is an id, not a word: the limit covers what sits inside the nearest selection of that entry
             const [items = []] = this.scopeContainers(c.scope, { self: rs, parent: rs.parent, force: rs.force });
@@ -655,7 +657,7 @@ export class Evaluator {
             let unit = rs;
             while (unit.parent) unit = unit.parent;
             if (c.type === 'max' && c.value >= 0 && total > c.value && n)
-              this.report(c, total, eff.name, 'unit', rs.force.force.uid, unit.sel.uid);
+              this.report(c, total, eff.name, { reach: 'unit', forceUid: rs.force.force.uid, selUid: unit.sel.uid });
           }
         }
         if (o.kind === 'group') walk(o.members);
@@ -791,6 +793,17 @@ export class Evaluator {
     visit(rs);
     return out;
   }
+}
+
+/** Each unit with the entry checks a wide limit, so the limit comes up many times: keep one within its reach. */
+function mergeByReach(issues: Issue[]): Issue[] {
+  const seen = new Set<string>();
+  return issues.filter((i) => {
+    const k = [i.level, i.reach, reachId(i), i.message].join('|');
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 function sameEff(a: Eff, b: Eff): boolean {
