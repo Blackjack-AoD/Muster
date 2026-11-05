@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { useState } from 'preact/hooks';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { App, go } from './app';
 import { toast } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
+import { Sheet } from './ui/common';
 import { encodeSnapshot, viewUrl, type Snapshot } from './ui/snapshot';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
@@ -206,6 +208,85 @@ describe('the back button', () => {
     await pressBack();
 
     await heading('Games')();
+  });
+});
+
+describe('a pop-up opened from a pop-up', () => {
+  async function openArmyPicker() {
+    await openListFromGames();
+    fireEvent.click(screen.getByRole('button', { name: 'Add detachment' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tap to change/ }));
+    await heading('Army')();
+  }
+
+  it('leaves no step behind when Back closes the inner one and the X closes the outer one', async () => {
+    await openArmyPicker();
+    await pressBack();
+    await heading('Add detachment')();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await noPopUp();
+    await waitFor(() => expect(history.state).toBeNull());
+    await pressBack();
+    await heading('Games')();
+  });
+
+  it('keeps the outer one open while its own step is under Back', async () => {
+    await openArmyPicker();
+    const outerStep = history.state;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await heading('Add detachment')();
+    await waitFor(() => expect(history.state).toEqual(outerStep));
+
+    history.pushState(null, '', location.href);
+    await pressBack();
+
+    expect(history.state).toEqual(outerStep);
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+    await heading('Add detachment')();
+  });
+});
+
+describe('two pop-ups', () => {
+  function Stacked() {
+    const [topOpen, setTopOpen] = useState(false);
+    return (
+      <Sheet title="Outer" onClose={() => {}}>
+        <button onClick={() => setTopOpen(true)}>Open the top one</button>
+        {topOpen && (
+          <Sheet title="Top" onClose={() => setTopOpen(false)}>
+            Top sheet
+          </Sheet>
+        )}
+      </Sheet>
+    );
+  }
+
+  it('closes only the top one on Back when both are up', async () => {
+    await renderScreen(<Stacked />);
+    fireEvent.click(await button('Open the top one')());
+    await heading('Top')();
+
+    await pressBack();
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Top' })).toBeNull());
+    await heading('Outer')();
+  });
+
+  it('gives a pop-up that takes over from another its own step, which the X then removes', async () => {
+    await openListFromGames();
+    go('/');
+    fireEvent.click(await button('New list')());
+    fireEvent.click(await button('Test Army')());
+    await button('Create list')();
+    await waitFor(() => expect(history.state?.sheet).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await noPopUp();
+    await waitFor(() => expect(history.state).toBeNull());
   });
 });
 
