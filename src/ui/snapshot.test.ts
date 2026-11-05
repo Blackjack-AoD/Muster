@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildSnapshot, decodeSnapshot, encodeSnapshot, viewUrl, type Snapshot } from './snapshot';
 import { rosterText } from './exporter';
 import type { RepoState } from '../data/db';
+import { locate } from '../data/engine';
 import type { RosterCtl } from '../store';
-import { children, entry, unit, world } from '../test/fixture';
+import { children, entry, present, unit, world } from '../test/fixture';
 
 vi.mock('./Lists', () => ({ catalogueName: () => 'Orks', systemName: () => 'Test Game' }));
 vi.mock('../store', () => ({ toast: vi.fn() }));
@@ -32,6 +33,24 @@ army.pick(army.add('Allegiance:'), 'Loyalist');
 army.pick(army.add('Expanded'), 'Legacy On');
 army.add('Warlord Trait');
 
+const model = (id: string, name: string, pts = 0) => entry(id, name, pts, '', 'type="model"');
+/** Squad Thrax, a Breacher Squad whose sergeant is named Kell, beside an unnamed Boss. */
+function namedSquad() {
+  const w = world(
+    unit('b', 'Boss', 50) +
+      unit('u', 'Breacher Squad', 100, children(model('sg', 'Sergeant', 10), model('m', 'Breacher'))),
+  );
+  w.add('Boss');
+  const squad = w.add('Breacher Squad');
+  const nameSel = (selUid: string, name: string) => {
+    present(locate(w.roster, selUid), 'the selection').sel.name = name;
+  };
+  nameSel(squad, 'Squad Thrax');
+  nameSel(w.pick(squad, 'Sergeant'), 'Kell');
+  w.pick(squad, 'Breacher', 4);
+  return w;
+}
+
 describe('buildSnapshot', () => {
   const s = buildSnapshot(ctlOf(army), repos);
 
@@ -56,6 +75,21 @@ describe('buildSnapshot', () => {
   });
   it('sums up set-up entries, leaving out switch panels', () => {
     expect(s.forces[0].setup).toEqual(['Allegiance: Loyalist', 'Warlord Trait']);
+  });
+  it('holds the custom name and the data name of a named unit, and one name for others', () => {
+    const units = buildSnapshot(ctlOf(namedSquad()), repos).forces[0].units;
+    expect(units.map(({ name, dataName }) => ({ name, dataName }))).toEqual([
+      { name: 'Boss', dataName: undefined },
+      { name: 'Squad Thrax', dataName: 'Breacher Squad' },
+    ]);
+    expect(units[0]).not.toHaveProperty('dataName');
+  });
+  it('names a named model in the gear lines by its custom name', () => {
+    const squad = buildSnapshot(ctlOf(namedSquad()), repos).forces[0].units[1];
+    expect(squad.gear).toEqual([
+      { d: 0, t: 'Kell (10)' },
+      { d: 0, t: '4× Breacher' },
+    ]);
   });
   it('counts errors', () => {
     const w = world(unit('u', 'Boss', 150), { costLimit: 100 });
@@ -100,6 +134,15 @@ describe('rosterText', () => {
       '(1 unresolved issue)',
       '',
       'Built with Muster',
+    ]);
+  });
+  it('shows a named unit as its name with the data name after it', () => {
+    expect(rosterText(ctlOf(namedSquad()), repos).split('\n').slice(4, 9)).toEqual([
+      '-- Other --',
+      'Boss [50]',
+      'Squad Thrax (Breacher Squad) [110]',
+      '  • Sergeant (10)',
+      '  • 4× Breacher',
     ]);
   });
   it('leaves out a limit of zero', () => {
@@ -193,7 +236,14 @@ describe('share links', () => {
       expect(await decodeSnapshot(await pack(noRules))).toEqual(noRules);
     });
 
+    it('opens a list with a named unit', async () => {
+      const named = withUnit({ name: 'Brother Ulf', dataName: 'Servitor' });
+      expect(await decodeSnapshot(await pack(named))).toEqual(named);
+    });
+
     it.each([
+      ['a data name that is a nested list', withUnit({ dataName: [[]] })],
+      ['a data name that is a number', withUnit({ dataName: 1 })],
       ['no points', { ...FULL, pts: undefined }],
       ['points as text', { ...FULL, pts: '25' }],
       ['a limit as text', { ...FULL, limit: '2000' }],

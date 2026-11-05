@@ -12,6 +12,8 @@ export interface SnapProfile {
 }
 export interface SnapUnit {
   name: string;
+  /** the data's name for a unit the player has named, which `name` then holds */
+  dataName?: string;
   cat: string;
   pts: number;
   /** wargear and upgrades as indented lines, totals across the unit ("5× Bolter") */

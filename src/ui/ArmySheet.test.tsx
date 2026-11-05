@@ -54,6 +54,12 @@ const sheetUnits = () =>
     card.querySelector('.as-unit-pts')?.textContent,
   ]);
 
+/** Each unit on the sheet as the names it shows: the custom name first, then the data name if any. */
+const sheetNames = () =>
+  [...document.querySelectorAll('.as-unit')].map((card) =>
+    [card.querySelector('b'), card.querySelector('.as-unit-data')].flatMap((el) => (el ? [el.textContent] : [])),
+  );
+
 beforeEach(stubBrowserGaps);
 
 afterEach(() => {
@@ -94,6 +100,26 @@ describe('SharedView', () => {
     expect(buttons).toEqual(['Open Muster', 'Print / save PDF', 'Share link']);
     expect(document.querySelector('.tabbar')).toBeNull();
     expect(await db.rosters()).toEqual([]);
+  });
+
+  it('shows a named unit by its custom name with the data name under it, and others by 1 name', async () => {
+    const [raider, servitor] = SHARED.forces[0].units;
+    const named = { ...raider, name: 'Fury of Olympia', dataName: 'Land Raider' };
+    openHash(await linkHash({ ...SHARED, forces: [{ ...SHARED.forces[0], units: [named, servitor] }] }));
+
+    await renderScreen(<App />);
+
+    await screen.findByRole('heading', { name: 'Friendly Fire' });
+    expect(sheetNames()).toEqual([['Fury of Olympia', 'Land Raider'], ['Servitor']]);
+  });
+
+  it('opens a link made by 0.5.5, before units had custom names, with 1 name per unit', async () => {
+    openHash(await linkHash(SHARED));
+
+    await renderScreen(<App />);
+
+    await screen.findByRole('heading', { name: 'Friendly Fire' });
+    expect(sheetNames()).toEqual([['Land Raider'], ['Servitor']]);
   });
 
   it.each([
