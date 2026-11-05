@@ -66,8 +66,8 @@ export function drag(row: HTMLElement, path: readonly Point[]): void {
 export async function stubBrowserGaps(): Promise<void> {
   vi.stubGlobal('scrollTo', () => {});
   vi.stubGlobal('matchMedia', () => ({ matches: false }));
-  // share links pack through Blob.stream(), which jsdom's Blob lacks; Response still makes Node's
-  vi.stubGlobal('Blob', (await new Response().blob()).constructor);
+  // share links pack through Blob.stream(), which jsdom's Blob lacks, so use Node's
+  vi.stubGlobal('Blob', (await import('node:buffer')).Blob);
   // the app's count outlives the store reset, and each step it counts is one entry at most
   for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
 }
