@@ -52,6 +52,16 @@ describe('addMandatoryRoots', () => {
     expect(addMandatoryRoots(w.roster, w.contexts, 'f1')).toBe(1);
     expect(rootNames(w)).toEqual(['Legion']);
   });
+  it('adds a mandatory entry with no category to a force that has categories', () => {
+    const w = world(setupEntry('leg', 'Chapter Tactics', min1('force')), {
+      gst: `<categoryEntries><categoryEntry id="hq" name="HQ"/></categoryEntries>
+        <forceEntries><forceEntry id="det" name="Detachment"><categoryLinks>
+          <categoryLink id="l-hq" name="HQ" targetId="hq"/>
+        </categoryLinks></forceEntry></forceEntries>`,
+    });
+    expect(addMandatoryRoots(w.roster, w.contexts, 'f1')).toBe(1);
+    expect(rootNames(w)).toEqual(['Chapter Tactics']);
+  });
   it('leaves optional entries, hidden ones, and ones already there', () => {
     const w = world(
       setupEntry('a', 'Optional', '') +

@@ -1144,7 +1144,7 @@ describe('validation', () => {
       addSel(w.roster, w.contexts, 'f1', null, opt, 1, 'tr');
       expect(w.ev().categoryLimits(w.ev().forces[0], 'tr').n).toBe(1);
     });
-    it('offers only units whose primary category is in the force', () => {
+    it('offers units whose primary category is in the force, and entries with no category', () => {
       const w = world(
         units +
           unit('z', 'Stranger', 0, inCat('nope')) +
@@ -1153,7 +1153,21 @@ describe('validation', () => {
         { gst: FOC },
       );
       const names = forceRootOptions(w.ctx, w.ctx.forceEntries()[0]).map((o) => o.node.name);
-      expect(names).toEqual(['Boss', 'Troop', 'Fallback']);
+      expect(names).toEqual(['Boss', 'Troop', 'Fallback', 'Nameless']);
+    });
+    it('holds a detachment to the minimum of a root entry with no category', () => {
+      const w = world(
+        units +
+          entry(
+            'c',
+            'Chapter Tactics',
+            0,
+            '<constraints><constraint id="c-min" type="min" value="1" field="selections" scope="force"/></constraints>',
+          ),
+        { gst: FOC },
+      );
+      w.add('Boss');
+      expect(w.errors()).toEqual(['Chapter Tactics: needs at least 1 in this detachment (has 0)']);
     });
     it('remembers root options per force entry', () => {
       const w = world(units, { gst: FOC });
