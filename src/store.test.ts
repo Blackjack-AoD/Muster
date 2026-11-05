@@ -112,7 +112,36 @@ describe('restoring a backup', () => {
     await importRosters([oldest]);
     expect(await stored('oldest')).toEqual([oldest]);
   });
+  it('restores a list with nested selections', async () => {
+    const leaf = { uid: 'leaf', key: 'e/c/d', number: 2, children: [] };
+    const nested = {
+      ...roster('nested'),
+      forces: [
+        {
+          uid: 'f',
+          forceEntryId: 'det',
+          catalogueId: 'cat',
+          selections: [
+            {
+              uid: 'root',
+              key: 'e',
+              number: 1,
+              categoryId: 'hq',
+              children: [{ uid: 'mid', key: 'e/c', number: 1, children: [leaf] }],
+            },
+          ],
+        },
+      ],
+    };
+    expect(await importRosters([nested])).toBe(1);
+    expect(await stored('nested')).toEqual([nested]);
+  });
   const FORCE = { uid: 'f', forceEntryId: 'det', catalogueId: 'cat', selections: [] };
+  const SEL = { uid: 's', key: 'e', number: 1, children: [] };
+  const withSel = (selection: unknown) => ({
+    ...roster('x'),
+    forces: [{ ...FORCE, selections: [selection] }],
+  });
   it.each([
     ['no uid', { ...roster('x'), uid: undefined }],
     ['an empty uid', roster('')],
@@ -128,10 +157,38 @@ describe('restoring a backup', () => {
     ['a detachment with no army', { ...roster('x'), forces: [{ ...FORCE, catalogueId: undefined }] }],
     ['a detachment with no type', { ...roster('x'), forces: [{ ...FORCE, forceEntryId: 7 }] }],
     ['a detachment with no units', { ...roster('x'), forces: [{ ...FORCE, selections: 'none' }] }],
+    ['a selection that is null', withSel(null)],
+    ['a selection that is text', withSel('Boyz')],
+    ['a selection with no uid', withSel({ ...SEL, uid: undefined })],
+    ['a selection with a key that is a number', withSel({ ...SEL, key: 7 })],
+    ['a selection with a number that is text', withSel({ ...SEL, number: '1' })],
+    ['a selection with no children', withSel({ ...SEL, children: undefined })],
+    ['a selection with children that are text', withSel({ ...SEL, children: 'none' })],
+    ['a selection with a category that is a number', withSel({ ...SEL, categoryId: 7 })],
+    ['a selection with a category that is null', withSel({ ...SEL, categoryId: null })],
+    ['a nested selection that is null', withSel({ ...SEL, children: [null] })],
+    ['a selection two levels down with no key', withSel({ ...SEL, children: [{ ...SEL, children: [{ uid: 's' }] }] })],
   ])('skips a list with %s', async (_what, broken) => {
     const before = (await db.rosters()).length;
     await importRosters([broken]);
     expect(await db.rosters()).toHaveLength(before);
+  });
+  it('restores the rest of a backup past a selection that is null', async () => {
+    const lists = [roster('r1'), withSel(null), roster('r2')];
+    expect(await importRosters(lists)).toBe(2);
+    expect((await db.rosters()).map((r) => r.uid)).toEqual(expect.arrayContaining(['r1', 'r2']));
+    expect(await stored('x')).toEqual([]);
+  });
+  it.each([
+    ['too deep to store', 3_000],
+    ['too deep for the stack', 100_000],
+  ])('skips a list nested %s and restores the rest', async (_what, depth) => {
+    let deepest: unknown = SEL;
+    for (let i = 0; i < depth; i++) deepest = { ...SEL, children: [deepest] };
+    expect(await importRosters([roster('d1'), withSel(deepest), roster('d2')])).toBe(2);
+    expect(await stored('d1')).toHaveLength(1);
+    expect(await stored('d2')).toHaveLength(1);
+    expect(await stored('x')).toEqual([]);
   });
 });
 
