@@ -35,3 +35,5 @@ export async function renderScreen(
   await init();
   render(screen);
 }
+
+export async function resetStore(): Promise<void> {}
