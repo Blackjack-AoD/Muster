@@ -1,7 +1,18 @@
 import { useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
-import { addSel, duplicateSel, issuesOn, locate, removeSel, unavailable, type RSel, type Sel } from '../data/engine';
+import {
+  addSel,
+  displayName,
+  duplicateSel,
+  issuesOn,
+  locate,
+  removeSel,
+  unavailable,
+  type Roster,
+  type RSel,
+  type Sel,
+} from '../data/engine';
 import type { Profile, Rule } from '../data/model';
 import type { RosterCtl } from '../store';
 import { Pts, Sheet, TopBar, fmtN } from './common';
@@ -37,19 +48,21 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
   return (
     <div class="page unit-page">
       <TopBar
-        title={rs.eff.name}
+        title={displayName(rs)}
         sub={cat}
         backTo={backTo}
         right={
           <>
-            <button class="icon-btn" aria-label="Rename unit" onClick={() => setNaming(true)}>
-              <Icon name="edit" />
-            </button>
+            {!ctl.scratch && isRoot && unitLike && (
+              <button class="icon-btn" aria-label="Rename unit" onClick={() => setNaming(true)}>
+                <Icon name="edit" />
+              </button>
+            )}
             {unitLike || rs.total ? <Pts v={rs.total} /> : null}
           </>
         }
       />
-      {naming && <NameSheet title="Unit" onClose={() => setNaming(false)} />}
+      {naming && <NameSheet title="Unit" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -466,8 +479,11 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
   const [open, setOpen] = useState(depth < 1 || (siblings.length > 1 && siblings.indexOf(rs) > 0));
   const [naming, setNaming] = useState(false);
   if (!visible.length || depth > 6) return null;
-  // offer "Merge" on the later row only, back into an earlier row with identical wargear
-  const twin = siblings.slice(0, siblings.indexOf(rs)).find((c) => sameGear(c.sel, rs.sel));
+  // offer "Merge" on the later row only, back into an earlier row with identical wargear; a named model stays apart
+  const twin =
+    rs.sel.name === undefined
+      ? siblings.slice(0, siblings.indexOf(rs)).find((c) => c.sel.name === undefined && sameGear(c.sel, rs.sel))
+      : undefined;
   const n = rs.sel.number;
   return (
     <div class="subopts">
@@ -476,11 +492,11 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
           <Icon name={open ? 'down' : 'chev'} size={14} />
           <span>
             {n > 1 ? `${n}× ` : siblings.length > 1 ? '1× ' : ''}
-            {rs.eff.name}
+            {displayName(rs)}
           </span>
           {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
         </button>
-        {rs.node.type === 'model' && (
+        {rs.node.type === 'model' && !ctl.scratch && (
           <button class="icon-btn sm" aria-label="Rename model" onClick={() => setNaming(true)}>
             <Icon name="edit" size={16} />
           </button>
@@ -501,23 +517,37 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
         )}
       </div>
       {open && <OptList ctl={ctl} rs={rs} opts={visible} depth={depth + 1} />}
-      {naming && <NameSheet title="Model" onClose={() => setNaming(false)} />}
+      {naming && <NameSheet title="Model" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
     </div>
   );
 }
 
-function NameSheet({ title, onClose }: { title: string; onClose: () => void }) {
-  const [name, setName] = useState('');
+/** Names a unit or model when it closes; an empty name clears it. */
+function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl; rs: RSel; onClose: () => void }) {
+  const [name, setName] = useState(rs.sel.name ?? '');
   return (
-    <Sheet title={title} onClose={onClose}>
+    <Sheet
+      title={title}
+      onClose={() => {
+        nameSel(ctl, rs, name.trim() || undefined);
+        onClose();
+      }}
+    >
       <div class="form">
         <label>
           Name
-          <input value={name} onInput={(e) => setName(e.currentTarget.value)} />
+          <input value={name} placeholder={rs.eff.name} onInput={(e) => setName(e.currentTarget.value)} />
         </label>
       </div>
       <div class="menu">
-        <button onClick={onClose}>Clear</button>
+        <button
+          onClick={() => {
+            nameSel(ctl, rs, undefined);
+            onClose();
+          }}
+        >
+          <Icon name="x" /> Clear
+        </button>
       </div>
     </Sheet>
   );
@@ -536,12 +566,28 @@ function sameGear(a: Sel, b: Sel) {
 
 /** Separate one model from a group so it can take its own wargear. */
 function splitOne(ctl: RosterCtl, rs: RSel) {
+  ctl.mutate((r) => splitOff(r, rs.sel.uid));
+}
+
+/** Takes one model off a group of 2 or more, as a row of its own after it, and returns that row. */
+function splitOff(r: Roster, selUid: string): Sel | null {
+  const loc = locate(r, selUid);
+  if (!loc || loc.sel.number < 2) return null;
+  loc.sel.number--;
+  const copy = duplicateSel(r, selUid);
+  if (copy) copy.number = 1;
+  return copy;
+}
+
+/** Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone. */
+function nameSel(ctl: RosterCtl, rs: RSel, name: string | undefined) {
+  if (name === rs.sel.name) return;
   ctl.mutate((r) => {
-    const loc = locate(r, rs.sel.uid);
-    if (!loc || loc.sel.number < 2) return;
-    loc.sel.number--;
-    const copy = duplicateSel(r, rs.sel.uid);
-    if (copy) copy.number = 1;
+    const own = locate(r, rs.sel.uid)?.sel;
+    const target = name !== undefined && rs.parent ? (splitOff(r, rs.sel.uid) ?? own) : own;
+    if (!target) return;
+    if (name === undefined) delete target.name;
+    else target.name = name;
   });
 }
 
