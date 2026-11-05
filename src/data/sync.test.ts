@@ -79,13 +79,11 @@ describe('normaliseRepo', () => {
     expect(normaliseRepo('https://github.com/my-org/wh40k-10e.data/tree/main')).toBe('my-org/wh40k-10e.data');
   });
 
-  // BUG: the trailing slash hides ".git" from the pattern, so the name keeps it.
-  it.fails('drops .git before a trailing slash', () => {
+  it('drops .git before a trailing slash', () => {
     expect(normaliseRepo('https://github.com/owner/repo.git/')).toBe('owner/repo');
   });
 
-  // BUG: with no repo in the link, the host is taken for the owner.
-  it.fails('rejects a link to an owner page', () => {
+  it('rejects a link to an owner page', () => {
     expect(normaliseRepo('https://github.com/owner')).toBeNull();
   });
 });
