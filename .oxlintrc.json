@@ -7,7 +7,7 @@
   "rules": {
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "warn",
-    "typescript/no-floating-promises": "warn",
+    "typescript/no-floating-promises": "error",
     "typescript/switch-exhaustiveness-check": "error",
     "typescript/no-unnecessary-type-assertion": "error"
   }
