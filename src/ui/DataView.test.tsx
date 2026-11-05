@@ -171,6 +171,24 @@ describe('DataView', () => {
       expect(getState().rosters.map((r) => r.uid)).toEqual(['r']);
     });
 
+    it('counts what it restored and what it skipped', async () => {
+      await renderScreen(<App />);
+      const second = { ...world('').roster, uid: 'second' };
+
+      restoreFile(JSON.stringify([world('').roster, null, second]));
+
+      await expectToast('Restored 2 list(s), skipped 1');
+      expect((await db.rosters()).map((r) => r.uid).sort()).toEqual(['r', 'second']);
+    });
+
+    it('restores nothing from a file of anything else', async () => {
+      await renderScreen(<App />);
+
+      restoreFile('[1, 2, 3]');
+
+      await expectToast('Restored 0 list(s), skipped 3');
+    });
+
     it.each([
       ['text that is not JSON', 'not json'],
       ['JSON with no lists in it', '{"app":"muster"}'],

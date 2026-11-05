@@ -88,6 +88,9 @@ describe('restoring a backup', () => {
     await importRosters([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }]);
     expect(await db.rosters()).toHaveLength(before);
   });
+  it('counts the lists it restored', async () => {
+    expect(await importRosters([roster('i3'), null, roster('i4')])).toBe(2);
+  });
   it('opens a list in the shape of the first release', async () => {
     const oldest = {
       uid: 'oldest',
