@@ -6,7 +6,7 @@ import { afterEach, vi } from 'vitest';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
-import { dismissToast, importRosters, init, removeRepo, setGame } from '../store';
+import { dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
 import { COST_TYPES, FORCE, type WorldOptions } from './fixture';
 
 export interface ScreenSeed {
@@ -43,7 +43,9 @@ export async function renderScreen(
 export async function resetStore(): Promise<void> {
   dismissToast();
   setGame(undefined);
-  for (const { repo } of await db.repos()) await removeRepo(repo);
+  // a repo that storage refused has a sync status and no record
+  const stored = (await db.repos()).map((r) => r.repo);
+  for (const repo of new Set([...stored, ...Object.keys(getState().sync)])) await removeRepo(repo);
   for (const { uid } of await db.rosters()) await db.delRoster(uid);
   // importing nothing reloads memory from storage, dropping a list whose save failed
   await importRosters([]);
