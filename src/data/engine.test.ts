@@ -250,6 +250,8 @@ describe('modifiers', () => {
 
 describe('conditions', () => {
   /** Squad costs 1 extra when the condition holds */
+  const TWO_FORCES =
+    '<forceEntries><forceEntry id="det" name="Detachment"/><forceEntry id="ally" name="Allies"/></forceEntries>';
   const guarded = (condition: string, others = unit('x', 'Other', 10)) =>
     unit(
       'u',
@@ -517,6 +519,41 @@ describe('conditions', () => {
       const u = w.add('Squad');
       w.add('Other');
       expect(holds(w, u)).toBe(true);
+    });
+    it('counts detachments when a condition asks for selections of a force entry', () => {
+      const w = world(guarded('<condition type="atLeast" value="2" field="selections" scope="roster" childId="det"/>'));
+      const u = w.add('Squad');
+      expect(holds(w, u)).toBe(false);
+      w.addForce();
+      expect(holds(w, u)).toBe(true);
+    });
+    it('a list with no detachment of that force entry counts none', () => {
+      const w = world(
+        guarded('<condition type="lessThan" value="1" field="selections" scope="roster" childId="ally"/>'),
+        {
+          gst: TWO_FORCES,
+        },
+      );
+      const u = w.add('Squad');
+      expect(holds(w, u)).toBe(true);
+      w.roster.forces.push({ uid: 'f2', forceEntryId: 'ally', catalogueId: 'cat', selections: [] });
+      expect(holds(w, u)).toBe(false);
+    });
+    it('scope force asks only whether this detachment is of that force entry', () => {
+      const own = world(
+        guarded('<condition type="atLeast" value="1" field="selections" scope="force" childId="det"/>'),
+        {
+          gst: TWO_FORCES,
+        },
+      );
+      expect(holds(own, own.add('Squad'))).toBe(true);
+      const other = world(
+        guarded('<condition type="atLeast" value="1" field="selections" scope="force" childId="ally"/>'),
+        { gst: TWO_FORCES },
+      );
+      const u = other.add('Squad');
+      other.roster.forces.push({ uid: 'f2', forceEntryId: 'ally', catalogueId: 'cat', selections: [] });
+      expect(holds(other, u)).toBe(false);
     });
     it('counts forces', () => {
       const w = world(guarded('<condition type="atLeast" value="2" field="forces" scope="roster" childId="det"/>'));
