@@ -139,7 +139,8 @@ export class Evaluator {
     this.bySel.set(s.uid, rs);
     for (const c of s.children) {
       const o = force.ctx.findOption(opt.node, c.key);
-      if (o && o.kind === 'entry') rs.children.push(this.buildSel(c, o, rs, force));
+      if (o?.kind === 'entry') rs.children.push(this.buildSel(c, o, rs, force));
+      else rs.broken.push(c);
     }
     // base categories (needed before modifiers can be evaluated anywhere)
     for (const cl of rs.node.categoryLinks) rs.eff.categories.add(cl.targetId);
@@ -460,13 +461,21 @@ export class Evaluator {
       seenMsg.add(k);
       return true;
     });
-    // added after the filter: forces that lost their entry share this message, and each one needs its warning
+    // added after the filter: forces that lost their entry, and units that lost wargear, can share a message
     for (const rf of this.forces)
       if (entryGone(rf))
         this.issues.push({
           level: 'warn',
           forceUid: rf.force.uid,
           message: "This detachment's type is no longer in the data",
+        });
+    for (const rs of this.bySel.values())
+      if (rs.broken.length)
+        this.issues.push({
+          level: 'warn',
+          forceUid: rs.force.force.uid,
+          selUid: rs.sel.uid,
+          message: `${rs.eff.name}: ${rs.broken.length} item(s) no longer exist in the data and were skipped`,
         });
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
       this.issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
