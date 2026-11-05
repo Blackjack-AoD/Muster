@@ -4,13 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { App } from '../app';
 import { db } from '../data/db';
 import { getState, toast } from '../store';
-import { world } from '../test/fixture';
+import { catalogueXml, gameSystemXml, world } from '../test/fixture';
 import { github } from '../test/github';
 import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
-const GST = '<gameSystem id="gst" name="Test Game" revision="1"/>';
-const CAT = '<catalogue id="cat" name="Test Army" revision="1" gameSystemId="gst"/>';
-const BODIES: Readonly<Record<string, string>> = { 'test.gst': GST, 'armies/test.cat': CAT };
+const CAT = catalogueXml();
+const BODIES: Readonly<Record<string, string>> = { 'test.gst': gameSystemXml(), 'armies/test.cat': CAT };
 
 const fakeGitHub = () =>
   github({
