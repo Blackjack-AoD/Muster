@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildSnapshot, decodeSnapshot, encodeSnapshot, viewUrl, type Snapshot } from './snapshot';
 import { rosterText } from './exporter';
 import type { RepoState } from '../data/db';
@@ -235,12 +235,38 @@ describe('share links', () => {
         const padding = bytes - JSON.stringify({ ...FULL, name: '' }).length;
         return { ...FULL, name: 'x'.repeat(padding) };
       };
+      afterEach(() => {
+        vi.unstubAllGlobals();
+      });
       it('opens at exactly 5 MB', async () => {
         const link = await pack(ofSize(MB5));
         expect((await decodeSnapshot(link)).name).toHaveLength(ofSize(MB5).name.length);
       });
       it('stops one byte past 5 MB', async () => {
         await expect(decodeSnapshot(await pack(ofSize(MB5 + 1)))).rejects.toThrow('too big');
+      });
+      it('stops reading soon after 5 MB, however much more the link holds', async () => {
+        const Real = DecompressionStream;
+        let unpacked = 0;
+        const counted = () =>
+          new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, out) {
+              unpacked += chunk.length;
+              out.enqueue(chunk);
+            },
+          });
+        vi.stubGlobal(
+          'DecompressionStream',
+          class {
+            private real = new Real('deflate-raw');
+            writable = this.real.writable;
+            readable = this.real.readable.pipeThrough(counted());
+          },
+        );
+        const link = await pack(ofSize(10 * MB5));
+        await expect(decodeSnapshot(link)).rejects.toThrow('too big');
+        expect(unpacked).toBeGreaterThan(MB5);
+        expect(unpacked).toBeLessThan(1.1 * MB5);
       });
     });
 
