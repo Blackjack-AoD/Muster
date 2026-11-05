@@ -73,7 +73,7 @@ export function Lists() {
       ) : (
         <div class="cards">
           {sorted.map((r) => (
-            <Link key={r.uid} class="card roster-card" to={`/r/${r.uid}`}>
+            <Link key={r.uid} class="card roster-card" to={`/r/${encodeURIComponent(r.uid)}`}>
               <div class="rc-main">
                 <div class="rc-name">{r.name}</div>
                 <div class="rc-sub">
