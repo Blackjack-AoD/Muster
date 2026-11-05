@@ -2,7 +2,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { App } from '../app';
-import { db } from '../data/db';
+import { db, type SavedUnit } from '../data/db';
 import { getState, toast } from '../store';
 import { catalogueXml, gameSystemXml, world } from '../test/fixture';
 import { github } from '../test/github';
@@ -34,6 +34,19 @@ afterEach(() => {
 });
 
 const REPO_FILES = worldFiles('');
+
+const SAVED_UNIT: SavedUnit = {
+  id: 'thrax',
+  name: 'Squad Thrax',
+  repo: 'test/repo',
+  gameSystemId: 'gs',
+  catalogueId: 'cat',
+  key: 'e',
+  categoryId: 'hq',
+  build: { uid: 'b', key: 'e', number: 1, children: [] },
+  created: 1,
+  updated: 2,
+};
 
 describe('DataView', () => {
   it.each(['owner/data', 'https://github.com/owner/data/tree/main'])(
@@ -123,6 +136,22 @@ describe('DataView', () => {
 
     await expectToast("Couldn't remove: Storage is full");
     expect(getState().repos.map((r) => r.repo)).toEqual(['test/repo']);
+  });
+
+  it('backs up the saved units with the lists', async () => {
+    await db.putSavedUnit(SAVED_UNIT);
+    await renderScreen(<App />, { files: REPO_FILES, rosters: [world('').roster] });
+    const made: Blob[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      if (blob instanceof Blob) made.push(blob);
+      return 'blob:muster/backup';
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back up 1 list' }));
+
+    await waitFor(() => expect(made).toHaveLength(1));
+    expect(JSON.parse((await made[0]?.text()) ?? 'null')).toMatchObject({ version: 2, savedUnits: [SAVED_UNIT] });
   });
 
   it('shows the reason in a toast when a backup fails to download', async () => {
@@ -273,13 +302,48 @@ describe('DataView', () => {
       });
     const backup = JSON.stringify({ app: 'muster', version: 1, rosters: [world('').roster] });
 
-    it('restores the lists in a backup file', async () => {
+    it('restores the lists in a version 1 backup file', async () => {
       await renderScreen(<App />);
 
       restoreFile(backup);
 
       await expectToast('Restored 1 list(s)');
       expect((await db.rosters()).map((r) => r.uid)).toEqual(['r']);
+      expect(await db.savedUnits()).toEqual([]);
+    });
+
+    const withCopy = {
+      ...world('').roster,
+      forces: [
+        {
+          uid: 'f',
+          forceEntryId: 'det',
+          catalogueId: 'cat',
+          selections: [{ uid: 'u', key: 'e', number: 1, name: 'Squad Thrax', saved: 'thrax', children: [] }],
+        },
+      ],
+    };
+
+    it('restores the lists and saved units in a version 2 backup file, with copies linked', async () => {
+      await renderScreen(<App />);
+
+      restoreFile(JSON.stringify({ app: 'muster', version: 2, rosters: [withCopy], savedUnits: [SAVED_UNIT] }));
+
+      await expectToast('Restored 1 list(s), 1 saved unit(s)');
+      expect(await db.savedUnits()).toEqual([SAVED_UNIT]);
+      expect(getState().savedUnits).toEqual([SAVED_UNIT]);
+      const [restored] = await db.rosters();
+      expect(restored?.forces[0]?.selections[0]).toMatchObject({ saved: 'thrax', name: 'Squad Thrax' });
+    });
+
+    it('counts the lists and saved units it skipped', async () => {
+      await renderScreen(<App />);
+
+      restoreFile(
+        JSON.stringify({ app: 'muster', version: 2, rosters: [withCopy, null], savedUnits: [SAVED_UNIT, null] }),
+      );
+
+      await expectToast('Restored 1 list(s), 1 saved unit(s), skipped 2');
     });
 
     it('reads a bare list of rosters as a backup', async () => {
@@ -313,6 +377,7 @@ describe('DataView', () => {
       ['text that is not JSON', 'not json'],
       ['JSON with no lists in it', '{"app":"muster"}'],
       ['the JSON value null', 'null'],
+      ['saved units that are not a list', '{"rosters":[],"savedUnits":{}}'],
     ])("says %s isn't a backup", async (_what, text) => {
       await renderScreen(<App />);
 

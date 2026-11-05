@@ -9,7 +9,7 @@ import {
   dismissToast,
   failureMessage,
   getState,
-  importRosters,
+  importBackup,
   init,
   refreshRepos,
   removeRepo,
@@ -80,22 +80,22 @@ describe('saving lists', () => {
 
 describe('restoring a backup', () => {
   it('adds new lists', async () => {
-    await importRosters([roster('i1')]);
+    await importBackup([roster('i1')]);
     expect(getState().rosters.some((x) => x.uid === 'i1')).toBe(true);
   });
   it('never overwrites a list that is already here', async () => {
     await saveRoster(roster('i2', 'Mine'));
-    await importRosters([roster('i2', 'From backup')]);
+    await importBackup([roster('i2', 'From backup')]);
     expect((await stored('i2')).map((x) => x.name)).toEqual(['Mine']);
     expect(getState().rosters.some((x) => x.name === 'From backup')).toBe(true);
   });
   it('skips anything that is not a list', async () => {
     const before = (await db.rosters()).length;
-    await importRosters([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }]);
+    await importBackup([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }]);
     expect(await db.rosters()).toHaveLength(before);
   });
   it('counts the lists it restored', async () => {
-    expect(await importRosters([roster('i3'), null, roster('i4')])).toBe(2);
+    expect((await importBackup([roster('i3'), null, roster('i4')])).lists).toBe(2);
   });
   it('restores a list in the shape of the first release', async () => {
     const oldest = {
@@ -115,7 +115,7 @@ describe('restoring a backup', () => {
       created: 1700000000000,
       updated: 1700000000000,
     };
-    await importRosters([oldest]);
+    await importBackup([oldest]);
     expect(await stored('oldest')).toEqual([oldest]);
   });
   it('restores a list with nested selections', async () => {
@@ -139,7 +139,7 @@ describe('restoring a backup', () => {
         },
       ],
     };
-    expect(await importRosters([nested])).toBe(1);
+    expect((await importBackup([nested])).lists).toBe(1);
     expect(await stored('nested')).toEqual([nested]);
   });
   it('keeps custom names and saved-unit links on units and models', async () => {
@@ -157,7 +157,7 @@ describe('restoring a backup', () => {
         },
       ],
     };
-    expect(await importRosters([named])).toBe(1);
+    expect((await importBackup([named])).lists).toBe(1);
     expect(await stored('named')).toEqual([named]);
   });
   const FORCE = { uid: 'f', forceEntryId: 'det', catalogueId: 'cat', selections: [] };
@@ -209,7 +209,7 @@ describe('restoring a backup', () => {
     ['a selection two levels down with no key', withSel({ ...SEL, children: [{ ...SEL, children: [{ uid: 's' }] }] })],
   ])('skips a list with %s', async (_what, broken) => {
     const before = (await db.rosters()).length;
-    await importRosters([broken]);
+    await importBackup([broken]);
     expect(await db.rosters()).toHaveLength(before);
   });
   describe('with fields it does not know', () => {
@@ -242,19 +242,19 @@ describe('restoring a backup', () => {
     it('stores a list the app built with every real field, and none of the junk', async () => {
       const list = realList(newUid());
       expect(list.forces[0]?.selections.some((s) => s.categoryId === 'hq')).toBe(true);
-      expect(await importRosters([withJunk(list)])).toBe(1);
+      expect((await importBackup([withJunk(list)])).lists).toBe(1);
       expect(await stored(list.uid)).toEqual([list]);
     });
     it('leaves a category absent from a selection that has none', async () => {
       const list = realList('nocategory');
-      await importRosters([withJunk(list)]);
+      await importBackup([withJunk(list)]);
       const [restored] = await stored('nocategory');
       const child = restored?.forces[0]?.selections.at(-1)?.children[0];
       expect(Object.keys(child ?? {}).sort()).toEqual(['children', 'key', 'number', 'uid']);
     });
     it('adds no custom name or saved-unit link to a list that had none', async () => {
       const list = realList('unnamed');
-      await importRosters([withJunk(list)]);
+      await importBackup([withJunk(list)]);
       const [restored] = await stored('unnamed');
       const keys = new Set<string>();
       const collect = (s: Sel) => {
@@ -269,14 +269,14 @@ describe('restoring a backup', () => {
       const shown = (ev: Evaluator) => ev.forces[0]?.roots.map((u) => [displayName(u), u.total]);
       const before = shown(w.ev());
       expect(before).toContainEqual(['Tactical Squad', 250]);
-      await importRosters([JSON.parse(JSON.stringify(w.roster))]);
+      await importBackup([JSON.parse(JSON.stringify(w.roster))]);
       const [restored] = await stored('reopened');
       expect(shown(new Evaluator(present(restored, 'the restored list'), w.contexts))).toEqual(before);
     });
   });
   it('restores the rest of a backup past a selection that is null', async () => {
     const lists = [roster('r1'), withSel(null), roster('r2')];
-    expect(await importRosters(lists)).toBe(2);
+    expect((await importBackup(lists)).lists).toBe(2);
     expect((await db.rosters()).map((r) => r.uid)).toEqual(expect.arrayContaining(['r1', 'r2']));
     expect(await stored('x')).toEqual([]);
   });
@@ -288,7 +288,7 @@ describe('restoring a backup', () => {
   };
   it('restores a list nested exactly 32 levels', async () => {
     const deepest = { ...withSel(nested(32)), uid: 'deepest' };
-    expect(await importRosters([deepest])).toBe(1);
+    expect((await importBackup([deepest])).lists).toBe(1);
     expect(await stored('deepest')).toEqual([deepest]);
   });
   it.each([
@@ -297,10 +297,116 @@ describe('restoring a backup', () => {
     ['too deep for the stack', 100_000],
   ])('skips a list nested %s and restores the rest', async (_what, levels) => {
     const tooDeep = { ...withSel(nested(levels)), uid: `deep${levels}` };
-    expect(await importRosters([roster('d1'), tooDeep, roster('d2')])).toBe(2);
+    expect((await importBackup([roster('d1'), tooDeep, roster('d2')])).lists).toBe(2);
     expect(await stored('d1')).toHaveLength(1);
     expect(await stored('d2')).toHaveLength(1);
     expect(await stored('x')).toEqual([]);
+  });
+
+  describe('with saved units', () => {
+    const MODEL = { uid: 'm', key: 'e/m', number: 1, name: 'Brother Thrax', children: [] };
+    const BUILD = { uid: 'b', key: 'e', number: 1, categoryId: 'hq', children: [MODEL] };
+    const savedUnit = (id: string, name = 'Squad Thrax') => ({
+      id,
+      name,
+      repo: 'r',
+      gameSystemId: 'g',
+      catalogueId: 'cat',
+      key: 'e',
+      categoryId: 'hq',
+      build: BUILD,
+      created: 1700000000000,
+      updated: 1700000000001,
+    });
+    /** A list holding one copy of saved unit `id`, under the saved unit's name. */
+    const listWithCopy = (listUid: string, id: string) => ({
+      ...roster(listUid),
+      forces: [
+        {
+          ...FORCE,
+          selections: [
+            { uid: 'u', key: 'e', number: 1, categoryId: 'hq', name: 'Squad Thrax', saved: id, children: [MODEL] },
+          ],
+        },
+      ],
+    });
+    const storedUnit = async (id: string) => (await db.savedUnits()).filter((u) => u.id === id);
+    const copyIn = async (listUid: string) => (await stored(listUid))[0]?.forces[0]?.selections[0];
+
+    it('stores each saved unit with only the fields of a saved unit, and counts them', async () => {
+      const junk = {
+        ...savedUnit('junky'),
+        junk: 'unit',
+        build: {
+          ...BUILD,
+          name: 'Squad Thrax',
+          saved: 'junky',
+          junk: 'build',
+          children: [{ ...MODEL, junk: 'model' }],
+        },
+      };
+      expect(await importBackup([], [junk])).toEqual({ lists: 0, savedUnits: 1 });
+      expect(await storedUnit('junky')).toEqual([savedUnit('junky')]);
+      expect(getState().savedUnits).toContainEqual(savedUnit('junky'));
+    });
+    it('keeps a restored copy linked to its restored saved unit', async () => {
+      await importBackup([listWithCopy('linked', 'thrax1')], [savedUnit('thrax1')]);
+      expect(await storedUnit('thrax1')).toEqual([savedUnit('thrax1')]);
+      expect(await copyIn('linked')).toMatchObject({ saved: 'thrax1', name: 'Squad Thrax' });
+    });
+    it('gives a saved unit whose id is taken a new id, and its copies follow it', async () => {
+      await importBackup([], [savedUnit('taken', 'Mine')]);
+      await importBackup([listWithCopy('follows', 'taken')], [savedUnit('taken', 'From backup')]);
+      expect((await storedUnit('taken')).map((u) => u.name)).toEqual(['Mine']);
+      const restored = (await db.savedUnits()).filter((u) => u.name === 'From backup');
+      const newId = restored[0]?.id ?? '';
+      expect(newId).not.toBe('taken');
+      expect(restored).toEqual([savedUnit(newId, 'From backup')]);
+      expect((await copyIn('follows'))?.saved).toBe(newId);
+      expect(getState().savedUnits.map((u) => u.name)).toEqual(expect.arrayContaining(['Mine', 'From backup']));
+    });
+    it('keeps a copy linked to a saved unit already on the phone', async () => {
+      await importBackup([], [savedUnit('here')]);
+      await importBackup([listWithCopy('onphone', 'here')]);
+      expect(getState().savedUnits.filter((u) => u.id === 'here')).toEqual([savedUnit('here')]);
+      expect(await copyIn('onphone')).toMatchObject({ saved: 'here', name: 'Squad Thrax' });
+    });
+    it('turns a copy whose saved unit is missing into a normal unit with no name', async () => {
+      await importBackup([listWithCopy('orphan', 'gone')]);
+      expect(await copyIn('orphan')).toEqual({ uid: 'u', key: 'e', number: 1, categoryId: 'hq', children: [MODEL] });
+    });
+    it('turns a copy of a saved unit it skipped into a normal unit', async () => {
+      await importBackup([listWithCopy('skippedcopy', 'broken')], [{ ...savedUnit('broken'), key: 7 }]);
+      expect(await copyIn('skippedcopy')).toEqual({
+        uid: 'u',
+        key: 'e',
+        number: 1,
+        categoryId: 'hq',
+        children: [MODEL],
+      });
+    });
+    it.each([
+      ['that is null', null],
+      ['that is text', 'Squad Thrax'],
+      ['with an id that is a number', { ...savedUnit('x'), id: 7 }],
+      ['with no name', { ...savedUnit('x'), name: undefined }],
+      ['with a repo that is an object', { ...savedUnit('x'), repo: {} }],
+      ['with a game that is an object', { ...savedUnit('x'), gameSystemId: {} }],
+      ['with an army that is a number', { ...savedUnit('x'), catalogueId: 7 }],
+      ['with a key that is a number', { ...savedUnit('x'), key: 7 }],
+      ['with a category that is null', { ...savedUnit('x'), categoryId: null }],
+      ['with no build', { ...savedUnit('x'), build: undefined }],
+      ['with a build that is text', { ...savedUnit('x'), build: 'Tactical Squad' }],
+      ['with a build with no key', { ...savedUnit('x'), build: { ...BUILD, key: undefined } }],
+      ['with a model in its build that is null', { ...savedUnit('x'), build: { ...BUILD, children: [null] } }],
+      ['with a creation time that is text', { ...savedUnit('x'), created: 'today' }],
+      ['with no edit time', { ...savedUnit('x'), updated: undefined }],
+    ])('skips a saved unit %s and restores the rest', async (_what, broken) => {
+      const before = (await db.savedUnits()).length;
+      expect(await importBackup([], [savedUnit('ok1'), broken, savedUnit('ok2')])).toEqual({ lists: 0, savedUnits: 2 });
+      expect(await db.savedUnits()).toHaveLength(before + 2);
+      expect(await storedUnit('x')).toEqual([]);
+    });
   });
 });
 

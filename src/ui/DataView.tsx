@@ -2,22 +2,23 @@ import { useEffect, useState } from 'preact/hooks';
 import { storageUse } from '../data/db';
 import { DEFAULT_REPOS, importLocalFiles, normaliseRepo } from '../data/sync';
 import { clearCaches } from '../data/library';
-import { failureMessage, getState, importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
+import { failureMessage, getState, importBackup, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
-import { backupLists, shareBackup } from './exporter';
+import { readBackup, shareBackup } from './exporter';
 import { APP_VERSION, BUILD_TIME, checkForUpdate, lastUpdateCheck, resetAppCache } from '../update';
 
 async function restoreBackup(file: File) {
-  let lists: unknown[];
+  let backup: ReturnType<typeof readBackup>;
   try {
-    lists = backupLists(await file.text());
+    backup = readBackup(await file.text());
   } catch {
     toast("That file isn't a Muster backup");
     return;
   }
   try {
-    const restored = await importRosters(lists);
+    const lists = backup.rosters;
+    const restored = (await importBackup(lists, backup.savedUnits)).lists;
     const skipped = lists.length - restored;
     // the Retry toast is the only way left to save a list's edit
     if (!getState().toastAction?.failedSave) {

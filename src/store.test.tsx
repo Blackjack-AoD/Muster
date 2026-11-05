@@ -9,7 +9,7 @@ import {
   addRoster,
   deleteRoster,
   getState,
-  importRosters,
+  importBackup,
   init,
   removeRepo,
   saveRoster,
@@ -342,7 +342,7 @@ describe('a Restore while a save has failed', () => {
     const put = await failASave();
 
     put.mockRestore();
-    await importRosters([{ ...newList(), uid: 'restored' }]);
+    await importBackup([{ ...newList(), uid: 'restored' }]);
 
     expect(getState().rosters.map((r) => [r.uid, unitsIn(r)])).toEqual([
       ['restored', 0],
@@ -357,7 +357,7 @@ describe('a Restore while a save has failed', () => {
     const put = await failASave();
 
     put.mockRestore();
-    await importRosters([{ ...newList(), uid: 'restored' }]);
+    await importBackup([{ ...newList(), uid: 'restored' }]);
     await pressRetry();
 
     const stored = await db.rosters();
@@ -375,13 +375,13 @@ describe('a Restore while a save has failed', () => {
     showUndo();
 
     put.mockRestore();
-    await importRosters([]);
+    await importBackup([]);
     expect(unitsInMemory()).toBe(1);
 
     await addUnit();
     await waitFor(async () => expect(await storedUnits()).toBe(2));
     getState().rosters[0].name = 'Changed only in memory';
-    await importRosters([]);
+    await importBackup([]);
     expect(getState().rosters.map((r) => r.name)).toEqual([list.name]);
   });
 
@@ -408,7 +408,7 @@ describe('a Restore while a save has failed', () => {
     await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
 
     put.mockRestore();
-    await importRosters([]);
+    await importBackup([]);
 
     expect(getState().rosters.map(unitsIn)).toEqual([1, 1]);
   });
@@ -430,7 +430,7 @@ describe('a Restore while a save has failed', () => {
     await waitFor(async () => expect(await storedUnits()).toBe(1));
     getState().rosters[0].name = 'Changed only in memory';
 
-    await importRosters([]);
+    await importBackup([]);
 
     expect(getState().rosters.map((r) => r.name)).toEqual([list.name]);
   });

@@ -7,7 +7,7 @@ import { App } from '../app';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
-import { deleteRoster, dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
+import { deleteRoster, dismissToast, getState, importBackup, init, removeRepo, setGame } from '../store';
 import { encodeSnapshot, viewUrl, type Snapshot } from '../ui/snapshot';
 import { FORCE, catalogueXml, gameSystemXml, type WorldOptions } from './fixture';
 
@@ -103,8 +103,9 @@ export async function resetStore(): Promise<void> {
   for (const repo of new Set([...stored, ...Object.keys(getState().sync)])) await removeRepo(repo);
   for (const uid of getState().unsaved) await deleteRoster(uid);
   for (const { uid } of await db.rosters()) await db.delRoster(uid);
+  for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
   // importing nothing reloads memory from storage
-  await importRosters([]);
+  await importBackup([]);
 }
 
 afterEach(async () => {

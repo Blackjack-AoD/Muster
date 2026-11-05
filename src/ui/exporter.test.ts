@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dismissToast, getState } from '../store';
+import type { SavedUnit } from '../data/db';
 import { unit, world } from '../test/fixture';
 import { downloadJson, shareBackup, shareText } from './exporter';
 
@@ -127,13 +128,25 @@ describe('downloadJson', () => {
 describe('shareBackup', () => {
   const { roster } = world(unit('tac', 'Tactical Squad', 100));
   const BACKUP_NAME = 'muster-lists-2026-11-05.json';
-  const backup = { app: 'muster', version: 1, rosters: [roster] };
+  const savedUnit: SavedUnit = {
+    id: 'thrax',
+    name: 'Squad Thrax',
+    repo: roster.repo,
+    gameSystemId: roster.gameSystemId,
+    catalogueId: 'cat',
+    key: 'tac',
+    categoryId: 'troops',
+    build: { uid: 'b', key: 'tac', number: 1, children: [] },
+    created: 1,
+    updated: 2,
+  };
+  const backup = { app: 'muster', version: 2, rosters: [roster], savedUnits: [savedUnit] };
 
-  it('shares a dated backup file where the device can share files, and downloads nothing', async () => {
+  it('shares a dated backup file of lists and saved units where the device can share files, and downloads nothing', async () => {
     const { downloads } = stubDownloads();
     const share = vi.fn<(data: { files: File[]; title: string }) => Promise<void>>(async () => {});
     vi.stubGlobal('navigator', { canShare: () => true, share });
-    await shareBackup([roster]);
+    await shareBackup([roster], [savedUnit]);
     const { files, title } = share.mock.calls[0][0];
     expect(title).toBe('Muster lists backup');
     expect(files.map((f) => f.name)).toEqual([BACKUP_NAME]);
@@ -145,7 +158,7 @@ describe('shareBackup', () => {
     const { madeFrom, downloads } = stubDownloads();
     const share = vi.fn(async () => {});
     vi.stubGlobal('navigator', { canShare: () => false, share });
-    await shareBackup([roster]);
+    await shareBackup([roster], [savedUnit]);
     expect(share).not.toHaveBeenCalled();
     expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
     expect(JSON.parse(await madeFrom[0].text())).toEqual(backup);
@@ -154,7 +167,7 @@ describe('shareBackup', () => {
   it('does nothing when the player cancels the share sheet', async () => {
     const { downloads } = stubDownloads();
     vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(CANCELLED) });
-    await shareBackup([roster]);
+    await shareBackup([roster], [savedUnit]);
     expect(downloads).toEqual([]);
     expect(getState().toast).toBeUndefined();
   });
@@ -162,7 +175,7 @@ describe('shareBackup', () => {
   it('counts a plain error named AbortError as a failure, and downloads the backup', async () => {
     const { downloads } = stubDownloads();
     vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(NAMED_ABORT) });
-    await shareBackup([roster]);
+    await shareBackup([roster], [savedUnit]);
     expect(getState().toast).toBe("Couldn't share: Stopped");
     expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
   });
@@ -170,7 +183,7 @@ describe('shareBackup', () => {
   it('shows the reason in a toast when the share sheet fails, and downloads the backup instead', async () => {
     const { madeFrom, downloads } = stubDownloads();
     vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(REFUSED) });
-    await shareBackup([roster]);
+    await shareBackup([roster], [savedUnit]);
     expect(getState().toast).toBe("Couldn't share: Permission denied");
     expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
     expect(JSON.parse(await madeFrom[0].text())).toEqual(backup);

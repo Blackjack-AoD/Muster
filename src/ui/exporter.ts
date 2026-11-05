@@ -1,4 +1,4 @@
-import type { RepoState } from '../data/db';
+import type { RepoState, SavedUnit } from '../data/db';
 import { displayName, type RSel } from '../data/engine';
 import type { Roster } from '../data/engine';
 import type { RosterCtl } from '../store';
@@ -111,14 +111,14 @@ export function downloadJson(name: string, data: unknown) {
 }
 
 /** The lists in a backup file: its `rosters`, or the whole file where it's a bare array. */
-export function backupLists(text: string): unknown[] {
+export function readBackup(text: string): { rosters: unknown[]; savedUnits: unknown[] } {
   const data: unknown = JSON.parse(text);
   const lists = data instanceof Object && 'rosters' in data ? data.rosters : data;
   if (!Array.isArray(lists)) throw new Error('This file holds no lists');
-  return lists;
+  return { rosters: lists, savedUnits: [] };
 }
 
-export async function shareBackup(rosters: Roster[]) {
+export async function shareBackup(rosters: Roster[], _savedUnits: SavedUnit[] = []) {
   const name = `muster-lists-${new Date().toISOString().slice(0, 10)}.json`;
   const file = new File([JSON.stringify({ app: 'muster', version: 1, rosters }, null, 1)], name, {
     type: 'application/json',

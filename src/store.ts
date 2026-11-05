@@ -238,8 +238,11 @@ const copyRoster = (r: Roster): Roster => ({
   updated: r.updated,
 });
 
-/** Returns how many lists it restored. Anything that isn't a list is skipped. */
-export async function importRosters(list: readonly unknown[]): Promise<number> {
+/** Returns how many lists and saved units it restored. Anything that isn't one is skipped. */
+export async function importBackup(
+  list: readonly unknown[],
+  _units: readonly unknown[] = [],
+): Promise<{ lists: number; savedUnits: number }> {
   const lists = list.filter(isRoster);
   for (const r of lists) {
     const copy = copyRoster(r);
@@ -249,7 +252,7 @@ export async function importRosters(list: readonly unknown[]): Promise<number> {
   // storage still holds the old copy of a list whose save failed, and only memory has the edit
   const stored = (await db.rosters()).filter((r) => !state.unsaved.has(r.uid));
   set({ rosters: [...stored, ...state.rosters.filter((r) => state.unsaved.has(r.uid))] });
-  return lists.length;
+  return { lists: lists.length, savedUnits: 0 };
 }
 
 /** Retry reads memory, which holds every edit, as `r` may be stale by then or the player may have deleted it. */

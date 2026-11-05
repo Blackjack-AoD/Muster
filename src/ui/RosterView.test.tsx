@@ -5,7 +5,7 @@ import { App } from '../app';
 import { db, type SavedUnit } from '../data/db';
 import { addSavedUnit, type Roster, type Sel } from '../data/engine';
 import { addMandatoryRoots } from '../data/setup';
-import { getState, importRosters } from '../store';
+import { getState, importBackup } from '../store';
 import {
   ASSAULT,
   RULED_OUT_BY_ASSAULT,
@@ -212,7 +212,7 @@ describe('RosterView', () => {
     const junkSel = (s: Sel): unknown => ({ ...s, junk, children: s.children.map(junkSel) });
     const forces = w.roster.forces.map((f) => ({ ...f, junk, selections: f.selections.map(junkSel) }));
 
-    expect(await importRosters([{ ...w.roster, junk, forces }])).toBe(1);
+    expect((await importBackup([{ ...w.roster, junk, forces }])).lists).toBe(1);
     openHash('#/r/r');
     await renderScreen(<App />, { files: worldFiles(UNITS) });
 
