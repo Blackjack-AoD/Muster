@@ -1008,14 +1008,37 @@ export function addSel(
 export type AddSavedResult =
   { added: true; uid: string } | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' };
 
-/** Add a copy of a saved unit to a detachment, rebuilt against the current data. */
+/**
+ * Add a copy of a saved unit to a detachment, rebuilt against the current data: options the data
+ * no longer has are left out and mandatory defaults filled. A list holds a saved unit at most once.
+ */
 export function addSavedUnit(
-  _roster: Roster,
-  _contexts: Map<string, Context>,
-  _forceUid: string,
-  _unit: SavedUnit,
+  roster: Roster,
+  contexts: Map<string, Context>,
+  forceUid: string,
+  unit: SavedUnit,
 ): AddSavedResult {
-  return { added: true, uid: '' };
+  const force = roster.forces.find((f) => f.uid === forceUid);
+  if (!force) return { added: false, reason: 'no-detachment' };
+  if (roster.repo !== unit.repo || force.catalogueId !== unit.catalogueId)
+    return { added: false, reason: 'other-army-file' };
+  if (roster.forces.some((f) => f.selections.some((s) => s.saved === unit.id)))
+    return { added: false, reason: 'already-in-list' };
+  const s = giveNewUids(structuredClone(unit.build));
+  s.categoryId = unit.categoryId;
+  s.name = unit.name;
+  s.saved = unit.id;
+  force.selections.push(s);
+  const rs = new Evaluator(roster, contexts).find(s.uid);
+  if (rs) dropBroken(rs);
+  fillDefaults(roster, contexts, s.uid, 0);
+  fillDefaults(roster, contexts, s.uid, 0, true);
+  return { added: true, uid: s.uid };
+}
+
+function dropBroken(rs: RSel) {
+  rs.sel.children = rs.sel.children.filter((c) => !rs.broken.includes(c));
+  rs.children.forEach(dropBroken);
 }
 
 /** One step of `fillDefaults`: the selection it fills, read through a fresh evaluator. */

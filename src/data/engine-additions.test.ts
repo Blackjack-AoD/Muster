@@ -329,6 +329,12 @@ describe('addSavedUnit', () => {
     expect(shape(onlyRoot(w))).toEqual(shape(sel('sq', 1, [sel('mar', 4), sel('sword')])));
   });
 
+  it('fills in a mandatory option under a model the saved build already holds', () => {
+    const w = world(unit('sq', 'Breacher Squad', 50, children(entry('sgt', 'Sergeant', 10, children(SWORD)))));
+    addSavedUnit(w.roster, w.contexts, 'f1', savedUnit(sel('sq', 1, [sel('sgt')])));
+    expect(shape(onlyRoot(w))).toEqual(shape(sel('sq', 1, [sel('sgt', 1, [sel('sword')])])));
+  });
+
   it('adds nothing to a detachment of another army file', () => {
     const w = world(SQUAD);
     const other = catalogue(`<selectionEntries>${SQUAD}</selectionEntries>`, 'cat2');
