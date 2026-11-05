@@ -690,3 +690,71 @@ describe('points limits with child selections', () => {
     expect(w.errors()).toEqual([]);
   });
 });
+
+describe('selection limits scoped to an entry id', () => {
+  const armoury = (vox: string) =>
+    world(unit('squad', 'Squad', 0, children(entry('m', 'Model', 0, children(entry('v', 'Vox', 0, vox))))));
+  const MAX_ONE = cons(
+    '<constraint id="c" type="max" value="1" field="selections" scope="squad" includeChildSelections="true"/>',
+  );
+
+  it('caps picks across every model in the unit', () => {
+    const w = armoury(MAX_ONE);
+    const s = w.add('Squad');
+    w.pick(w.pick(s, 'Model'), 'Vox');
+    expect(w.errors()).toEqual([]);
+    w.pick(w.pick(s, 'Model'), 'Vox');
+    expect(w.errors()).toEqual(['Vox: at most 1 allowed (has 2)']);
+  });
+
+  it('puts the error on the unit, not on each model', () => {
+    const w = armoury(MAX_ONE);
+    const s = w.add('Squad');
+    w.pick(w.pick(s, 'Model'), 'Vox');
+    w.pick(w.pick(s, 'Model'), 'Vox');
+    expect(w.ev().issues.map((i) => i.selUid)).toEqual([s]);
+  });
+
+  it('gives each unit its own cap', () => {
+    const w = armoury(MAX_ONE);
+    w.pick(w.pick(w.add('Squad'), 'Model'), 'Vox');
+    w.pick(w.pick(w.add('Squad'), 'Model'), 'Vox');
+    expect(w.errors()).toEqual([]);
+  });
+
+  it('multiplies by the number of the selections in between', () => {
+    const w = armoury(MAX_ONE);
+    w.pick(w.pick(w.add('Squad'), 'Model', 2), 'Vox');
+    expect(w.errors()).toEqual(['Vox: at most 1 allowed (has 2)']);
+  });
+
+  it('reads the limit after modifiers, as "one in five models" does', () => {
+    const w = armoury(
+      cons('<constraint id="c" type="max" value="0" field="selections" scope="squad" includeChildSelections="true"/>') +
+        mods(
+          '<modifier type="increment" field="c" value="1"><repeats><repeat value="5" repeats="1" field="selections" scope="squad" childId="m" includeChildSelections="true"/></repeats></modifier>',
+        ),
+    );
+    const s = w.add('Squad');
+    const others = w.pick(s, 'Model', 4);
+    w.pick(w.pick(s, 'Model'), 'Vox');
+    expect(w.errors()).toEqual([]);
+    removeSel(w.roster, others);
+    expect(w.errors()).toEqual(['Vox: at most 0 allowed (has 1)']);
+  });
+
+  it('without child selections counts only direct picks in that entry', () => {
+    const w = world(
+      unit(
+        'squad',
+        'Squad',
+        0,
+        children(
+          entry('g', 'Gun', 0, cons('<constraint id="c" type="max" value="1" field="selections" scope="squad"/>')),
+        ),
+      ),
+    );
+    w.pick(w.add('Squad'), 'Gun', 2);
+    expect(w.errors()).toEqual(['Gun: at most 1 allowed (has 2)']);
+  });
+});
