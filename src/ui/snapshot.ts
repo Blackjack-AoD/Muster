@@ -145,6 +145,11 @@ export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withR
 const MAX_UNPACKED_BYTES = 5_000_000;
 /** Well above any real list: it caps how long a shared sheet can take to draw. */
 const MAX_UNITS = 2000;
+/** Ten times the most a real unit reaches: a unit's gear columns take time to lay out that grows with lines squared. */
+const MAX_GEAR_LINES = 10_000;
+
+const withinCaps = (units: SnapUnit[]) =>
+  units.length <= MAX_UNITS && units.every((u) => u.gear.length <= MAX_GEAR_LINES);
 
 const isText = (v: unknown) => typeof v === 'string';
 const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(isText);
@@ -181,7 +186,7 @@ function isSnapshot(s: unknown): s is Snapshot {
     typeof s.at === 'number' &&
     Array.isArray(s.forces) &&
     s.forces.every(isSnapForce) &&
-    s.forces.flatMap((f) => f.units).length <= MAX_UNITS &&
+    withinCaps(s.forces.flatMap((f) => f.units)) &&
     (s.rules === undefined || isListOf(s.rules, isTextPair))
   );
 }
