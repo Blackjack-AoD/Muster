@@ -219,5 +219,41 @@ describe('Library', () => {
       await expectToast("Couldn't rename this saved unit: Storage is full");
       expect(savedNames()).toEqual(['Squad Thrax']);
     });
+
+    const ASKED = `Delete "Squad Thrax"? Lists that hold it keep it as a normal unit, without the name.`;
+    const answer = (yes: boolean) => vi.spyOn(window, 'confirm').mockReturnValue(yes);
+    const stored = async () => (await db.savedUnits()).map((u) => u.id);
+
+    it('asks before deleting a saved unit, saying what happens to its copies, and keeps it on no', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+      const asked = answer(false);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
+
+      expect(asked).toHaveBeenCalledWith(ASKED);
+      expect(savedNames()).toEqual(['Squad Thrax']);
+      expect(await stored()).toEqual(['thrax']);
+    });
+
+    it('deletes a saved unit once the player agrees', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax'), saved('iron', 'Squad Iron')]);
+      answer(true);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
+
+      await waitFor(() => expect(savedNames()).toEqual(['Squad Iron']));
+      expect(await stored()).toEqual(['iron']);
+    });
+
+    it('tells the player when storage refuses the delete, and keeps the saved unit', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+      answer(true);
+      refuse('delete');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
+
+      await expectToast("Couldn't delete this saved unit: Storage is full");
+      expect(savedNames()).toEqual(['Squad Thrax']);
+    });
   });
 });

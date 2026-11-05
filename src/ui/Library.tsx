@@ -319,6 +319,9 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
                 <button class="icon-btn sm" aria-label={`Rename ${u.name}`} onClick={() => setNaming(u)}>
                   <Icon name="edit" size={16} />
                 </button>
+                <button class="icon-btn sm" aria-label={`Delete ${u.name}`}>
+                  <Icon name="trash" size={16} />
+                </button>
               </div>
             ))}
           </div>
