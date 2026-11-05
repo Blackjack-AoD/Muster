@@ -141,7 +141,9 @@ export async function importRosters(list: Roster[]) {
     if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
     await db.putRoster(r);
   }
-  set({ rosters: await db.rosters() });
+  const stored = await db.rosters();
+  const unsaved = state.rosters.find((r) => r.uid === state.toastAction?.failedSave);
+  set({ rosters: unsaved ? [...stored.filter((r) => r.uid !== unsaved.uid), unsaved] : stored });
 }
 
 /** Retry reads memory, which holds every edit, as `r` may be stale or deleted by then. */
