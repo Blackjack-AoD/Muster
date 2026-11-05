@@ -158,6 +158,7 @@ describe('UnitEditor', () => {
   it('Duplicate puts a copy of the unit straight after it', async () => {
     const w = world(UNITS + ASSAULT, { costLimit: 2000 });
     const tac = w.add('Tactical Squad');
+    const fist = w.pick(tac, 'Power Fist');
     w.add('Assault Squad');
     await openPage(w, tac, UNITS + ASSAULT);
 
@@ -167,6 +168,13 @@ describe('UnitEditor', () => {
       const [saved] = await db.rosters();
       expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['tac', 'tac', 'assault']);
     });
+    const [saved] = await db.rosters();
+    const [original, copy] = saved?.forces[0]?.selections ?? [];
+    expect(original?.uid).toBe(tac);
+    expect(original?.children.map((c) => c.uid)).toEqual([fist]);
+    expect(copy?.children.map((c) => c.key)).toEqual(original?.children.map((c) => c.key));
+    expect(copy?.uid).not.toBe(tac);
+    expect(copy?.children.map((c) => c.uid)).not.toContain(fist);
   });
 
   it("a wargear choice reaches the list's row and total, and is saved", async () => {
