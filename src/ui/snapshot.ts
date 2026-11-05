@@ -125,20 +125,26 @@ const unb64url = (s: string) => {
   const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 };
-async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream) {
-  return new Uint8Array(await new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream)).arrayBuffer());
+const inStream = (bytes: Uint8Array) => new Blob([bytes as BlobPart]).stream();
+async function deflate(text: string) {
+  const packed = inStream(new TextEncoder().encode(text)).pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(packed).arrayBuffer());
 }
 
 /** Links longer than this get the rules text left out (names stay on each unit). */
 const MAX_LINK_DATA = 24_000;
 
 export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withRules: boolean }> {
-  const pack = async (x: Snapshot) =>
-    b64url(await pipe(new TextEncoder().encode(JSON.stringify(x)), new CompressionStream('deflate-raw')));
+  const pack = async (x: Snapshot) => b64url(await deflate(JSON.stringify(x)));
   const full = await pack(s);
   if (full.length <= MAX_LINK_DATA || !s.rules?.length) return { data: full, withRules: !!s.rules?.length };
   return { data: await pack({ ...s, rules: undefined }), withRules: false };
 }
+
+/** Well above any real list: a short link could otherwise unpack to enough text to freeze a phone. */
+const MAX_UNPACKED_BYTES = 5_000_000;
+/** Well above any real list: it caps how long a shared sheet can take to draw. */
+const MAX_UNITS = 2000;
 
 const isText = (v: unknown) => typeof v === 'string';
 const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(isText);
@@ -152,7 +158,7 @@ const isSnapUnit = (u: unknown) =>
   isListOf(u.gear, isGearLine) &&
   isListOf(u.profiles, isSnapProfile) &&
   isListOf(u.rules, isText);
-const isSnapForce = (f: unknown) =>
+const isSnapForce = (f: unknown): f is SnapForce =>
   isRecord(f) &&
   typeof f.pts === 'number' &&
   isListOf(f.units, isSnapUnit) &&
@@ -167,14 +173,32 @@ function isSnapshot(s: unknown): s is Snapshot {
     typeof s.limit === 'number' &&
     typeof s.issues === 'number' &&
     typeof s.at === 'number' &&
-    isListOf(s.forces, isSnapForce) &&
+    Array.isArray(s.forces) &&
+    s.forces.every(isSnapForce) &&
+    s.forces.flatMap((f) => f.units).length <= MAX_UNITS &&
     (s.rules === undefined || isListOf(s.rules, isTextPair))
   );
 }
 
+/** Reads chunk by chunk, so a link past the limit stops there rather than filling memory first. */
+async function inflate(bytes: Uint8Array): Promise<string> {
+  const reader = inStream(bytes).pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let size = 0;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    size += chunk.value.length;
+    if (size > MAX_UNPACKED_BYTES) {
+      await reader.cancel();
+      throw new Error('This link is too big to open');
+    }
+    text += decoder.decode(chunk.value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 export async function decodeSnapshot(data: string): Promise<Snapshot> {
-  const json = new TextDecoder().decode(await pipe(unb64url(data), new DecompressionStream('deflate-raw')));
-  const s: unknown = JSON.parse(json);
+  const s: unknown = JSON.parse(await inflate(unb64url(data)));
   if (!isSnapshot(s)) throw new Error('Not a Muster list');
   return s;
 }
