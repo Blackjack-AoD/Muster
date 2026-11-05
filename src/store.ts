@@ -16,6 +16,8 @@ interface State {
   toastAction?: { label: string; run: () => void; failedSave?: string };
   /** active game: "<repo>|<game system id>", or undefined for all games */
   game?: string;
+  /** uids of lists whose latest edit is in memory and not in storage */
+  unsaved: ReadonlySet<string>;
 }
 
 const GAME_KEY = 'muster.game';
@@ -26,7 +28,7 @@ const savedGame = (() => {
     return undefined;
   }
 })();
-let state: State = { ready: false, repos: [], rosters: [], sync: {}, game: savedGame };
+let state: State = { ready: false, repos: [], rosters: [], sync: {}, game: savedGame, unsaved: new Set() };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };

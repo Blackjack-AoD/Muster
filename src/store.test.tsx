@@ -236,6 +236,61 @@ describe('a Restore while a save has failed', () => {
     expect(getState().toast).toBeUndefined();
   });
 
+  it('keeps the edit after another toast replaced Retry, and the next save stores it', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    const put = await failASave();
+    showUndo();
+
+    put.mockRestore();
+    await importRosters([]);
+    expect(unitsInMemory()).toBe(1);
+
+    await addUnit();
+    await waitFor(async () => expect(await storedUnits()).toBe(2));
+    getState().rosters[0].name = 'Changed only in memory';
+    await importRosters([]);
+    expect(getState().rosters.map((r) => r.name)).toEqual([list.name]);
+  });
+
+  it('keeps the edit of every list whose save failed', async () => {
+    const first = { ...newList(), uid: 'first' };
+    const second = { ...newList(), uid: 'second' };
+    await renderScreen(
+      <>
+        <App />
+        <ListEditor source={first} />
+        <ListEditor source={second} />
+      </>,
+      { files: FILES, rosters: [first, second] },
+    );
+    const adds = async () => {
+      await waitFor(() => expect(screen.getAllByRole('button', { name: 'Add a unit' })).toHaveLength(2));
+      return screen.getAllByRole('button', { name: 'Add a unit' });
+    };
+    const [addToFirst, addToSecond] = await adds();
+    const put = refuse('put');
+    fireEvent.click(addToFirst);
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    fireEvent.click(addToSecond);
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+
+    put.mockRestore();
+    await importRosters([]);
+
+    expect(getState().rosters.map(unitsIn)).toEqual([1, 1]);
+  });
+
+  it('forgets a list that was deleted after its save failed', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    const put = await failASave();
+
+    put.mockRestore();
+    await deleteRoster(list.uid);
+    expect(getState().unsaved.size).toBe(0);
+  });
+
   it('reloads every list from storage when no save has failed', async () => {
     const list = newList();
     await renderWithToast(list);
