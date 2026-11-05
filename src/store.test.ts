@@ -157,7 +157,19 @@ describe('restoring a backup', () => {
         },
       ],
     };
-    expect((await importBackup([named])).lists).toBe(1);
+    const thrax = {
+      id: 'thrax',
+      name: 'Squad Thrax',
+      repo: 'r',
+      gameSystemId: 'g',
+      catalogueId: 'cat',
+      key: 'e',
+      categoryId: 'hq',
+      build: { uid: 'b', key: 'e', number: 1, children: [] },
+      created: 0,
+      updated: 0,
+    };
+    expect((await importBackup([named], [thrax])).lists).toBe(1);
     expect(await stored('named')).toEqual([named]);
   });
   const FORCE = { uid: 'f', forceEntryId: 'det', catalogueId: 'cat', selections: [] };

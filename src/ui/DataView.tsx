@@ -17,12 +17,13 @@ async function restoreBackup(file: File) {
     return;
   }
   try {
-    const lists = backup.rosters;
-    const restored = (await importBackup(lists, backup.savedUnits)).lists;
-    const skipped = lists.length - restored;
+    const units = backup.savedUnits ?? [];
+    const restored = await importBackup(backup.rosters, units);
+    const skipped = backup.rosters.length - restored.lists + units.length - restored.savedUnits;
+    const savedText = backup.savedUnits ? `, ${restored.savedUnits} saved unit(s)` : '';
     // the Retry toast is the only way left to save a list's edit
     if (!getState().toastAction?.failedSave) {
-      toast(`Restored ${restored} list(s)${skipped ? `, skipped ${skipped}` : ''}`);
+      toast(`Restored ${restored.lists} list(s)${savedText}${skipped ? `, skipped ${skipped}` : ''}`);
     }
   } catch (e) {
     toast(failureMessage('restore', e));
@@ -41,6 +42,7 @@ export function DataView() {
   const repos = useStore((s) => s.repos);
   const sync = useStore((s) => s.sync);
   const rosters = useStore((s) => s.rosters);
+  const savedUnits = useStore((s) => s.savedUnits);
   const [input, setInput] = useState('');
   const [usage, setUsage] = useState<Awaited<ReturnType<typeof storageUse>>>();
   const [online, setOnline] = useState(navigator.onLine);
@@ -222,7 +224,7 @@ export function DataView() {
           class="btn grow"
           disabled={!rosters.length}
           onClick={() => {
-            shareBackup(rosters).catch((e: unknown) => toast(failureMessage('share', e)));
+            shareBackup(rosters, savedUnits).catch((e: unknown) => toast(failureMessage('share', e)));
           }}
         >
           <Icon name="share" /> Back up {rosters.length} list{rosters.length === 1 ? '' : 's'}

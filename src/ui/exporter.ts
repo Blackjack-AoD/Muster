@@ -110,19 +110,20 @@ export function downloadJson(name: string, data: unknown) {
   }, 1000);
 }
 
-/** The lists in a backup file: its `rosters`, or the whole file where it's a bare array. */
-export function readBackup(text: string): { rosters: unknown[]; savedUnits: unknown[] } {
+/** A backup's lists and saved units. A file from before saved units has no `savedUnits`, and may be a bare array of lists. */
+export function readBackup(text: string): { rosters: unknown[]; savedUnits?: unknown[] } {
   const data: unknown = JSON.parse(text);
   const lists = data instanceof Object && 'rosters' in data ? data.rosters : data;
   if (!Array.isArray(lists)) throw new Error('This file holds no lists');
-  return { rosters: lists, savedUnits: [] };
+  if (!(data instanceof Object && 'savedUnits' in data)) return { rosters: lists };
+  if (!Array.isArray(data.savedUnits)) throw new Error('This file holds no saved units');
+  return { rosters: lists, savedUnits: data.savedUnits };
 }
 
-export async function shareBackup(rosters: Roster[], _savedUnits: SavedUnit[] = []) {
+export async function shareBackup(rosters: Roster[], savedUnits: SavedUnit[]) {
   const name = `muster-lists-${new Date().toISOString().slice(0, 10)}.json`;
-  const file = new File([JSON.stringify({ app: 'muster', version: 1, rosters }, null, 1)], name, {
-    type: 'application/json',
-  });
+  const backup = { app: 'muster', version: 2, rosters, savedUnits };
+  const file = new File([JSON.stringify(backup, null, 1)], name, { type: 'application/json' });
   try {
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: 'Muster lists backup' });
@@ -132,5 +133,5 @@ export async function shareBackup(rosters: Roster[], _savedUnits: SavedUnit[] = 
     if (isCancelled(e)) return;
     toast(failureMessage('share', e));
   }
-  downloadJson(name, { app: 'muster', version: 1, rosters });
+  downloadJson(name, backup);
 }

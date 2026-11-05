@@ -238,21 +238,78 @@ const copyRoster = (r: Roster): Roster => ({
   updated: r.updated,
 });
 
+function isSavedUnit(u: unknown): u is SavedUnit {
+  return (
+    isRecord(u) &&
+    typeof u.id === 'string' &&
+    typeof u.name === 'string' &&
+    typeof u.repo === 'string' &&
+    typeof u.gameSystemId === 'string' &&
+    typeof u.catalogueId === 'string' &&
+    typeof u.key === 'string' &&
+    typeof u.categoryId === 'string' &&
+    isSel(u.build, 1) &&
+    typeof u.created === 'number' &&
+    typeof u.updated === 'number'
+  );
+}
+
+/** A saved unit's build never holds a name or a link of its own: the copies in lists do. */
+function copySavedUnit(u: SavedUnit): SavedUnit {
+  const { name: _name, saved: _saved, ...build } = copySel(u.build);
+  return {
+    id: u.id,
+    name: u.name,
+    repo: u.repo,
+    gameSystemId: u.gameSystemId,
+    catalogueId: u.catalogueId,
+    key: u.key,
+    categoryId: u.categoryId,
+    build,
+    created: u.created,
+    updated: u.updated,
+  };
+}
+
+/** Points a copy at its saved unit's id on this phone, or makes it a normal unit when its saved unit isn't here. */
+function relinkCopy(s: Sel, ids: ReadonlyMap<string, string>) {
+  if (s.saved === undefined) return;
+  const id = ids.get(s.saved);
+  if (id !== undefined) s.saved = id;
+  else {
+    delete s.saved;
+    delete s.name;
+  }
+}
+
 /** Returns how many lists and saved units it restored. Anything that isn't one is skipped. */
 export async function importBackup(
   list: readonly unknown[],
-  _units: readonly unknown[] = [],
+  units: readonly unknown[] = [],
 ): Promise<{ lists: number; savedUnits: number }> {
+  const savedUnits = units.filter(isSavedUnit);
+  // a backup's saved-unit id, to its id on this phone
+  const ids = new Map(state.savedUnits.map((u) => [u.id, u.id]));
+  for (const u of savedUnits) {
+    const copy = copySavedUnit(u);
+    if (state.savedUnits.some((x) => x.id === copy.id)) copy.id = uid();
+    ids.set(u.id, copy.id);
+    await db.putSavedUnit(copy);
+  }
   const lists = list.filter(isRoster);
   for (const r of lists) {
     const copy = copyRoster(r);
     if (state.rosters.some((x) => x.uid === copy.uid)) copy.uid = uid();
+    for (const f of copy.forces) for (const s of f.selections) relinkCopy(s, ids);
     await db.putRoster(copy);
   }
   // storage still holds the old copy of a list whose save failed, and only memory has the edit
   const stored = (await db.rosters()).filter((r) => !state.unsaved.has(r.uid));
-  set({ rosters: [...stored, ...state.rosters.filter((r) => state.unsaved.has(r.uid))] });
-  return { lists: lists.length, savedUnits: 0 };
+  set({
+    rosters: [...stored, ...state.rosters.filter((r) => state.unsaved.has(r.uid))],
+    savedUnits: await db.savedUnits(),
+  });
+  return { lists: lists.length, savedUnits: savedUnits.length };
 }
 
 /** Retry reads memory, which holds every edit, as `r` may be stale by then or the player may have deleted it. */
