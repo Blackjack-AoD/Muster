@@ -553,9 +553,7 @@ describe('conditions', () => {
       expect(holds(w, w.add('Squad'))).toBe(true);
     });
 
-    // BUG: units are given their modifiers one at a time, so a later unit's cost still reads as nothing.
-    // The same list costs different points depending on the order its units were added.
-    it.fails('points conditions give the same answer whatever order units were added', () => {
+    it('points conditions give the same answer whatever order units were added', () => {
       const xml = guarded('<condition type="atLeast" value="10" field="pts" scope="force" childId="x"/>');
       const after = world(xml);
       const a = after.add('Squad');
@@ -563,7 +561,11 @@ describe('conditions', () => {
       const before = world(xml);
       before.add('Other');
       const b = before.add('Squad');
-      expect(after.pts(a)).toBe(before.pts(b));
+      // Other costs 10, so the condition holds and Squad costs 1 either way
+      expect(after.pts(a)).toBe(1);
+      expect(before.pts(b)).toBe(1);
+      expect(after.ev().total).toBe(11);
+      expect(before.ev().total).toBe(11);
     });
   });
 
@@ -693,6 +695,134 @@ describe('conditions', () => {
       const ev = w.ev();
       expect(ev.optionEff(w.beneath(s, 'Gun'), ev.find(s)!, ev.forces[0]).hidden).toBe(true);
     });
+  });
+});
+
+describe('effects that depend on each other', () => {
+  /** adds the named units in the order given and reads the points of each */
+  const built = (xml: string, ...names: string[]) => {
+    const w = world(xml);
+    const sels = names.map((n) => [n, w.add(n)] as const);
+    const ev = w.ev();
+    return { total: ev.total, pts: Object.fromEntries(sels.map(([n, u]) => [n, ev.find(u)?.total])) };
+  };
+
+  it("a parent's condition on its children's costs gives the right points", () => {
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        50,
+        mods(
+          `<modifier type="increment" field="pts" value="10">${conds('<condition type="atLeast" value="5" field="pts" scope="self" childId="any"/>')}</modifier>`,
+        ) + children(entry('g', 'Gun', 5)),
+      ),
+    );
+    const u = w.add('Squad');
+    expect(w.pts(u)).toBe(50);
+    w.pick(u, 'Gun');
+    expect(w.pts(u)).toBe(50 + 5 + 10);
+  });
+
+  // A adds 10 while B costs 15 or more; B adds 10 while A costs under 15. Each pass from nothing:
+  // (A, B) = (10, 20), (20, 20), (20, 10), (10, 10), (10, 20), so the cap leaves A at 10 and B at 20.
+  it('a list whose modifiers never settle stops at the cap, with the same points in any unit order', () => {
+    const xml =
+      unit(
+        'a',
+        'Alpha',
+        10,
+        mods(
+          `<modifier type="increment" field="pts" value="10">${conds('<condition type="atLeast" value="15" field="pts" scope="force" childId="b"/>')}</modifier>`,
+        ),
+      ) +
+      unit(
+        'b',
+        'Beta',
+        10,
+        mods(
+          `<modifier type="increment" field="pts" value="10">${conds('<condition type="lessThan" value="15" field="pts" scope="force" childId="a"/>')}</modifier>`,
+        ),
+      );
+    const expected = { total: 30, pts: { Alpha: 10, Beta: 20 } };
+    expect(built(xml, 'Alpha', 'Beta')).toEqual(expected);
+    expect(built(xml, 'Beta', 'Alpha')).toEqual(expected);
+  });
+
+  /** costs 10, or 20 once the unit before it in the chain costs 20 */
+  const link = (id: string, name: string, before: string) =>
+    unit(
+      id,
+      name,
+      10,
+      mods(
+        `<modifier type="increment" field="pts" value="10">${conds(`<condition type="atLeast" value="20" field="pts" scope="force" childId="${before}"/>`)}</modifier>`,
+      ),
+    );
+
+  it('a chain of conditions runs out at the fifth pass, whatever the unit order', () => {
+    const xml =
+      unit('c1', 'One', 20) +
+      link('c2', 'Two', 'c1') +
+      link('c3', 'Three', 'c2') +
+      link('c4', 'Four', 'c3') +
+      link('c5', 'Five', 'c4') +
+      link('c6', 'Six', 'c5');
+    // each pass brings one more unit to 20, and only the sixth would need a sixth pass
+    const expected = { total: 110, pts: { One: 20, Two: 20, Three: 20, Four: 20, Five: 20, Six: 10 } };
+    expect(built(xml, 'One', 'Two', 'Three', 'Four', 'Five', 'Six')).toEqual(expected);
+    expect(built(xml, 'Six', 'Five', 'Four', 'Three', 'Two', 'One')).toEqual(expected);
+  });
+
+  it('keeps going after a pass that changes only a category', () => {
+    const xml =
+      unit('s', 'Spotter', 10) +
+      unit(
+        'm',
+        'Marked',
+        0,
+        mods(
+          `<modifier type="add" field="category" value="elite">${conds('<condition type="atLeast" value="10" field="pts" scope="force" childId="s"/>')}</modifier>`,
+        ),
+      ) +
+      unit(
+        'r',
+        'Reader',
+        1,
+        mods(
+          `<modifier type="increment" field="pts" value="5">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="elite"/>')}</modifier>`,
+        ),
+      );
+    const expected = { total: 16, pts: { Spotter: 10, Marked: 0, Reader: 6 } };
+    expect(built(xml, 'Spotter', 'Marked', 'Reader')).toEqual(expected);
+    expect(built(xml, 'Reader', 'Marked', 'Spotter')).toEqual(expected);
+  });
+
+  it('keeps going after a pass that changes only a primary category', () => {
+    const hq = '<categoryLinks><categoryLink id="l" targetId="hq" primary="true"/></categoryLinks>';
+    const xml =
+      unit('s', 'Spotter', 10) +
+      unit(
+        'm',
+        'Marked',
+        0,
+        hq +
+          mods(
+            `<modifier type="unset-primary" field="category" value="hq">${conds('<condition type="atLeast" value="10" field="pts" scope="force" childId="s"/>')}</modifier>`,
+          ),
+      ) +
+      unit(
+        'r',
+        'Reader',
+        1,
+        hq +
+          mods(
+            `<modifier type="increment" field="pts" value="5">${conds('<condition type="lessThan" value="2" field="selections" scope="primary-category" childId="any"/>')}</modifier>`,
+          ),
+      );
+    const expected = { total: 16, pts: { Spotter: 10, Marked: 0, Reader: 6 } };
+    expect(built(xml, 'Spotter', 'Marked', 'Reader')).toEqual(expected);
+    expect(built(xml, 'Reader', 'Marked', 'Spotter')).toEqual(expected);
   });
 });
 
