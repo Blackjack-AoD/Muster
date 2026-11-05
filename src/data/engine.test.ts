@@ -986,6 +986,63 @@ describe('validation', () => {
       w.roster.forces[1].forceEntryId = 'gone';
       expect(w.ev().issues.map((i) => i.forceUid)).toEqual(['f2']);
     });
+    describe('root-entry limits on a force whose entry has gone', () => {
+      const TWO_TYPES = `<categoryEntries><categoryEntry id="hq" name="HQ"/><categoryEntry id="oth" name="Other"/></categoryEntries>
+        <forceEntries>
+          <forceEntry id="det" name="Detachment"><categoryLinks><categoryLink id="l-hq" name="HQ" targetId="hq"/></categoryLinks></forceEntry>
+          <forceEntry id="other" name="Other Detachment"><categoryLinks><categoryLink id="l-oth" name="Other" targetId="oth"/></categoryLinks></forceEntry>
+        </forceEntries>`;
+      const boss = unit('b', 'Boss', 0, inCat('hq'));
+      const elsewhere = unit('m', 'Mandatory', 0, inCat('oth') + cons(min(1)));
+
+      it('keeps a list free of errors when a mandatory entry belongs to another detachment type', () => {
+        const w = world(boss + elsewhere, { gst: TWO_TYPES });
+        w.add('Boss');
+        expect(w.errors()).toEqual([]);
+        w.roster.forces[0].forceEntryId = 'gone';
+        expect(w.errors()).toEqual([]);
+      });
+      it('applies no limit set on a root entry the force holds', () => {
+        const w = world(unit('b', 'Boss', 0, inCat('hq') + cons(max(2))), { gst: TWO_TYPES });
+        w.add('Boss', 3);
+        expect(w.errors()).toEqual(['Boss: at most 2 allowed (has 3)']);
+        w.roster.forces[0].forceEntryId = 'gone';
+        expect(w.errors()).toEqual([]);
+      });
+      it('drops the warning about a hidden root entry the force holds', () => {
+        const hidden = entry('b', 'Boss', 0, inCat('hq'), 'type="unit" hidden="true"');
+        const w = world(hidden, { gst: TWO_TYPES });
+        w.add('Boss');
+        expect(w.warnings()).toEqual(['Boss is not available with the current choices']);
+        w.roster.forces[0].forceEntryId = 'gone';
+        expect(w.warnings()).toEqual(["This detachment's type is no longer in the data"]);
+      });
+      it('leaves only the warnings about the lost entry and the skipped units at force level', () => {
+        const w = world(boss + elsewhere, { gst: TWO_TYPES });
+        w.add('Boss', 2);
+        w.roster.forces[0].selections[0].key = 'gone';
+        w.roster.forces[0].forceEntryId = 'gone';
+        expect(w.ev().issues).toEqual([
+          { level: 'warn', forceUid: 'f1', message: '1 unit(s) no longer exist in the data and were skipped' },
+          { level: 'warn', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
+        ]);
+      });
+      it('still reports a limit inside a unit', () => {
+        const squad = unit('b', 'Boss', 0, inCat('hq') + children(entry('g', 'Gun', 0, cons(max(1)))));
+        const w = world(squad + elsewhere, { gst: TWO_TYPES });
+        const u = w.add('Boss');
+        w.pick(u, 'Gun', 2);
+        w.roster.forces[0].forceEntryId = 'gone';
+        expect(w.errors()).toEqual(['Boss › Gun: at most 1 allowed (has 2)']);
+      });
+      it('keeps the root-entry limits of a force that still has its entry', () => {
+        const w = world(unit('b', 'Boss', 0, inCat('hq') + cons(min(1))), { gst: TWO_TYPES });
+        w.addForce();
+        w.roster.forces[0].forceEntryId = 'gone';
+        const errors = w.ev().issues.filter((i) => i.level === 'error');
+        expect(errors.map((i) => i.forceUid)).toEqual(['f2']);
+      });
+    });
   });
 });
 
