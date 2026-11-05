@@ -574,6 +574,24 @@ function IssuesSheet({ issues, ctl, onClose }: { issues: Issue[]; ctl: RosterCtl
   );
 }
 
+/** Saves a copy and returns its uid, or tells the player why it couldn't. */
+async function duplicateList(ctl: RosterCtl): Promise<string | undefined> {
+  const copy: Roster = {
+    ...structuredClone(ctl.roster),
+    uid: uid(),
+    name: ctl.roster.name + ' (copy)',
+    created: Date.now(),
+  };
+  try {
+    await addRoster(copy);
+    return copy.uid;
+  } catch (e) {
+    // the Retry toast from a failed save is the only way left to save this list's edit
+    if (!getState().toastAction?.failedSave) toast(failureMessage('copy this list', e));
+    return undefined;
+  }
+}
+
 function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
   const repos = useStore((s) => s.repos);
   const [name, setName] = useState(ctl.roster.name);
@@ -628,21 +646,10 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
         <button
           onClick={async () => {
             save();
-            const copy: Roster = {
-              ...structuredClone(ctl.roster),
-              uid: uid(),
-              name: ctl.roster.name + ' (copy)',
-              created: Date.now(),
-            };
-            try {
-              await addRoster(copy);
-            } catch (e) {
-              // the Retry toast from save() is the only way left to save this list's edit
-              if (!getState().toastAction?.failedSave) toast(failureMessage('copy this list', e));
-              return;
-            }
+            const copyUid = await duplicateList(ctl);
+            if (!copyUid) return;
             onClose();
-            go(`/r/${copy.uid}`, true);
+            go(`/r/${copyUid}`, true);
             toast('List duplicated');
           }}
         >
