@@ -166,7 +166,7 @@ describe('UnitEditor', () => {
     expect(split?.uid).not.toBe(group);
   });
 
-  it("a wargear choice reaches the list's row and total, and is saved", async () => {
+  it("a wargear choice reaches the list's row and total, and storage has it", async () => {
     await openUnit();
 
     fireEvent.click(option('checkbox', /Power Fist/));

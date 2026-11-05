@@ -79,7 +79,7 @@ describe('DataView', () => {
     await expectToast("Couldn't sync: Repo not found (is it public?)");
   });
 
-  it('shows a download that fails while offline as offline in both places', async () => {
+  it('shows a download that fails while offline as offline on its card and in a toast', async () => {
     vi.stubGlobal('fetch', async () => {
       throw new TypeError('Failed to fetch');
     });

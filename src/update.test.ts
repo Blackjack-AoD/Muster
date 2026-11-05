@@ -107,7 +107,7 @@ describe('the weekly update check', () => {
     expect(registration.update).toHaveBeenCalledTimes(1);
   });
 
-  it('waits for a full week on both triggers', async () => {
+  it('waits for a full week on load and on coming back', async () => {
     const registration = fakeRegistration();
     stubBrowser(registration);
     const triggersFireAt = NOW + LOAD_DELAY;

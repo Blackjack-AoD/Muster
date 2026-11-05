@@ -175,7 +175,7 @@ export async function importRosters(list: readonly unknown[]): Promise<number> {
   return lists.length;
 }
 
-/** Retry reads memory, which holds every edit, as `r` may be stale or deleted by then. */
+/** Retry reads memory, which holds every edit, as `r` may be stale by then or the player may have deleted it. */
 function saveEdit(r: Roster) {
   const retry = () => {
     const latest = state.rosters.find((x) => x.uid === r.uid);
