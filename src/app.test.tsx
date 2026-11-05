@@ -117,6 +117,13 @@ describe('routes', () => {
     expect(hasTabBar()).toBe(false);
   });
 
+  it.each(['#/view', '#/view/'])('%s holds no list, so it shows Lists with the tab bar', async (hash) => {
+    openHash(hash);
+    await renderApp();
+    await heading('Muster')();
+    expect(activeTab()).toBe('Lists');
+  });
+
   it('decodes an address before matching a list', async () => {
     openHash('#/r/my%20list');
     await renderApp({ ...seededWorld().roster, uid: 'my list' });
