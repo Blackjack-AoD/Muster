@@ -270,9 +270,59 @@ function saveEdit(r: Roster) {
   });
 }
 
-export function saveListEdit(r: Roster): Promise<void> {
+/** Same options and model names, whatever the uids: each copy of a saved unit has its own. */
+const sameChildren = (a: readonly Sel[], b: readonly Sel[]): boolean =>
+  a.length === b.length &&
+  a.every((s, i) => {
+    const t = b[i];
+    return (
+      t !== undefined &&
+      s.key === t.key &&
+      s.number === t.number &&
+      s.name === t.name &&
+      sameChildren(s.children, t.children)
+    );
+  });
+
+/** Saves an edited list, then takes each linked copy it changed to its saved unit and the other lists. */
+export async function saveListEdit(r: Roster): Promise<void> {
   saveEdit(r);
-  return Promise.resolve();
+  // copied before the first wait, as the next edit changes `r` in place
+  const copies = r.forces
+    .flatMap((f) => f.selections.filter((s) => s.saved !== undefined))
+    .map((s) => structuredClone(s));
+  for (const copy of copies) {
+    const saved = state.savedUnits.find((u) => u.id === copy.saved);
+    if (saved) await followCopy(r.uid, saved, copy);
+  }
+}
+
+async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
+  const name = copy.name ?? saved.name;
+  const same =
+    copy.key === saved.build.key &&
+    copy.number === saved.build.number &&
+    sameChildren(copy.children, saved.build.children);
+  if (same && name === saved.name) return;
+  const { name: _name, saved: _saved, ...build } = copy;
+  const followed = { ...saved, name, build, updated: Date.now() };
+  try {
+    await db.putSavedUnit(followed);
+  } catch (e) {
+    toast(failureMessage('update the saved unit', e));
+    return;
+  }
+  set({ savedUnits: state.savedUnits.map((u) => (u.id === saved.id ? followed : u)) });
+  changeCopies(
+    saved.id,
+    (other) => {
+      other.key = build.key;
+      other.number = build.number;
+      other.children = structuredClone(build.children);
+      other.name = name;
+    },
+    listUid,
+  );
 }
 
 /** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
@@ -302,9 +352,9 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   saveEdit(r);
 }
 
-/** Changes every copy of saved unit `id` in every list, and saves each list that holds one as an edit. */
-function changeCopies(id: string, change: (copy: Sel) => void) {
-  const holds = (r: Roster) => r.forces.some((f) => f.selections.some((s) => s.saved === id));
+/** Changes every copy of saved unit `id` in every list but `skip`, and saves each list that holds one as an edit. */
+function changeCopies(id: string, change: (copy: Sel) => void, skip?: string) {
+  const holds = (r: Roster) => r.uid !== skip && r.forces.some((f) => f.selections.some((s) => s.saved === id));
   for (const held of state.rosters.filter(holds)) {
     const r = structuredClone(held);
     for (const f of r.forces) for (const s of f.selections) if (s.saved === id) change(s);
@@ -390,7 +440,7 @@ export function useRosterCtl(
       mutate: (fn) => {
         fn(local);
         setVersion((v) => v + 1);
-        if (!scratch) saveEdit(local);
+        if (!scratch) void saveListEdit(local);
       },
     },
   };
