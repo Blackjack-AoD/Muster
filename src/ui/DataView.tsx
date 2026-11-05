@@ -8,6 +8,26 @@ import { Icon } from './Icon';
 import { backupLists, shareBackup } from './exporter';
 import { APP_VERSION, BUILD_TIME, checkForUpdate, lastUpdateCheck, resetAppCache } from '../update';
 
+async function restoreBackup(file: File) {
+  let lists: unknown[];
+  try {
+    lists = backupLists(await file.text());
+  } catch {
+    toast("That file isn't a Muster backup");
+    return;
+  }
+  try {
+    const restored = await importRosters(lists);
+    const skipped = lists.length - restored;
+    // the Retry toast is the only way left to save a list's edit
+    if (!getState().toastAction?.failedSave) {
+      toast(`Restored ${restored} list(s)${skipped ? `, skipped ${skipped}` : ''}`);
+    }
+  } catch (e) {
+    toast(failureMessage('restore', e));
+  }
+}
+
 const mb = (b: number) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
 
 let installEvent: (Event & { prompt: () => Promise<void> }) | null = null;
@@ -213,24 +233,7 @@ export function DataView() {
             accept=".json,application/json"
             onChange={async (e) => {
               const f = e.currentTarget.files?.[0];
-              if (!f) return;
-              let lists: unknown[];
-              try {
-                lists = backupLists(await f.text());
-              } catch {
-                toast("That file isn't a Muster backup");
-                return;
-              }
-              try {
-                const restored = await importRosters(lists);
-                const skipped = lists.length - restored;
-                // the Retry toast is the only way left to save a list's edit
-                if (!getState().toastAction?.failedSave) {
-                  toast(`Restored ${restored} list(s)${skipped ? `, skipped ${skipped}` : ''}`);
-                }
-              } catch (err) {
-                toast(failureMessage('restore', err));
-              }
+              if (f) await restoreBackup(f);
             }}
           />
         </label>
