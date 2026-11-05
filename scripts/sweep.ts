@@ -103,6 +103,7 @@ for (const [id, m] of meta) {
     note(kind, size, example);
   };
   for (const fe of ctx.forceEntries()) {
+    if (fe.hidden) continue; // the app doesn't offer it
     const setUp: Roster = {
       uid: uid(),
       name: 't',
