@@ -383,7 +383,7 @@ export class Evaluator {
     for (const c of e.constraints) {
       if (c.field !== 'selections' || c.scope !== 'parent') continue;
       if (c.type === 'min') min = Math.max(min, c.value);
-      if (c.type === 'max') max = max < 0 ? c.value : Math.min(max, c.value);
+      if (c.type === 'max' && c.value >= 0) max = max < 0 ? c.value : Math.min(max, c.value);
     }
     return { min, max };
   }
