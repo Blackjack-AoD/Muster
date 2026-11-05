@@ -374,6 +374,20 @@ describe('UnitEditor', () => {
     );
   });
 
+  it('More adds a model to the biggest unnamed row', async () => {
+    await openSquad([1, 3, 1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [1, 'Brother Kael'],
+        [4, undefined],
+        [1, undefined],
+      ]),
+    );
+  });
+
   it('More adds a new unnamed row when every row of that model is named', async () => {
     await openSquad([1], { 0: 'Brother Kael' });
 
