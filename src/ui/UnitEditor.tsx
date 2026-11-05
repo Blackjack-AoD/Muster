@@ -31,6 +31,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
   const tabs = (['options', 'stats', 'rules'] as const).filter(
     (t) => t === 'options' || (t === 'stats' ? hasStats : hasRules),
   );
+  const switches = switchesOnly(ctl, rs);
 
   return (
     <div class="page unit-page">
@@ -62,9 +63,9 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
       {tab === 'options' && (
         <>
           <ProfileStrip ctl={ctl} rs={rs} />
-          {switchesOnly(ctl, rs) ? (
+          {switches ? (
             <div class="opts switches">
-              {switchesOnly(ctl, rs)!.map(({ g, pair }) => (
+              {switches.map(({ g, pair }) => (
                 <ToggleRow key={g.key} ctl={ctl} rs={rs} g={g} pair={pair} />
               ))}
             </div>
@@ -83,9 +84,9 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
                 class="btn"
                 onClick={() => {
                   ctl.mutate((r) => {
-                    const f = r.forces.find((x) => x.uid === rs.force.force.uid)!;
-                    const copy = reUid(structuredClone(rs.sel));
-                    f.selections.splice(f.selections.findIndex((s) => s.uid === rs.sel.uid) + 1, 0, copy);
+                    const loc = locate(r, rs.sel.uid);
+                    if (!loc) return;
+                    loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, reUid(structuredClone(loc.sel)));
                   });
                   back(backTo);
                 }}
@@ -303,8 +304,9 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
     .sort((a, b) => a.total - b.total)[0];
   if (!victim) return;
   ctl.mutate((r) => {
-    const parent = locate(r, rs.sel.uid)!.sel;
-    const v = parent.children.find((c) => c.uid === victim.sel.uid)!;
+    const parent = locate(r, rs.sel.uid)?.sel;
+    const v = parent?.children.find((c) => c.uid === victim.sel.uid);
+    if (!parent || !v) return;
     if (v.number > 1) v.number--;
     else parent.children = parent.children.filter((c) => c !== v);
     const mine = parent.children.filter((c) => c.key === o.key);
@@ -326,7 +328,8 @@ function costLabel(v: number | undefined, each = false) {
 
 function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
   ctl.mutate((r) => {
-    const parent = locate(r, rs.sel.uid)!.sel;
+    const parent = locate(r, rs.sel.uid)?.sel;
+    if (!parent) return;
     const mine = parent.children.filter((c) => c.key === o.key);
     if (n <= 0) {
       parent.children = parent.children.filter((c) => c.key !== o.key);
@@ -435,7 +438,8 @@ function RadioRow({
       return;
     }
     ctl.mutate((r) => {
-      const parent = locate(r, rs.sel.uid)!.sel;
+      const parent = locate(r, rs.sel.uid)?.sel;
+      if (!parent) return;
       parent.children = parent.children.filter((c) => !c.key.startsWith(g.key + '/'));
       addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, 1);
     });

@@ -10,7 +10,8 @@ import { App } from './app';
 import { failureMessage, init } from './store';
 import { registerServiceWorker } from './update';
 
-const root = document.getElementById('app')!;
+const root = document.getElementById('app');
+if (!root) throw new Error("Muster's page has no #app element to start in");
 render(<App />, root);
 init().catch((e) => render(<p class="error-text pad">{failureMessage('open Muster', e)}</p>, root));
 registerServiceWorker();
