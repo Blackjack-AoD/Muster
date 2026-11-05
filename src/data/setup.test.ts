@@ -9,7 +9,7 @@ import {
   setUpForce,
   switchesOn,
 } from './setup';
-import { children, entry, unit, world } from '../test/fixture';
+import { children, entry, present, unit, world } from '../test/fixture';
 
 const min1 = (scope: string) =>
   `<constraints><constraint id="c" type="min" value="1" field="selections" scope="${scope}"/></constraints>`;
@@ -104,12 +104,7 @@ describe('applyLoreAllegiance', () => {
     const w = world(allegiance);
     const a = w.add('Allegiance');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(
-      w
-        .ev()
-        .find(a)!
-        .children.map((c) => c.eff.name.trim()),
-    ).toEqual(['Traitor']);
+    expect(present(w.ev().find(a), 'the selection').children.map((c) => c.eff.name.trim())).toEqual(['Traitor']);
   });
   it('ignores groups that are not an allegiance choice', () => {
     const w = world(
@@ -117,7 +112,7 @@ describe('applyLoreAllegiance', () => {
     );
     const a = w.add('Other');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(w.ev().find(a)!.children).toEqual([]);
+    expect(present(w.ev().find(a), 'the selection').children).toEqual([]);
   });
   it('does nothing for a force that is not there', () => {
     const w = world(allegiance);
@@ -135,24 +130,14 @@ describe('switchesOn', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(
-      w
-        .ev()
-        .find(p)!
-        .children.map((c) => c.eff.name),
-    ).toEqual(['Legacy On']);
+    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['Legacy On']);
   });
   it('replaces an Off with On', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     w.pick(p, 'Legacy Off');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(
-      w
-        .ev()
-        .find(p)!
-        .children.map((c) => c.eff.name),
-    ).toEqual(['Legacy On']);
+    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['Legacy On']);
   });
   it('finds switches inside other groups', () => {
     const w = world(
@@ -164,18 +149,13 @@ describe('switchesOn', () => {
     );
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(
-      w
-        .ev()
-        .find(p)!
-        .children.map((c) => c.eff.name),
-    ).toEqual(['X On']);
+    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['X On']);
   });
   it('leaves units alone', () => {
     const w = world(unit('p', 'Squad', 0, group('g1', 'Legacy', children(entry('on', 'X On'), entry('off', 'X Off')))));
     const p = w.add('Squad');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(w.ev().find(p)!.children).toEqual([]);
+    expect(present(w.ev().find(p), 'the selection').children).toEqual([]);
   });
   it('does nothing for a force that is not there', () => {
     const w = world(panel);
@@ -188,7 +168,7 @@ describe('pick', () => {
     const w = world(setupEntry('p', 'Panel', group('g', 'Choice', children(entry('a', 'A'), entry('b', 'B')))));
     const p = w.add('Panel');
     const ev = w.ev();
-    const rs = ev.find(p)!;
+    const rs = present(ev.find(p), 'the selection');
     const [g] = w.ctx.options(rs.node);
     return { w, p, rs, g };
   };
@@ -196,19 +176,14 @@ describe('pick', () => {
     const { w, p, rs, g } = setup();
     pick(w.roster, w.contexts, rs, g, g.members[0]);
     pick(w.roster, w.contexts, rs, g, g.members[1]);
-    expect(
-      w
-        .ev()
-        .find(p)!
-        .children.map((c) => c.eff.name),
-    ).toEqual(['B']);
+    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['B']);
   });
   it('does nothing when the target is already picked', () => {
     const { w, p, rs, g } = setup();
     pick(w.roster, w.contexts, rs, g, g.members[0]);
-    const uid = w.ev().find(p)!.children[0].sel.uid;
+    const uid = present(w.ev().find(p), 'the selection').children[0].sel.uid;
     pick(w.roster, w.contexts, rs, g, g.members[0]);
-    expect(w.ev().find(p)!.children[0].sel.uid).toBe(uid);
+    expect(present(w.ev().find(p), 'the selection').children[0].sel.uid).toBe(uid);
   });
 });
 
