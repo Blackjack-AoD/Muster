@@ -35,31 +35,34 @@ const walk = (d: string, match: RegExp): string[] =>
   });
 
 const texts = new Map(walk(dir, /\.(gst|cat)$/i).map((f) => [f, readFileSync(f, 'utf8')]));
-const meta = new Map<string, { path: string; h: NonNullable<ReturnType<typeof readHeader>> }>();
-for (const [path, xml] of texts) {
+interface Source {
+  xml: string;
+  h: NonNullable<ReturnType<typeof readHeader>>;
+}
+const meta = new Map<string, Source>();
+for (const xml of texts.values()) {
   const h = readHeader(xml);
-  if (h) meta.set(h.id, { path, h });
+  if (h) meta.set(h.id, { xml, h });
 }
 
 const parsed = new Map<string, DataFile>();
-const load = (id: string) => {
-  if (!parsed.has(id))
-    parsed.set(
-      id,
-      parseDataFile(
-        new DOMParser().parseFromString(texts.get(meta.get(id)!.path), 'text/xml')
-          .documentElement as unknown as Element,
-      ),
-    );
-  return parsed.get(id)!;
+const load = (source: Source) => {
+  const hit = parsed.get(source.h.id);
+  if (hit) return hit;
+  const file = parseDataFile(
+    new DOMParser().parseFromString(source.xml, 'text/xml').documentElement as unknown as Element,
+  );
+  parsed.set(source.h.id, file);
+  return file;
 };
 const linkedTo = (cat: DataFile) => {
   const linked: DataFile[] = [];
   const queue = [cat];
-  while (queue.length) {
-    for (const l of queue.pop()!.catalogueLinks) {
-      if (!meta.has(l.targetId) || linked.some((x) => x.id === l.targetId)) continue;
-      const f = load(l.targetId);
+  for (let c = queue.pop(); c; c = queue.pop()) {
+    for (const l of c.catalogueLinks) {
+      const source = meta.get(l.targetId);
+      if (!source || linked.some((x) => x.id === l.targetId)) continue;
+      const f = load(source);
       linked.push(f);
       queue.push(f);
     }
@@ -89,11 +92,12 @@ const issueKey = (i: Issue) => `${i.selUid}|${i.level}|${i.message}`;
 const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 let units = 0;
-for (const [id, m] of meta) {
+for (const m of meta.values()) {
   if (m.h.kind !== 'catalogue' || m.h.library || (only && !m.h.name.includes(only))) continue;
-  const cat = load(id);
-  if (!cat.gameSystemId || !meta.has(cat.gameSystemId)) continue;
-  const ctx = new Context(load(cat.gameSystemId), cat, linkedTo(cat));
+  const cat = load(m);
+  const gst = meta.get(cat.gameSystemId ?? '');
+  if (!gst) continue;
+  const ctx = new Context(load(gst), cat, linkedTo(cat));
   const contexts = new Map([[cat.id, ctx]]);
   // A problem the set-up raises on its own belongs to the army, not to each unit added after it.
   const armyWide = new Set<string>();
