@@ -421,7 +421,7 @@ export class Evaluator {
         for (const c of [...effCons, ...catCons]) this.checkForceConstraint(c, rf, cl.targetId, name, fname);
       }
       // root entry constraints
-      for (const o of forceRootOptions(rf.ctx, rf.entry)) {
+      for (const o of entryGone(rf) ? [] : forceRootOptions(rf.ctx, rf.entry)) {
         const w: Where = { self: null, parent: null, force: rf, opt: o };
         const eff = this.effective(o.node, w);
         // the same entry can be linked more than once (often one link is switched off): judge each link by its own picks
@@ -459,7 +459,7 @@ export class Evaluator {
     });
     // added after the filter: forces that lost their entry share this message, and each one needs its warning
     for (const rf of this.forces)
-      if (!rf.ctx.get(rf.force.forceEntryId))
+      if (entryGone(rf))
         this.issues.push({
           level: 'warn',
           forceUid: rf.force.uid,
@@ -741,6 +741,11 @@ function standInForceEntry(id: string): EntryNode {
     infoLinks: [],
     children: [],
   };
+}
+
+/** with its entry gone, nothing says which root entries belong to a force */
+function entryGone(rf: RForce): boolean {
+  return !rf.ctx.get(rf.force.forceEntryId);
 }
 
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
