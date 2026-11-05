@@ -1676,6 +1676,45 @@ describe('adding a unit fills in what it must have', () => {
     const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + nested)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Axe']);
   });
+  it('takes a free weapon over a nested group that holds only a paid one', () => {
+    const melee = `<selectionEntryGroups><selectionEntryGroup id="melee" name="Melee Weapon" defaultSelectionEntryId="gone">
+      <constraints>
+        <constraint id="melee-min" type="min" value="1" field="selections" scope="parent"/>
+        <constraint id="melee-max" type="max" value="1" field="selections" scope="parent"/>
+      </constraints>
+      <selectionEntryGroups><selectionEntryGroup id="swap" name="One in five may exchange it for">
+        <selectionEntries><selectionEntry id="blade" name="Blade" type="upgrade">
+          <constraints>
+            <constraint id="blade-cap" type="max" value="1" field="selections" scope="u" shared="true" includeChildSelections="true"/>
+          </constraints>
+          <costs><cost name="pts" typeId="pts" value="10"/></costs>
+        </selectionEntry></selectionEntries>
+      </selectionEntryGroup></selectionEntryGroups>
+      <entryLinks><entryLink id="axe-link" name="Axe" type="selectionEntry" targetId="axe"/></entryLinks>
+    </selectionEntryGroup></selectionEntryGroups>`;
+    const guard = entry('m', 'Guard', 40, cons(min(5)) + melee, 'type="model"');
+    const w = world(unit('u', 'Squad', 10, children(guard)), {
+      cat: `<sharedSelectionEntries>${entry('axe', 'Axe', 0)}</sharedSelectionEntries>`,
+    });
+    const squad = w.add('Squad');
+    const model = w.ev().find(squad)!.children[0];
+    expect(names(w, model.sel.uid)).toEqual(['1x Axe']);
+    expect(w.ev().total).toBe(210); // 10 + 5 x 40
+    expect(w.ev().issues).toEqual([]);
+  });
+  it('prices a nested group by the members it can offer', () => {
+    const hiddenFree = entry('f', 'Free', 0, '', 'type="upgrade" hidden="true"');
+    const nested = `<selectionEntryGroups><selectionEntryGroup id="inner" name="Inner">${children(hiddenFree, entry('s', 'Sword', 10))}</selectionEntryGroup></selectionEntryGroups>`;
+    const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + children(entry('b', 'Bow', 5)) + nested)));
+    expect(names(w, w.add('Squad'))).toEqual(['1x Bow']);
+  });
+  it('compares nested groups by what they hold', () => {
+    const inner = (id: string, member: string) =>
+      `<selectionEntryGroup id="${id}" name="${id}">${children(member)}</selectionEntryGroup>`;
+    const nested = `<selectionEntryGroups>${inner('dear', entry('s', 'Sword', 10))}${inner('cheap', entry('d', 'Dagger', 1))}</selectionEntryGroups>`;
+    const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + nested)));
+    expect(names(w, w.add('Squad'))).toEqual(['1x Dagger']);
+  });
   it('respects a limit elsewhere in the force when choosing', () => {
     const limited = entry(
       'a',
