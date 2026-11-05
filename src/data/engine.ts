@@ -974,8 +974,12 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
         return !e.hidden && !unavailable(e);
       });
     const pts = ev.pointsTypeId;
-    // cost after modifiers (a link can make a 'free' weapon cost points)
-    const cost = (m: Opt) => (m.kind === 'entry' ? (ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0) : 0);
+    // cost after modifiers (a link can make a 'free' weapon cost points); a group costs its cheapest offer
+    const cost = (m: Opt): number => {
+      if (m.kind === 'entry') return ev.optionEff(m, rs, rs.force).costs.get(pts) ?? 0;
+      const costs = visibleOf(m).map(cost);
+      return costs.length ? Math.min(...costs) : 0;
+    };
     const baseMin = (m: Opt) => (m.node.constraints.some((c) => c.type === 'min' && c.value > 0) ? 0 : 1);
     /** one entry inside group g (searching nested groups) that can take another selection */
     const pickIn = (g: Opt, d = 0): Opt | undefined => {
