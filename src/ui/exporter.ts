@@ -57,33 +57,43 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
 
 const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
 
+const RULES_LEFT_OUT = ' (rule text left out to keep it short)';
+
 /** Copies `text` after the share sheet rejected with `e`, unless the player cancelled it. */
-export async function copyAfterFailedShare(text: string, e: unknown, withRules = true): Promise<void> {
+async function copyAfterFailedShare(text: string, e: unknown, note: string): Promise<void> {
   if (isCancelled(e)) return;
   try {
     await navigator.clipboard.writeText(text);
     const reason = failureMessage('share', e).replace(/\.$/, '');
-    toast(`${reason}. Copied it instead${withRules ? '' : ' (rule text left out to keep it short)'}`);
+    toast(`${reason}. Copied it instead${note}`);
   } catch {
     toast(failureMessage('share', e));
   }
 }
 
-export async function shareText(text: string, title: string): Promise<void> {
+/** Opens the share sheet, or copies `copy` and says `copied` where there is none. */
+export async function shareOrCopy(data: ShareData, copy: string, copied: string, withRules = true): Promise<void> {
+  const note = withRules ? '' : RULES_LEFT_OUT;
   if (navigator.share) {
     try {
-      await navigator.share({ title, text });
+      await navigator.share(data);
     } catch (e) {
-      await copyAfterFailedShare(text, e);
+      await copyAfterFailedShare(copy, e, note);
+      return;
     }
+    if (!withRules) toast('Link shared. Rule text was left out to keep it short');
     return;
   }
   try {
-    await navigator.clipboard.writeText(text);
-    toast('Copied to clipboard');
+    await navigator.clipboard.writeText(copy);
+    toast(copied + note);
   } catch (e) {
     toast(failureMessage('share', e));
   }
+}
+
+export function shareText(text: string, title: string): Promise<void> {
+  return shareOrCopy({ title, text }, text, 'Copied to clipboard');
 }
 
 export function downloadJson(name: string, data: unknown) {

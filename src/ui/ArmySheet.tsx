@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import { failureMessage, toast, useRosterCtl, useStore } from '../store';
 import { Loading, TopBar, fmtN } from './common';
-import { copyAfterFailedShare } from './exporter';
+import { shareOrCopy } from './exporter';
 import { Icon } from './Icon';
 import { StatBlock } from './StatBlock';
 import {
@@ -116,18 +116,8 @@ async function shareLink(snap: Snapshot) {
   try {
     const { data, withRules } = await encodeSnapshot(snap);
     const url = viewUrl(data);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: snap.name, text: `${snap.name} · ${fmtN(snap.pts)} pts`, url });
-      } catch (e) {
-        await copyAfterFailedShare(url, e, withRules);
-        return;
-      }
-      if (!withRules) toast('Link shared. Rule text was left out to keep it short');
-    } else {
-      await navigator.clipboard.writeText(url);
-      toast(withRules ? 'Link copied' : 'Link copied (rule text left out to keep it short)');
-    }
+    const text = `${snap.name} · ${fmtN(snap.pts)} pts`;
+    await shareOrCopy({ title: snap.name, text, url }, url, 'Link copied', withRules);
   } catch (e) {
     toast(failureMessage('share', e));
   }
