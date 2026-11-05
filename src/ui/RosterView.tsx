@@ -538,6 +538,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
         <Icon name="search" size={18} />
         <input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
+      <div class="pick-list" role="group" aria-label="Saved units" />
       {!shown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
       {shown.length > 0 && (
         <p class="muted small pad-x pick-hint">

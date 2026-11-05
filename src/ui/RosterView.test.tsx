@@ -2,8 +2,8 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
-import { db } from '../data/db';
-import type { Roster, Sel } from '../data/engine';
+import { db, type SavedUnit } from '../data/db';
+import { addSavedUnit, type Roster, type Sel } from '../data/engine';
 import { addMandatoryRoots } from '../data/setup';
 import { getState, importRosters } from '../store';
 import {
@@ -557,6 +557,197 @@ describe('RosterView', () => {
       expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['term', 'term']);
 
       expect(offered(await openAddSheet('Add unit'))).toEqual(['Assault Squad']);
+    });
+  });
+
+  describe('saved units', () => {
+    const CATEGORIES = {
+      gst: `<categoryEntries>
+          <categoryEntry id="hq" name="HQ"/>
+          <categoryEntry id="troops" name="Troops"/>
+        </categoryEntries>
+        <forceEntries>
+          <forceEntry id="det" name="Detachment">
+            <categoryLinks>
+              <categoryLink id="det-hq" name="HQ" targetId="hq" primary="false"/>
+              <categoryLink id="det-troops" name="Troops" targetId="troops" primary="false"/>
+            </categoryLinks>
+          </forceEntry>
+        </forceEntries>`,
+    };
+    const SAVED_UNITS =
+      unit(
+        'captain',
+        'Captain',
+        100,
+        '<categoryLinks><categoryLink id="capt-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>',
+      ) +
+      unit(
+        'tac',
+        'Tactical Squad',
+        100,
+        '<categoryLinks><categoryLink id="tac-tr" name="Troops" targetId="troops" primary="true"/></categoryLinks>' +
+          children(sergeant(children(entry('fist', 'Power Fist', 15)))),
+      );
+    const sel = (key: string, kids: Sel[] = []): Sel => ({ uid: `old-${key}`, key, number: 1, children: kids });
+    const saved = (id: string, name: string, build: Sel, o: Partial<SavedUnit> = {}): SavedUnit => ({
+      id,
+      name,
+      repo: 'test/repo',
+      gameSystemId: 'gst',
+      catalogueId: 'cat',
+      key: build.key,
+      categoryId: build.key === 'captain' ? 'hq' : 'troops',
+      build,
+      created: 0,
+      updated: 0,
+      ...o,
+    });
+    const LORD = saved('lord', 'Lord Thrax', sel('captain'));
+    const SQUAD = saved('squad', 'Squad Iron', sel('tac', [sel('sgt', [sel('fist')])]));
+
+    async function openWithSaved(w: ReturnType<typeof world>, units: readonly SavedUnit[]) {
+      for (const u of units) await db.putSavedUnit(u);
+      await openList(w, SAVED_UNITS, CATEGORIES);
+    }
+    const savedSection = (sheet: HTMLElement) => within(sheet).getByRole('group', { name: 'Saved units' });
+    const savedOffered = (sheet: HTMLElement) =>
+      [...savedSection(sheet).querySelectorAll('.pick')].map((row) => [
+        row.querySelector('b')?.textContent,
+        row.querySelector('.pick-pts')?.textContent,
+      ]);
+    const savedRow = (sheet: HTMLElement, name: string) =>
+      within(savedSection(sheet)).getByRole('button', { name: new RegExp(name) });
+    const storedRoots = async () => (await db.rosters())[0]?.forces.flatMap((f) => f.selections) ?? [];
+
+    afterEach(async () => {
+      for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
+    });
+
+    it.each([
+      ['Add HQ', [['Lord Thrax', '100']]],
+      [
+        'Add unit',
+        [
+          ['Lord Thrax', '100'],
+          ['Squad Iron', '135'],
+        ],
+      ],
+    ])('lists from the %s button only saved units of this army file and its category', async (button, rows) => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [
+        LORD,
+        SQUAD,
+        saved('elsewhere', 'Lord Other Army', sel('captain'), { catalogueId: 'other' }),
+        saved('other-repo', 'Lord Other Repo', sel('captain'), { repo: 'other/repo' }),
+      ]);
+
+      expect(savedOffered(await openAddSheet(button))).toEqual(rows);
+    });
+
+    it('filters saved units by their name in the search', async () => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [LORD, SQUAD]);
+      const sheet = await openAddSheet('Add unit');
+
+      fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'iron' } });
+
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', '135']]);
+    });
+
+    it('adds a saved unit on a tap and opens its unit page', async () => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [SQUAD]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', '135']]);
+
+      fireEvent.click(savedRow(sheet, 'Squad Iron'));
+
+      await waitFor(async () => expect(await storedRoots()).toHaveLength(1));
+      const [copy] = await storedRoots();
+      expect(copy).toMatchObject({ key: 'tac', name: 'Squad Iron', saved: 'squad' });
+      expect(location.hash).toBe(`#/r/r/u/${copy?.uid}`);
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('adds a saved unit on a swipe right, stays in the sheet and shows it as added', async () => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [SQUAD]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', '135']]);
+
+      drag(savedRow(sheet, 'Squad Iron'), [[SWIPE, 0]]);
+
+      await waitFor(async () => expect((await storedRoots()).map((s) => s.saved)).toEqual(['squad']));
+      expect(location.hash).toBe('#/r/r');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', 'Added']]);
+    });
+
+    it('shows a saved unit the list holds in another detachment as added, and adds nothing on a tap or swipe', async () => {
+      const w = world(SAVED_UNITS, CATEGORIES);
+      w.addForce('f2');
+      expect(addSavedUnit(w.roster, w.contexts, 'f2', SQUAD)).toMatchObject({ added: true });
+      await openWithSaved(w, [SQUAD]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', 'Added']]);
+
+      fireEvent.click(savedRow(sheet, 'Squad Iron'));
+      drag(savedRow(sheet, 'Squad Iron'), [[SWIPE, 0]]);
+
+      expect(getState().rosters[0]?.forces.map((f) => f.selections.length)).toEqual([0, 1]);
+      expect(location.hash).toBe('#/r/r');
+      expect(screen.getByRole('dialog')).toBe(sheet);
+    });
+
+    it.each([
+      ['1 option is no longer in the data', [sel('gone')]],
+      ['2 options are no longer in the data', [sel('gone'), sel('lost')]],
+    ])('says "%s" in a toast when options did not carry over', async (message, lost) => {
+      const squad = saved('squad', 'Squad Iron', sel('tac', [sel('sgt'), ...lost]));
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [squad]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', '120']]);
+
+      drag(savedRow(sheet, 'Squad Iron'), [[SWIPE, 0]]);
+
+      await expectToast(message);
+    });
+
+    it('shows no toast when everything carried over', async () => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [SQUAD]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Iron', '135']]);
+
+      fireEvent.click(savedRow(sheet, 'Squad Iron'));
+
+      await waitFor(async () => expect(await storedRoots()).toHaveLength(1));
+      expect(getState().toast).toBeUndefined();
+    });
+
+    it('says in the sheet that a saved unit is gone from the data, and adds nothing on a tap or swipe', async () => {
+      const gone = saved('gone', 'Squad Lost', sel('gone'), { categoryId: 'troops' });
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [gone]);
+      const sheet = await openAddSheet('Add Troops');
+      expect(savedOffered(sheet)).toEqual([['Squad Lost', 'No longer in the data']]);
+
+      fireEvent.click(savedRow(sheet, 'Squad Lost'));
+      drag(savedRow(sheet, 'Squad Lost'), [[SWIPE, 0]]);
+
+      expect(getState().rosters[0]?.forces[0]?.selections).toEqual([]);
+      expect(location.hash).toBe('#/r/r');
+      expect(screen.getByRole('dialog')).toBe(sheet);
+    });
+
+    it("shows a named unit's custom name over its data name, and an unnamed unit's name alone", async () => {
+      const w = world(SAVED_UNITS, CATEGORIES);
+      expect(addSavedUnit(w.roster, w.contexts, 'f1', SQUAD)).toMatchObject({ added: true });
+      w.add('Tactical Squad');
+      await openWithSaved(w, [SQUAD]);
+
+      const rows = [...document.querySelectorAll('.unit-row')].map((row) => [
+        row.querySelector('.ur-name')?.textContent,
+        row.querySelector('.ur-data')?.textContent,
+      ]);
+      expect(rows).toEqual([
+        ['Squad Iron', 'Tactical Squad'],
+        ['Tactical Squad', undefined],
+      ]);
     });
   });
 });
