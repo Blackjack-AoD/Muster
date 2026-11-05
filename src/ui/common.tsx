@@ -75,6 +75,14 @@ export function Sheet({
 }) {
   const close = useRef(onClose);
   close.current = onClose;
+  const id = useRef(0);
+  const popped = useRef(false);
+  // Back can close a picker shown inside the sheet and leave the sheet up, which then needs a step of its own again.
+  useLayoutEffect(() => {
+    if (!popped.current) return;
+    popped.current = false;
+    pushSheetState(id.current);
+  });
   // layout effect: runs in the same commit as a previous sheet's cleanup, so one sheet can hand its step to the next
   useLayoutEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
@@ -82,16 +90,15 @@ export function Sheet({
     document.body.classList.add('locked');
     // The sheet gets its own history step, so the phone's back button closes it instead of leaving the page.
     // Navigating from inside a sheet should use go(path, true), which replaces this step.
-    const id = ++sheetSeq;
+    id.current = ++sheetSeq;
     if (releasing) {
       releasing.cancelled = true;
       releasing = null;
-      history.replaceState({ sheet: id }, '', location.href);
-    } else pushSheetState(id);
-    let popped = false;
+      history.replaceState({ sheet: id.current }, '', location.href);
+    } else pushSheetState(id.current);
     const onPop = () => {
-      if (history.state?.sheet === id) return;
-      popped = true;
+      if (history.state?.sheet === id.current) return;
+      popped.current = true;
       close.current();
     };
     addEventListener('popstate', onPop);
@@ -100,7 +107,7 @@ export function Sheet({
       removeEventListener('popstate', onPop);
       document.body.classList.remove('locked');
       // closed with the X, a tap outside or a choice: take our history step back off
-      if (!popped && history.state?.sheet === id) {
+      if (!popped.current && history.state?.sheet === id.current) {
         const r = (releasing = { cancelled: false });
         queueMicrotask(() => {
           if (r.cancelled) return;
