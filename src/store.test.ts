@@ -446,6 +446,17 @@ describe('saved units', () => {
     expect(saved.categoryId).toBe('troops');
   });
 
+  it('refuses to save a model inside a unit, and adds nothing', async () => {
+    const { w, squad } = listWithSquad('su5');
+    const model = present(savedIn(w.roster, squad).children[0], 'the sergeant');
+    const before = getState().savedUnits.length;
+    await expect(saveUnit(w.roster, w.sel(model.uid), 'Brother Thrax')).rejects.toThrow(
+      'Only a unit of this list can be saved.',
+    );
+    expect(getState().savedUnits).toHaveLength(before);
+    expect(model.saved).toBeUndefined();
+  });
+
   it('leaves the unit unlinked when storage refuses the saved unit', async () => {
     const { w, squad, rs } = listWithSquad('su4');
     await saveRoster(w.roster);
