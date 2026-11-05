@@ -39,7 +39,7 @@ export interface SavedUnit {
 }
 
 const DB_NAME = 'muster';
-const VERSION = 1;
+const VERSION = 2;
 let dbp: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
@@ -51,6 +51,7 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
       if (!db.objectStoreNames.contains('repos')) db.createObjectStore('repos', { keyPath: 'repo' });
       if (!db.objectStoreNames.contains('rosters')) db.createObjectStore('rosters', { keyPath: 'uid' });
+      if (!db.objectStoreNames.contains('savedUnits')) db.createObjectStore('savedUnits', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -109,9 +110,15 @@ export const db = {
     tx('rosters', 'readwrite', (s) => {
       s.delete(uid);
     }),
-  savedUnits: async (): Promise<SavedUnit[]> => [],
-  putSavedUnit: async (_u: SavedUnit) => {},
-  delSavedUnit: async (_id: string) => {},
+  savedUnits: () => tx<SavedUnit[]>('savedUnits', 'readonly', (s) => s.getAll()),
+  putSavedUnit: (u: SavedUnit) =>
+    tx('savedUnits', 'readwrite', (s) => {
+      s.put(JSON.parse(JSON.stringify(u)));
+    }),
+  delSavedUnit: (id: string) =>
+    tx('savedUnits', 'readwrite', (s) => {
+      s.delete(id);
+    }),
 };
 
 /** Ask the browser not to clear our storage when space runs low. */
