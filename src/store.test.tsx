@@ -380,6 +380,8 @@ describe('starting up', () => {
     vi.stubGlobal('navigator', { onLine: false, storage });
     await init();
     expect(persist).toHaveBeenCalled();
+    // a trip to storage lets the refusal land first
+    await db.repos();
     expect(getState().toast).toBeUndefined();
   });
 });
