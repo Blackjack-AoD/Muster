@@ -15,6 +15,8 @@ const refuse = (method: 'put' | 'delete') =>
   vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
     throw new DOMException('Storage is full', 'QuotaExceededError');
   });
+// oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
+const realPut = IDBObjectStore.prototype.put;
 const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
 const storedUids = async () => (await db.rosters()).map((r) => r.uid);
@@ -45,13 +47,27 @@ afterEach(() => {
 });
 
 describe('list actions', () => {
-  it('shows the reason in a toast when a copy fails to save, and stays on the list', async () => {
+  it("keeps the Retry toast up when Duplicate list can't save the list or its copy", async () => {
     await openListMenu();
-    refuse('put');
+    const put = refuse('put');
+
+    await press('Duplicate list');
+
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    // a trip to storage lets both refused saves report, whichever finishes last
+    expect(await storedUids()).toEqual([roster.uid]);
+    await waitFor(() => expect(screen.queryByRole('status')?.textContent).toBe("Couldn't save this listRetry"));
+    expect(location.hash).toBe(`#/r/${roster.uid}`);
+  });
+
+  it('shows the reason in a toast when only the copy fails to save', async () => {
+    await openListMenu();
+    refuse('put').mockImplementationOnce(realPut);
 
     await press('Duplicate list');
 
     await expectToast("Couldn't copy this list: Storage is full");
+    expect(getState().toastAction).toBeUndefined();
     expect(location.hash).toBe(`#/r/${roster.uid}`);
     expect(await storedUids()).toEqual([roster.uid]);
   });
