@@ -144,17 +144,17 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'string');
 const isListOf = (v: unknown, each: (x: unknown) => boolean) => Array.isArray(v) && v.every(each);
 
-const isProfile = (p: unknown) => isRecord(p) && isListOf(p.chars, isTextPair);
-const isUnit = (u: unknown) =>
+const isSnapProfile = (p: unknown) => isRecord(p) && isListOf(p.chars, isTextPair);
+const isSnapUnit = (u: unknown) =>
   isRecord(u) &&
   typeof u.pts === 'number' &&
   isListOf(u.gear, isRecord) &&
-  isListOf(u.profiles, isProfile) &&
+  isListOf(u.profiles, isSnapProfile) &&
   Array.isArray(u.rules);
-const isForce = (f: unknown) =>
+const isSnapForce = (f: unknown) =>
   isRecord(f) &&
   typeof f.pts === 'number' &&
-  isListOf(f.units, isUnit) &&
+  isListOf(f.units, isSnapUnit) &&
   (f.setup === undefined || Array.isArray(f.setup));
 
 /** The fields the sheet can't draw without, in the shapes `buildSnapshot` writes, so old v1 links still pass. */
@@ -164,7 +164,7 @@ function isSnapshot(s: unknown): s is Snapshot {
     s.v === 1 &&
     typeof s.pts === 'number' &&
     typeof s.limit === 'number' &&
-    isListOf(s.forces, isForce) &&
+    isListOf(s.forces, isSnapForce) &&
     (s.rules === undefined || isListOf(s.rules, isTextPair))
   );
 }

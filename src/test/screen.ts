@@ -39,7 +39,7 @@ export const refuse = (method: 'put' | 'delete') =>
 
 export const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
-export type Point = readonly [x: number, y: number];
+type Point = readonly [x: number, y: number];
 
 /** A finger going down at the origin, through each point, then lifting. */
 export function drag(row: HTMLElement, path: readonly Point[]): void {
