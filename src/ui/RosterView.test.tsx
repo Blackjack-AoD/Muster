@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
-import type { Sel } from '../data/engine';
+import type { Roster, Sel } from '../data/engine';
 import { addMandatoryRoots } from '../data/setup';
-import { importRosters } from '../store';
+import { getState, importRosters } from '../store';
 import {
   ASSAULT,
   RULED_OUT_BY_ASSAULT,
@@ -17,7 +17,7 @@ import {
   world,
   type WorldOptions,
 } from '../test/fixture';
-import { drag, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { drag, expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { SWIPE } from './swipe';
 
 const UNITS = unit('tac', 'Tactical Squad', 100, children(sergeant())) + ASSAULT;
@@ -217,6 +217,80 @@ describe('RosterView', () => {
     await renderScreen(<App />, { files: worldFiles(UNITS) });
 
     await waitFor(() => expect(sumPoints()).toBe(`${w.pts(tac)}pts`));
+  });
+
+  describe('a list that cannot open', () => {
+    const CANT_OPEN: [string, string, (r: Roster) => Roster][] = [
+      [
+        'its data has gone',
+        "Data for gone/repo isn't on this phone. Sync it on the Data tab.",
+        (r) => ({ ...r, repo: 'gone/repo' }),
+      ],
+      [
+        'its army has gone',
+        'This army is no longer in the synced data',
+        (r) => ({ ...r, forces: r.forces.map((f) => ({ ...f, catalogueId: 'gone' })) }),
+      ],
+    ];
+    const { roster } = world(UNITS);
+    const showsError = (text: string) =>
+      waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe(text));
+    function pressDelete() {
+      const button = screen.queryByRole('button', { name: 'Delete list' });
+      expect(button).not.toBeNull();
+      if (button) fireEvent.click(button);
+    }
+    const asked = vi.fn(() => true);
+
+    async function openBroken(broken: Roster, error: string) {
+      openHash(`#/r/${broken.uid}`);
+      await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [broken] });
+      await showsError(error);
+    }
+
+    beforeEach(() => {
+      asked.mockClear();
+      vi.stubGlobal('confirm', asked);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    it.each(CANT_OPEN)('offers Delete when %s, and asks first', async (_why, error, damage) => {
+      const broken = damage(roster);
+      await openBroken(broken, error);
+
+      pressDelete();
+
+      await waitFor(() => expect(location.hash).toBe('#/'));
+      expect(asked).toHaveBeenCalledWith(`Delete "Test list"? This can't be undone.`);
+      expect(getState().rosters).toEqual([]);
+      expect(await db.rosters()).toEqual([]);
+    });
+
+    it('keeps the list when the player says no', async () => {
+      const [[, error, damage]] = CANT_OPEN;
+      asked.mockReturnValue(false);
+      await openBroken(damage(roster), error);
+
+      pressDelete();
+
+      await showsError(error);
+      expect((await db.rosters()).map((r) => r.uid)).toEqual([roster.uid]);
+    });
+
+    it('shows the reason in a toast when the delete fails, and keeps the list', async () => {
+      const [[, error, damage]] = CANT_OPEN;
+      await openBroken(damage(roster), error);
+      refuse('delete');
+
+      pressDelete();
+
+      await expectToast("Couldn't delete this list: Storage is full");
+      expect(location.hash).toBe(`#/r/${roster.uid}`);
+      expect(getState().rosters.map((r) => r.uid)).toEqual([roster.uid]);
+    });
   });
 
   it('says so in the issues sheet when a list has no issues', async () => {
