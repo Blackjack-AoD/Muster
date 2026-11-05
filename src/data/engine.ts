@@ -66,6 +66,10 @@ export type Issue = IssuePlace & { level: 'error' | 'warn'; message: string };
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
 interface Where {
   self: RSel | null;
   parent: RSel | null;

@@ -1,7 +1,7 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState } from './data/db';
-import { Evaluator, uid, type Roster } from './data/engine';
+import { Evaluator, isRecord, uid, type Roster } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
 import { DEFAULT_REPOS, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
@@ -139,8 +139,20 @@ export async function deleteRoster(u: string) {
   set({ rosters: state.rosters.filter((x) => x.uid !== u) });
 }
 
-const isRoster = (r: unknown): r is Roster =>
-  r instanceof Object && 'uid' in r && Boolean(r.uid) && 'forces' in r && Array.isArray(r.forces);
+const isForce = (f: unknown) =>
+  isRecord(f) && typeof f.catalogueId === 'string' && typeof f.forceEntryId === 'string' && Array.isArray(f.selections);
+
+/** The fields Lists can't draw without. Every release has written all of them. */
+function isRoster(r: unknown): r is Roster {
+  return (
+    isRecord(r) &&
+    typeof r.uid === 'string' &&
+    r.uid !== '' &&
+    typeof r.updated === 'number' &&
+    Array.isArray(r.forces) &&
+    r.forces.every(isForce)
+  );
+}
 
 export async function importRosters(list: readonly unknown[]) {
   for (const r of list) {

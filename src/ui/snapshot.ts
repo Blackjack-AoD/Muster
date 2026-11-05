@@ -1,7 +1,7 @@
 // A self-contained picture of a list (units, stats, wargear, rules) that needs no game data to show.
 // Used for the printable army sheet (PDF) and for share links that friends can open without Muster's data.
 import type { RepoState } from '../data/db';
-import type { RSel } from '../data/engine';
+import { isRecord, type RSel } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { catalogueName, systemName } from './Lists';
 
@@ -140,7 +140,6 @@ export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withR
   return { data: await pack({ ...s, rules: undefined }), withRules: false };
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'string');
 const isListOf = (v: unknown, each: (x: unknown) => boolean) => Array.isArray(v) && v.every(each);
 
