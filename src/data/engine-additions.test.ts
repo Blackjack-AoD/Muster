@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { unavailableHere } from './engine';
-import { FORCE, children, entry, unit, world } from '../test/fixture';
+import { FORCE, children, cons, entry, group, mods, unit, world } from '../test/fixture';
 
-const mods = (...m: string[]) => `<modifiers>${m.join('')}</modifiers>`;
-const cons = (...c: string[]) => `<constraints>${c.join('')}</constraints>`;
 const rules = (...names: string[]) =>
   `<rules>${names.map((n) => `<rule id="r-${n}" name="${n}"><description>Text</description></rule>`).join('')}</rules>`;
-
-const selection = (w: ReturnType<typeof world>, uid: string) => {
-  const rs = w.ev().find(uid);
-  if (!rs) throw new Error(`no selection ${uid}`);
-  return rs;
-};
 
 describe('armyRules', () => {
   it('lists the rules on set-up entries once each by name', () => {
@@ -149,7 +141,7 @@ describe('rules inherited from a category', () => {
     '<categoryLinks><categoryLink id="cl" name="Character" targetId="char" primary="true"/></categoryLinks>';
   const rulesOf = (inner: string) => {
     const w = world(unit('u', 'Praetor', 0, inner), { gst });
-    return w.ev().rulesFor(selection(w, w.add('Praetor')));
+    return w.ev().rulesFor(w.sel(w.add('Praetor')));
   };
 
   it('includes the rules on a category the unit belongs to', () => {
@@ -174,7 +166,7 @@ describe('rules inherited from a category', () => {
 });
 
 describe('fillDefaults at a cap of 0', () => {
-  const namesUnder = (w: ReturnType<typeof world>, uid: string) => selection(w, uid).children.map((c) => c.eff.name);
+  const namesUnder = (w: ReturnType<typeof world>, uid: string) => w.sel(uid).children.map((c) => c.eff.name);
 
   const listCap = '<constraint id="cap" type="max" value="0" field="selections" scope="roster"/>';
   /** As Horus Heresy writes it: no Master of the Legion allowed, plus one for each full 1,000 points in the list. */
@@ -199,8 +191,6 @@ describe('fillDefaults at a cap of 0', () => {
       ) + unit('t', 'Tactical Squad', 880),
       { cat: `<sharedSelectionEntries>${onePer1000}</sharedSelectionEntries>` },
     );
-  const group = (inner: string, attrs = '') =>
-    `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
   const required = '<constraint id="g-min" type="min" value="1" field="selections" scope="parent"/>';
 
   it("adds a Praetor's Master of the Legion under 1,000 points, and the cap shows as an issue", () => {

@@ -2,7 +2,6 @@
 import { waitFor } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
-import { addSel } from '../data/engine';
 import { children, entry, unit, world } from '../test/fixture';
 import { renderScreen, worldFiles } from '../test/screen';
 import { buildSnapshot } from './snapshot';
@@ -42,8 +41,7 @@ function listWithFiveIssues() {
     w.pick(u, 'Relic');
     w.pick(u, 'Banner');
   }
-  for (const u of [w.add('Squad', 1, f2), w.add('Squad', 1, f2)])
-    addSel(w.roster, w.contexts, f2, u, w.beneath(u, 'Relic'));
+  for (const u of [w.add('Squad', 1, f2), w.add('Squad', 1, f2)]) w.pick(u, 'Relic');
   return w;
 }
 

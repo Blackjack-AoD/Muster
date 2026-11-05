@@ -1,11 +1,7 @@
 // One test for each common shape of data. Each states what the shape means, in the XML the data uses.
 import { describe, expect, it } from 'vitest';
 import { removeSel } from './engine';
-import { children, entry, unit, world } from '../test/fixture';
-
-const mods = (...m: string[]) => `<modifiers>${m.join('')}</modifiers>`;
-const cons = (...c: string[]) => `<constraints>${c.join('')}</constraints>`;
-const conds = (...c: string[]) => `<conditions>${c.join('')}</conditions>`;
+import { TWO_FORCES, children, conds, cons, entry, mods, unit, world } from '../test/fixture';
 
 /** 10 points more while every condition holds. */
 const plusTen = (...c: string[]) => mods(`<modifier type="increment" field="pts" value="10">${conds(...c)}</modifier>`);
@@ -22,20 +18,8 @@ const token = (linkId: string, inner = '') =>
   `<entryLink id="${linkId}" name="Token" targetId="x" type="selectionEntry">${inner}</entryLink>`;
 const tokenIn = (linkId: string) => `<entryLinks>${token(linkId)}</entryLinks>`;
 
-const TWO_FORCES =
-  '<forceEntries><forceEntry id="det" name="Detachment"/><forceEntry id="ally" name="Allies"/></forceEntries>';
-
 type World = ReturnType<typeof world>;
 
-const addAllies = (w: World) => {
-  w.roster.forces.push({ uid: 'f2', forceEntryId: 'ally', catalogueId: w.cat.id, selections: [] });
-  return 'f2';
-};
-const selection = (w: World, uid: string) => {
-  const rs = w.ev().find(uid);
-  if (!rs) throw new Error(`no selection ${uid}`);
-  return rs;
-};
 const hiddenBeneath = (w: World, parentUid: string, name: string) => {
   const ev = w.ev();
   const rs = ev.find(parentUid);
@@ -65,14 +49,14 @@ describe('conditions counting inside the selection itself', () => {
     const w = ranked();
     const s = w.add('Squad');
     w.pick(w.pick(s, 'Model'), 'XP', xp);
-    expect(selection(w, s).eff.name).toBe(name);
+    expect(w.sel(s).eff.name).toBe(name);
   });
 
   it('multiplies by the number of the selections in between', () => {
     const w = ranked();
     const s = w.add('Squad');
     w.pick(w.pick(s, 'Model', 2), 'XP', 3);
-    expect(selection(w, s).eff.name).toBe('Squad (Blooded)');
+    expect(w.sel(s).eff.name).toBe('Squad (Blooded)');
   });
 
   describe('atLeast', () => {
@@ -215,7 +199,7 @@ describe('conditions on the detachment', () => {
   const inForce = (condition: string) => {
     const w = world(unit('u', 'Unit', 10, plusTen(condition)), { gst: TWO_FORCES });
     const here = w.add('Unit');
-    const there = w.add('Unit', 1, addAllies(w));
+    const there = w.add('Unit', 1, w.addForce('f2', 'ally'));
     return { w, here, there };
   };
   /** Watcher costs 10 and carries the modifier; Carrier can hold a Token. */
@@ -225,7 +209,7 @@ describe('conditions on the detachment', () => {
       gst: TWO_FORCES,
     });
     const watcher = w.add('Watcher');
-    const ally = addAllies(w);
+    const ally = w.addForce('f2', 'ally');
     return { w, watcher, ally };
   };
 
@@ -273,7 +257,7 @@ describe('conditions on the whole list', () => {
       gst: TWO_FORCES,
     });
     const watcher = w.add('Watcher');
-    const ally = addAllies(w);
+    const ally = w.addForce('f2', 'ally');
     return { w, watcher, ally };
   };
 
@@ -311,7 +295,7 @@ describe('conditions on the whole list', () => {
     );
     const watcher = w.add('Watcher');
     expect(w.pts(watcher)).toBe(10);
-    addAllies(w);
+    w.addForce('f2', 'ally');
     expect(w.pts(watcher)).toBe(20);
   });
 
@@ -350,7 +334,7 @@ describe('conditions on the whole list', () => {
     );
     const u = w.add('Unit');
     expect(w.pts(u)).toBe(10);
-    addAllies(w);
+    w.addForce('f2', 'ally');
     expect(w.pts(u)).toBe(20);
   });
 
@@ -368,7 +352,7 @@ describe('conditions on the whole list', () => {
     );
     const u = w.add('Unit');
     expect(w.pts(u)).toBe(20);
-    addAllies(w);
+    w.addForce('f2', 'ally');
     expect(w.pts(u)).toBe(10);
   });
 });
@@ -468,7 +452,7 @@ describe('conditions scoped to the parent', () => {
       { cat: TOKEN, gst: TWO_FORCES },
     );
     const watcher = w.add('Watcher');
-    w.pick(w.add('Carrier', 1, addAllies(w)), 'Token');
+    w.pick(w.add('Carrier', 1, w.addForce('f2', 'ally')), 'Token');
     expect(w.pts(watcher)).toBe(10);
     w.pick(w.add('Carrier'), 'Token');
     expect(w.pts(watcher)).toBe(20);
@@ -530,7 +514,7 @@ describe('conditions on any ancestor', () => {
       '<condition type="instanceOf" value="1" field="selections" scope="ancestor" childId="det" includeChildSelections="true"/>',
     );
     expect(w.pts(gunIn('Vehicle'))).toBe(10);
-    expect(w.pts(gunIn('Vehicle', addAllies(w)))).toBe(0);
+    expect(w.pts(gunIn('Vehicle', w.addForce('f2', 'ally')))).toBe(0);
   });
 
   it('notInstanceOf holds only when no ancestor has the category', () => {
@@ -595,7 +579,7 @@ describe('selection limits with child selections', () => {
     const w = world(unit('s', 'Squad', 0, children(entry('g', 'Gun', 0, cons(MIN_PARENT)))));
     const s = w.add('Squad');
     expect(w.errors()).toEqual([]);
-    removeSel(w.roster, selection(w, s).children[0].sel.uid);
+    removeSel(w.roster, w.sel(s).children[0].sel.uid);
     expect(w.errors()).toEqual(['Squad › Gun: needs at least 1 (has 0)']);
   });
 
@@ -609,13 +593,13 @@ describe('selection limits with child selections', () => {
   it('a min on the list is met by a nested copy in any detachment', () => {
     const w = rootToken(MIN_ROSTER);
     expect(w.errors()).toEqual(['Token: needs at least 1 in the list (has 0)']);
-    w.pick(w.add('Carrier', 1, addAllies(w)), 'Token');
+    w.pick(w.add('Carrier', 1, w.addForce('f2', 'ally')), 'Token');
     expect(w.errors()).toEqual([]);
   });
 
   it('a min on the detachment is not met by a copy in another detachment', () => {
     const w = rootToken(MIN_FORCE);
-    w.pick(w.add('Carrier', 1, addAllies(w)), 'Token');
+    w.pick(w.add('Carrier', 1, w.addForce('f2', 'ally')), 'Token');
     expect(w.errors()).toEqual(['Token: needs at least 1 in this detachment (has 0)']);
     w.pick(w.add('Carrier'), 'Token');
     expect(w.errors()).toEqual([]);

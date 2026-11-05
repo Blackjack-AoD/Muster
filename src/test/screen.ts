@@ -7,7 +7,7 @@ import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
 import { dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
-import { COST_TYPES, FORCE, type WorldOptions } from './fixture';
+import { FORCE, catalogueXml, gameSystemXml, type WorldOptions } from './fixture';
 
 export interface ScreenSeed {
   /** data files by path, as XML */
@@ -20,9 +20,8 @@ const REPO = 'test/repo';
 /** The XML behind `world(units, o)`, which keeps only what it parsed. */
 export function worldFiles(units: string, o: Pick<WorldOptions, 'gst' | 'cat'> = {}): Record<string, string> {
   return {
-    'test.gst': `<gameSystem id="gst" name="Test Game" revision="1">${COST_TYPES}${o.gst ?? FORCE}</gameSystem>`,
-    'test.cat': `<catalogue id="cat" name="Test Army" revision="1" gameSystemId="gst">
-      <selectionEntries>${units}</selectionEntries>${o.cat ?? ''}</catalogue>`,
+    'test.gst': gameSystemXml(o.gst ?? FORCE),
+    'test.cat': catalogueXml(`<selectionEntries>${units}</selectionEntries>${o.cat ?? ''}`),
   };
 }
 

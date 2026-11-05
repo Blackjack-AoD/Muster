@@ -106,13 +106,13 @@ describe('applyLoreAllegiance', () => {
     const w = world(allegiance);
     const a = w.add('Allegiance');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(present(w.ev().find(a), 'the selection').children.map((c) => c.eff.name.trim())).toEqual(['Traitor']);
+    expect(w.sel(a).children.map((c) => c.eff.name.trim())).toEqual(['Traitor']);
   });
   it('picks Loyalist for a loyalist army', () => {
     const w = world(allegiance);
     const a = w.add('Allegiance');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Ultramarines');
-    expect(present(w.ev().find(a), 'the selection').children.map((c) => c.eff.name.trim())).toEqual(['Loyalist']);
+    expect(w.sel(a).children.map((c) => c.eff.name.trim())).toEqual(['Loyalist']);
   });
   it('ignores a group with Traitor and no Loyalist', () => {
     const w = world(
@@ -120,7 +120,7 @@ describe('applyLoreAllegiance', () => {
     );
     const a = w.add('Other');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(present(w.ev().find(a), 'the selection').children).toEqual([]);
+    expect(w.sel(a).children).toEqual([]);
   });
   it('ignores groups that are not an allegiance choice', () => {
     const w = world(
@@ -128,7 +128,7 @@ describe('applyLoreAllegiance', () => {
     );
     const a = w.add('Other');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
-    expect(present(w.ev().find(a), 'the selection').children).toEqual([]);
+    expect(w.sel(a).children).toEqual([]);
   });
   it('does nothing for a force that is not there', () => {
     const w = world(allegiance);
@@ -146,14 +146,14 @@ describe('switchesOn', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['Legacy On']);
+    expect(w.sel(p).children.map((c) => c.eff.name)).toEqual(['Legacy On']);
   });
   it('replaces an Off with On', () => {
     const w = world(panel);
     const p = w.add('Expanded');
     w.pick(p, 'Legacy Off');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['Legacy On']);
+    expect(w.sel(p).children.map((c) => c.eff.name)).toEqual(['Legacy On']);
   });
   it('finds switches inside other groups', () => {
     const w = world(
@@ -165,13 +165,13 @@ describe('switchesOn', () => {
     );
     const p = w.add('Expanded');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['X On']);
+    expect(w.sel(p).children.map((c) => c.eff.name)).toEqual(['X On']);
   });
   it('leaves units alone', () => {
     const w = world(unit('p', 'Squad', 0, group('g1', 'Legacy', children(entry('on', 'X On'), entry('off', 'X Off')))));
     const p = w.add('Squad');
     switchesOn(w.roster, w.contexts, 'f1');
-    expect(present(w.ev().find(p), 'the selection').children).toEqual([]);
+    expect(w.sel(p).children).toEqual([]);
   });
   it('does nothing for a force that is not there', () => {
     const w = world(panel);
@@ -192,14 +192,14 @@ describe('pick', () => {
     const { w, p, rs, g } = setup();
     pick(w.roster, w.contexts, rs, g, g.members[0]);
     pick(w.roster, w.contexts, rs, g, g.members[1]);
-    expect(present(w.ev().find(p), 'the selection').children.map((c) => c.eff.name)).toEqual(['B']);
+    expect(w.sel(p).children.map((c) => c.eff.name)).toEqual(['B']);
   });
   it('does nothing when the target is already picked', () => {
     const { w, p, rs, g } = setup();
     pick(w.roster, w.contexts, rs, g, g.members[0]);
-    const uid = present(w.ev().find(p), 'the selection').children[0].sel.uid;
+    const uid = w.sel(p).children[0].sel.uid;
     pick(w.roster, w.contexts, rs, g, g.members[0]);
-    expect(present(w.ev().find(p), 'the selection').children[0].sel.uid).toBe(uid);
+    expect(w.sel(p).children[0].sel.uid).toBe(uid);
   });
 });
 

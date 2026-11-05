@@ -11,18 +11,28 @@ export const parseXml = (xml: string) =>
 export const COST_TYPES =
   '<costTypes><costType id="pts" name="pts" defaultCostLimit="2000"/><costType id="pl" name="PL" defaultCostLimit="-1"/></costTypes>';
 
-export const gameSystem = (inner = '') =>
-  parseXml(`<gameSystem id="gst" name="Test Game" revision="1">${COST_TYPES}${inner}</gameSystem>`);
-export const catalogue = (inner = '', id = 'cat', attrs = '') =>
-  parseXml(`<catalogue id="${id}" name="Test Army" revision="1" gameSystemId="gst" ${attrs}>${inner}</catalogue>`);
+export const gameSystemXml = (inner = '') =>
+  `<gameSystem id="gst" name="Test Game" revision="1">${COST_TYPES}${inner}</gameSystem>`;
+export const catalogueXml = (inner = '', id = 'cat', attrs = '') =>
+  `<catalogue id="${id}" name="Test Army" revision="1" gameSystemId="gst" ${attrs}>${inner}</catalogue>`;
+
+export const gameSystem = (inner = '') => parseXml(gameSystemXml(inner));
+export const catalogue = (inner = '', id = 'cat', attrs = '') => parseXml(catalogueXml(inner, id, attrs));
 
 export const FORCE = '<forceEntries><forceEntry id="det" name="Detachment"/></forceEntries>';
+export const TWO_FORCES =
+  '<forceEntries><forceEntry id="det" name="Detachment"/><forceEntry id="ally" name="Allies"/></forceEntries>';
 
 /** A selection entry; `inner` holds its modifiers, constraints, child entries and so on. */
 export const entry = (id: string, name: string, pts = 0, inner = '', attrs = 'type="upgrade"') =>
   `<selectionEntry id="${id}" name="${name}" ${attrs}><costs><cost name="pts" typeId="pts" value="${pts}"/></costs>${inner}</selectionEntry>`;
 export const unit = (id: string, name: string, pts = 0, inner = '') => entry(id, name, pts, inner, 'type="unit"');
 export const children = (...entries: string[]) => `<selectionEntries>${entries.join('')}</selectionEntries>`;
+export const mods = (...m: string[]) => `<modifiers>${m.join('')}</modifiers>`;
+export const cons = (...c: string[]) => `<constraints>${c.join('')}</constraints>`;
+export const conds = (...c: string[]) => `<conditions>${c.join('')}</conditions>`;
+export const group = (inner: string, attrs = '') =>
+  `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
 
 export interface WorldOptions {
   /** extra XML inside the game system; defaults to a force entry with no category limits */
@@ -31,12 +41,6 @@ export interface WorldOptions {
   cat?: string;
   linked?: DataFile[];
   costLimit?: number;
-}
-
-/** The uid from an `addSel` that a test expects to work. */
-export function addedUid(uid: string | null): string {
-  if (uid === null) throw new Error('the add was skipped: its force or parent is not in the roster');
-  return uid;
 }
 
 /** A value a test needs, so a missing one fails there by name. */
@@ -68,7 +72,7 @@ export function world(units: string, o: WorldOptions = {}) {
     return opt;
   };
   const beneath = (parentUid: string, name: string) => {
-    const rs = present(ev().find(parentUid), 'the parent selection');
+    const rs = sel(parentUid);
     const walk = (opts: Opt[]): Opt | undefined => {
       for (const o of opts) {
         if (o.node.name === name) return o;
@@ -82,6 +86,7 @@ export function world(units: string, o: WorldOptions = {}) {
     return opt;
   };
   const ev = () => new Evaluator(roster, contexts);
+  const sel = (selUid: string) => present(ev().find(selUid), 'the selection');
   return {
     gst,
     cat,
@@ -89,24 +94,24 @@ export function world(units: string, o: WorldOptions = {}) {
     contexts,
     roster,
     ev,
+    sel,
     root,
     beneath,
     /** add a root unit, filling its mandatory defaults */
     add: (name: string, number = 1, forceUid = 'f1') => {
       const opt = root(name);
-      return addedUid(
-        addSel(roster, contexts, forceUid, null, opt, number, opt.node.categoryLinks.find((c) => c.primary)?.targetId),
-      );
+      const primary = opt.node.categoryLinks.find((c) => c.primary)?.targetId;
+      return present(addSel(roster, contexts, forceUid, null, opt, number, primary), 'the added unit');
     },
     /** add an option beneath a selection */
     pick: (parentUid: string, name: string, number = 1) =>
-      addedUid(addSel(roster, contexts, 'f1', parentUid, beneath(parentUid, name), number)),
-    /** a second detachment of the same catalogue */
-    addForce: (uid = 'f2') => {
-      roster.forces.push({ uid, forceEntryId: fe.id, catalogueId: cat.id, selections: [] });
+      present(addSel(roster, contexts, 'f1', parentUid, beneath(parentUid, name), number), 'the added option'),
+    /** another detachment of the same catalogue */
+    addForce: (uid = 'f2', forceEntryId = fe.id) => {
+      roster.forces.push({ uid, forceEntryId, catalogueId: cat.id, selections: [] });
       return uid;
     },
-    pts: (selUid: string) => present(ev().find(selUid), 'the selection').total,
+    pts: (selUid: string) => sel(selUid).total,
     errors: () =>
       ev()
         .issues.filter((i) => i.level === 'error')

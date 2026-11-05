@@ -12,11 +12,8 @@ import {
   type Issue,
 } from './engine';
 import type { Opt } from './catalog';
-import { addedUid, children, entry, present, unit, world } from '../test/fixture';
+import { TWO_FORCES, children, conds, cons, entry, group, mods, present, unit, world } from '../test/fixture';
 
-const mods = (...m: string[]) => `<modifiers>${m.join('')}</modifiers>`;
-const cons = (...c: string[]) => `<constraints>${c.join('')}</constraints>`;
-const conds = (...c: string[]) => `<conditions>${c.join('')}</conditions>`;
 const min = (n: number) => `<constraint id="c-min" type="min" value="${n}" field="selections" scope="parent"/>`;
 const max = (n: number) => `<constraint id="c-max" type="max" value="${n}" field="selections" scope="parent"/>`;
 
@@ -100,14 +97,14 @@ describe('modifiers', () => {
         unit('b', 'Beta', 0, mods('<modifier type="append" field="name" value="(Elite)"/>')),
     );
     const [a, b] = [w.add('Alpha'), w.add('Beta')];
-    expect(present(w.ev().find(a), 'the selection').eff.name).toBe('Omega');
-    expect(present(w.ev().find(b), 'the selection').eff.name).toBe('Beta (Elite)');
+    expect(w.sel(a).eff.name).toBe('Omega');
+    expect(w.sel(b).eff.name).toBe('Beta (Elite)');
   });
 
   it('sets hidden', () => {
     const w = world(unit('u', 'Squad', 0, mods('<modifier type="set" field="hidden" value="true"/>')));
     const u = w.add('Squad');
-    expect(present(w.ev().find(u), 'the selection').eff.hidden).toBe(true);
+    expect(w.sel(u).eff.hidden).toBe(true);
   });
 
   it('adds, removes, and changes the primary category', () => {
@@ -127,7 +124,7 @@ describe('modifiers', () => {
       ),
     );
     const u = w.add('Squad');
-    const e = present(w.ev().find(u), 'the selection').eff;
+    const e = w.sel(u).eff;
     expect([...e.categories].sort()).toEqual(['heavy', 'hq', 'troops']);
     expect(e.primary).toBe('hq');
   });
@@ -251,8 +248,6 @@ describe('modifiers', () => {
 
 describe('conditions', () => {
   /** Squad costs 1 extra when the condition holds */
-  const TWO_FORCES =
-    '<forceEntries><forceEntry id="det" name="Detachment"/><forceEntry id="ally" name="Allies"/></forceEntries>';
   const guarded = (condition: string, others = unit('x', 'Other', 10)) =>
     unit(
       'u',
@@ -545,7 +540,7 @@ describe('conditions', () => {
       );
       const u = w.add('Squad');
       expect(holds(w, u)).toBe(true);
-      w.roster.forces.push({ uid: 'f2', forceEntryId: 'ally', catalogueId: 'cat', selections: [] });
+      w.addForce('f2', 'ally');
       expect(holds(w, u)).toBe(false);
     });
     it('scope force asks only whether this detachment is of that force entry', () => {
@@ -561,7 +556,7 @@ describe('conditions', () => {
         { gst: TWO_FORCES },
       );
       const u = other.add('Squad');
-      other.roster.forces.push({ uid: 'f2', forceEntryId: 'ally', catalogueId: 'cat', selections: [] });
+      other.addForce('f2', 'ally');
       expect(holds(other, u)).toBe(false);
     });
     it('counts forces', () => {
@@ -1214,8 +1209,6 @@ describe('validation', () => {
       selUid,
       message,
     });
-    const pickIn = (w: ReturnType<typeof world>, forceUid: string, parentUid: string, name: string) =>
-      addSel(w.roster, w.contexts, forceUid, parentUid, w.beneath(parentUid, name));
     const inForce = cons('<constraint id="c" type="max" value="1" field="selections" scope="force"/>');
     const inList = cons('<constraint id="c" type="max" value="1" field="selections" scope="roster"/>');
 
@@ -1234,8 +1227,8 @@ describe('validation', () => {
       const f2 = w.addForce();
       const [a, b] = [w.add('Squad'), w.add('Squad')];
       const [c, d] = [w.add('Squad', 1, f2), w.add('Squad', 1, f2)];
-      for (const u of [a, b]) pickIn(w, 'f1', u, 'Relic');
-      for (const u of [c, d]) pickIn(w, f2, u, 'Relic');
+      for (const u of [a, b]) w.pick(u, 'Relic');
+      for (const u of [c, d]) w.pick(u, 'Relic');
       const message = 'Relic: at most 1 allowed in this detachment (has 2)';
       expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, c)]);
     });
@@ -1297,9 +1290,9 @@ describe('validation', () => {
       });
       const f2 = w.addForce();
       const [one, two] = forceRootOptions(w.ctx, w.ctx.forceEntries()[0]);
-      const a = addedUid(addSel(w.roster, w.contexts, 'f1', null, one));
+      const a = present(addSel(w.roster, w.contexts, 'f1', null, one), 'the added unit');
       addSel(w.roster, w.contexts, 'f1', null, two);
-      const b = addedUid(addSel(w.roster, w.contexts, f2, null, one));
+      const b = present(addSel(w.roster, w.contexts, f2, null, one), 'the added unit');
       addSel(w.roster, w.contexts, f2, null, two);
       const message = 'Hero: at most 1 allowed (has 2)';
       expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, b)]);
@@ -1310,8 +1303,8 @@ describe('validation', () => {
       const f2 = w.addForce();
       const a = w.add('Squad');
       const b = w.add('Squad', 1, f2);
-      pickIn(w, 'f1', a, 'Relic');
-      pickIn(w, f2, b, 'Relic');
+      w.pick(a, 'Relic');
+      w.pick(b, 'Relic');
       expect(w.ev().issues).toEqual([issue('list', 'Relic: at most 1 allowed in the list (has 2)', 'f1', a)]);
     });
 
@@ -1769,9 +1762,7 @@ describe('selected', () => {
 
 describe('adding a unit fills in what it must have', () => {
   const names = (w: ReturnType<typeof world>, uid: string) =>
-    present(w.ev().find(uid), 'the selection').children.map((c) => `${c.sel.number}x ${c.eff.name}`);
-  const group = (inner: string, attrs = '') =>
-    `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
+    w.sel(uid).children.map((c) => `${c.sel.number}x ${c.eff.name}`);
 
   it('takes the minimum of a mandatory child', () => {
     const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(5))))));
@@ -1795,7 +1786,7 @@ describe('adding a unit fills in what it must have', () => {
       ),
     );
     const u = w.add('Squad');
-    expect(present(w.ev().find(u), 'the selection').children[0].children.map((c) => c.eff.name)).toEqual(['Gun']);
+    expect(w.sel(u).children[0].children.map((c) => c.eff.name)).toEqual(['Gun']);
   });
   it('skips a hidden mandatory child', () => {
     const w = world(
@@ -1956,7 +1947,7 @@ describe('adding a unit fills in what it must have', () => {
     const trooper = entry('t', 'Trooper', 0, cons(min(1)) + children(entry('gun', 'Gun', 0, cons(min(1)))));
     const w = world(unit('u', 'Squad', 0, children(sarge, trooper)));
     const u = w.add('Squad');
-    expect(present(w.ev().find(u), 'the selection').children[0].children.map((c) => c.eff.name)).toEqual(['Sword']);
+    expect(w.sel(u).children[0].children.map((c) => c.eff.name)).toEqual(['Sword']);
   });
   it('stops a chain of mandatory entries that links back to itself', () => {
     const w = world(
@@ -1991,8 +1982,8 @@ describe('roster edits', () => {
     const w = world(
       unit('u', 'Squad', 0, '<categoryLinks><categoryLink id="l" targetId="troops" primary="true"/></categoryLinks>'),
     );
-    const uid = addedUid(addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen'));
-    expect(present(w.ev().find(uid), 'the selection').eff.primary).toBe('chosen');
+    const uid = present(addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen'), 'the added unit');
+    expect(w.sel(uid).eff.primary).toBe('chosen');
   });
 
   describe('an add with nowhere to go', () => {
