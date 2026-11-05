@@ -10,7 +10,8 @@ export function normaliseRepo(input: string): string | null {
     .trim()
     .replace(/\.git$/, '')
     .replace(/\/+$/, '');
-  const m = s.match(/(?:github\.com\/)?([\w.-]+)\/([\w.-]+)$/i);
+  // Past the host, the repo comes first, so anything after it is a page inside the repo.
+  const m = s.match(/github\.com\/([\w.-]+)\/([\w.-]+)(?:[/?#]|$)/i) ?? s.match(/([\w.-]+)\/([\w.-]+)$/);
   return m ? `${m[1]}/${m[2]}` : null;
 }
 
