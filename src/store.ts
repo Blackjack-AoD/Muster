@@ -1,7 +1,7 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { db, persistStorage, type RepoState } from './data/db';
-import { Evaluator, isRecord, uid, type Force, type Roster, type Sel } from './data/engine';
+import { db, persistStorage, type RepoState, type SavedUnit } from './data/db';
+import { Evaluator, isRecord, uid, type Force, type RSel, type Roster, type Sel } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
 import { DEFAULT_REPOS, failureReason, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
@@ -10,6 +10,7 @@ interface State {
   ready: boolean;
   repos: RepoState[];
   rosters: Roster[];
+  savedUnits: SavedUnit[];
   sync: Record<string, SyncProgress>;
   toast?: string;
   /** optional button on the toast, e.g. Undo; failedSave holds the uid of a list that hasn't saved */
@@ -28,7 +29,15 @@ const savedGame = (() => {
     return undefined;
   }
 })();
-let state: State = { ready: false, repos: [], rosters: [], sync: {}, game: savedGame, unsaved: new Set() };
+let state: State = {
+  ready: false,
+  repos: [],
+  rosters: [],
+  savedUnits: [],
+  sync: {},
+  game: savedGame,
+  unsaved: new Set(),
+};
 const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
@@ -260,6 +269,8 @@ function saveEdit(r: Roster) {
     toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid });
   });
 }
+
+export async function saveUnit(_r: Roster, _rs: RSel, _name: string): Promise<void> {}
 
 // ---------- roster controller ----------
 export interface RosterCtl {

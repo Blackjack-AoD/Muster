@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
-import { Evaluator, displayName, uid as newUid, type Roster, type Sel } from './data/engine';
+import { Evaluator, addSel, displayName, uid as newUid, type Roster, type Sel } from './data/engine';
 import { setUpForce } from './data/setup';
 import {
   deleteRoster,
@@ -13,6 +13,7 @@ import {
   refreshRepos,
   removeRepo,
   saveRoster,
+  saveUnit,
   setGame,
   syncAll,
   toast,
@@ -354,5 +355,152 @@ describe('app state', () => {
     dismissToast();
     expect(getState().toast).toBeUndefined();
     vi.useRealTimers();
+  });
+});
+
+describe('saved units', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const SQUAD = unit(
+    'tac',
+    'Tactical Squad',
+    100,
+    `<categoryLinks>
+      <categoryLink id="tac-troops" name="Troops" targetId="troops" primary="true"/>
+      <categoryLink id="tac-hq" name="HQ" targetId="hq"/>
+    </categoryLinks>
+    ${children(sergeant(children(SWORD)))}`,
+  );
+  /** A list holding one Tactical Squad, added under the HQ heading rather than its primary Troops. */
+  const listWithSquad = (listUid: string) => {
+    const w = world(SQUAD);
+    w.roster.uid = listUid;
+    const squad = present(addSel(w.roster, w.contexts, 'f1', null, w.root('Tactical Squad'), 1, 'hq'), 'the squad');
+    return { w, squad, rs: w.sel(squad) };
+  };
+  const rootsOf = (r?: Roster) => r?.forces.flatMap((f) => f.selections) ?? [];
+  const inMemory = (listUid: string) => rootsOf(getState().rosters.find((r) => r.uid === listUid));
+  const inStorage = async (listUid: string) => rootsOf((await stored(listUid))[0]);
+  const savedIn = (r: Roster, selUid: string) =>
+    present(
+      rootsOf(r).find((s) => s.uid === selUid),
+      'the unit',
+    );
+  const savedUnit = (id: string) => getState().savedUnits.find((u) => u.id === id);
+  const storedSavedUnit = async (id: string) => (await db.savedUnits()).find((u) => u.id === id);
+
+  /** Storage refuses every write of a list, as a full phone would, and still takes saved units. */
+  const refuseLists = () => {
+    // oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
+    const put = IDBObjectStore.prototype.put;
+    return vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value: unknown,
+      key?: IDBValidKey,
+    ) {
+      if (this.name === 'rosters') throw new DOMException('Storage is full', 'QuotaExceededError');
+      return put.call(this, value, key);
+    });
+  };
+
+  /** Runs `save` and returns the one saved unit it added. */
+  const addedBy = async (save: () => Promise<void>) => {
+    const before = new Set(getState().savedUnits.map((u) => u.id));
+    await save();
+    const added = getState().savedUnits.filter((u) => !before.has(u.id));
+    expect(added).toHaveLength(1);
+    return present(added[0], 'the saved unit');
+  };
+
+  it('saves a unit with its army file, key, category and build', async () => {
+    const { w, squad, rs } = listWithSquad('su1');
+    const build = structuredClone(savedIn(w.roster, squad));
+    const { id } = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
+    const expected = {
+      id,
+      name: 'Squad Thrax',
+      repo: 'test/repo',
+      gameSystemId: 'gst',
+      catalogueId: 'cat',
+      key: 'tac',
+      categoryId: 'hq',
+      build,
+    };
+    expect(savedUnit(id)).toMatchObject(expected);
+    expect(await storedSavedUnit(id)).toMatchObject(expected);
+  });
+
+  it('links the unit to its saved unit by id and name, in memory and storage', async () => {
+    const { w, squad, rs } = listWithSquad('su2');
+    const { id } = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
+    const link = { uid: squad, saved: id, name: 'Squad Thrax' };
+    expect(savedIn(w.roster, squad)).toMatchObject(link);
+    expect(inMemory('su2')).toEqual([expect.objectContaining(link)]);
+    expect(await inStorage('su2')).toEqual([expect.objectContaining(link)]);
+  });
+
+  it('takes the category the list shows for a unit added under none', async () => {
+    const w = world(SQUAD);
+    w.roster.uid = 'su3';
+    const squad = present(addSel(w.roster, w.contexts, 'f1', null, w.root('Tactical Squad')), 'the squad');
+    const saved = await addedBy(() => saveUnit(w.roster, w.sel(squad), 'No Heading'));
+    expect(saved.categoryId).toBe('troops');
+  });
+
+  it('leaves the unit unlinked when storage refuses the saved unit', async () => {
+    const { w, squad, rs } = listWithSquad('su4');
+    await saveRoster(w.roster);
+    const before = getState().savedUnits.length;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+    await expect(saveUnit(w.roster, rs, 'Squad Thrax')).rejects.toThrow('Storage is full');
+    expect(getState().savedUnits).toHaveLength(before);
+    expect(Object.keys(savedIn(w.roster, squad))).not.toContain('saved');
+    expect(inMemory('su4')[0]?.saved).toBeUndefined();
+  });
+
+  it('loads saved units from storage at start', async () => {
+    const { w, squad } = listWithSquad('ld1');
+    const record = {
+      id: 'thrax',
+      name: 'Squad Thrax',
+      repo: 'test/repo',
+      gameSystemId: 'gst',
+      catalogueId: 'cat',
+      key: 'tac',
+      categoryId: 'hq',
+      build: savedIn(w.roster, squad),
+      created: 1,
+      updated: 2,
+    };
+    await db.putSavedUnit(record);
+    await init();
+    expect(savedUnit('thrax')).toEqual(record);
+  });
+
+  describe('a list that fails to save', () => {
+    afterEach(dismissToast);
+    it.each([
+      [
+        'saving a unit',
+        async () => {
+          const { w, rs } = listWithSquad('rt1');
+          await saveRoster(w.roster);
+          refuseLists();
+          await saveUnit(w.roster, rs, 'Squad Thrax');
+          return { list: 'rt1', expected: { saved: expect.any(String), name: 'Squad Thrax' } };
+        },
+      ],
+    ])('offers Retry after %s, and Retry stores it', async (_what, change) => {
+      const { list, expected } = await change();
+      await vi.waitFor(() => expect(getState().toastAction?.failedSave).toBe(list));
+      expect(getState().toast).toBe("Couldn't save this list");
+      expect(getState().unsaved.has(list)).toBe(true);
+
+      vi.restoreAllMocks();
+      getState().toastAction?.run();
+      await vi.waitFor(() => expect(getState().unsaved.has(list)).toBe(false));
+      expect((await inStorage(list))[0]).toMatchObject(expected);
+    });
   });
 });
