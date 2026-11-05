@@ -5,7 +5,7 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { Context } from '../src/data/catalog';
+import { Context, type Opt } from '../src/data/catalog';
 import {
   Evaluator,
   addSel,
@@ -16,7 +16,7 @@ import {
   type Roster,
   type Sel,
 } from '../src/data/engine';
-import type { DataFile } from '../src/data/model';
+import type { DataFile, EntryNode } from '../src/data/model';
 import { parseDataFile, readHeader } from '../src/data/parse';
 import { setUpForce } from '../src/data/setup';
 import { costIds, shapesOf } from './shapes';
@@ -91,14 +91,73 @@ const kindOf = (i: Issue) => i.message.replace(/[\d.]+/g, 'N').replace(/^.*›/,
 const issueKey = (i: Issue) => `${i.selUid}|${i.level}|${i.message}`;
 const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+interface Army {
+  name: string;
+  catalogueId: string;
+  ctx: Context;
+  contexts: Map<string, Context>;
+}
+
 let units = 0;
+
+/** A new list of this force entry with its set-up in place, as the app starts one, and what its set-up raises. */
+function setUpList(army: Army, fe: EntryNode, list: string, noteOnce: typeof note) {
+  const roster: Roster = {
+    uid: uid(),
+    name: 't',
+    repo: 'x',
+    gameSystemId: army.ctx.gst.id,
+    costLimit: 2000,
+    forces: [{ uid: uid(), forceEntryId: fe.id, catalogueId: army.catalogueId, selections: [] }],
+    created: 0,
+    updated: 0,
+  };
+  const fromSetUp = new Set<string>();
+  try {
+    setUpForce(roster, army.contexts, roster.forces[0].uid, army.name);
+    const size = nodes(roster.forces[0].selections);
+    for (const i of new Evaluator(roster, army.contexts).issues) {
+      if (!i.selUid || i.level !== 'error') continue;
+      fromSetUp.add(issueKey(i));
+      noteOnce(`SET-UP ${kindOf(i)}`, size, list);
+    }
+  } catch (e) {
+    // the app also carries on with whatever set-up it managed
+    noteOnce(`SET-UP CRASH ${reason(e)}`, 0, list);
+  }
+  return { roster, fromSetUp };
+}
+
+/** Adds one root entry to a copy of the set-up list and notes what goes wrong that the set-up didn't raise. */
+function tryUnit(army: Army, setUp: Roster, fromSetUp: Set<string>, o: Opt, where: string) {
+  const roster = structuredClone(setUp);
+  try {
+    const before = new Evaluator(roster, army.contexts);
+    const eff = before.optionEff(o, null, before.forces[0]);
+    if (eff.hidden || unavailable(eff)) return;
+    // a second copy of a set-up entry only reports that entry's own cap
+    if (before.forces[0].roots.some((r) => r.node.id === o.node.id)) return;
+    const primary = o.node.categoryLinks.find((c) => c.primary)?.targetId;
+    const su = addSel(roster, army.contexts, roster.forces[0].uid, null, o, 1, primary);
+    if (su === null) throw new Error('the unit was not added');
+    const ev = new Evaluator(roster, army.contexts);
+    units++;
+    const size = nodes(roster.forces[0].selections);
+    for (const i of ev.issues)
+      if ((i.selUid === su || (i.selUid && i.level === 'error')) && !fromSetUp.has(issueKey(i)))
+        note(kindOf(i), size, where);
+  } catch (e) {
+    note(`CRASH ${reason(e)}`, 0, where);
+  }
+}
+
 for (const m of meta.values()) {
   if (m.h.kind !== 'catalogue' || m.h.library || (only && !m.h.name.includes(only))) continue;
   const cat = load(m);
   const gst = meta.get(cat.gameSystemId ?? '');
   if (!gst) continue;
   const ctx = new Context(load(gst), cat, linkedTo(cat));
-  const contexts = new Map([[cat.id, ctx]]);
+  const army: Army = { name: m.h.name, catalogueId: cat.id, ctx, contexts: new Map([[cat.id, ctx]]) };
   // A problem the set-up raises on its own belongs to the army, not to each unit added after it.
   const armyWide = new Set<string>();
   const noteOnce = (kind: string, size: number, example: string) => {
@@ -107,59 +166,9 @@ for (const m of meta.values()) {
   };
   for (const fe of ctx.forceEntries()) {
     if (fe.hidden) continue; // the app doesn't offer it
-    const setUp: Roster = {
-      uid: uid(),
-      name: 't',
-      repo: 'x',
-      gameSystemId: ctx.gst.id,
-      costLimit: 2000,
-      forces: [{ uid: uid(), forceEntryId: fe.id, catalogueId: cat.id, selections: [] }],
-      created: 0,
-      updated: 0,
-    };
     const list = `${m.h.name} / ${fe.name}`;
-    const fromSetUp = new Set<string>();
-    try {
-      setUpForce(setUp, contexts, setUp.forces[0].uid, m.h.name);
-      const size = nodes(setUp.forces[0].selections);
-      for (const i of new Evaluator(setUp, contexts).issues) {
-        if (!i.selUid || i.level !== 'error') continue;
-        fromSetUp.add(issueKey(i));
-        noteOnce(`SET-UP ${kindOf(i)}`, size, list);
-      }
-    } catch (e) {
-      // the app also carries on with whatever set-up it managed
-      noteOnce(`SET-UP CRASH ${reason(e)}`, 0, list);
-    }
-    for (const o of forceRootOptions(ctx, fe)) {
-      const roster = structuredClone(setUp);
-      const where = `${list} / ${o.node.name}`;
-      try {
-        const before = new Evaluator(roster, contexts);
-        const eff = before.optionEff(o, null, before.forces[0]);
-        if (eff.hidden || unavailable(eff)) continue;
-        // a second copy of a set-up entry only reports that entry's own cap
-        if (before.forces[0].roots.some((r) => r.node.id === o.node.id)) continue;
-        const su = addSel(
-          roster,
-          contexts,
-          roster.forces[0].uid,
-          null,
-          o,
-          1,
-          o.node.categoryLinks.find((c) => c.primary)?.targetId,
-        );
-        if (su === null) throw new Error('the unit was not added');
-        const ev = new Evaluator(roster, contexts);
-        units++;
-        const size = nodes(roster.forces[0].selections);
-        for (const i of ev.issues)
-          if ((i.selUid === su || (i.selUid && i.level === 'error')) && !fromSetUp.has(issueKey(i)))
-            note(kindOf(i), size, where);
-      } catch (e) {
-        note(`CRASH ${reason(e)}`, 0, where);
-      }
-    }
+    const { roster, fromSetUp } = setUpList(army, fe, list, noteOnce);
+    for (const o of forceRootOptions(ctx, fe)) tryUnit(army, roster, fromSetUp, o, `${list} / ${o.node.name}`);
   }
 }
 
