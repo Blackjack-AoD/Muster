@@ -88,6 +88,44 @@ describe('restoring a backup', () => {
     await importRosters([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }]);
     expect(await db.rosters()).toHaveLength(before);
   });
+  it('opens a list in the shape of the first release', async () => {
+    const oldest = {
+      uid: 'oldest',
+      name: 'Old Guard',
+      repo: 'r',
+      gameSystemId: 'g',
+      costLimit: 2000,
+      forces: [
+        {
+          uid: 'f',
+          forceEntryId: 'det',
+          catalogueId: 'cat',
+          selections: [{ uid: 's', key: 'e', number: 1, children: [], categoryId: 'hq' }],
+        },
+      ],
+      created: 1700000000000,
+      updated: 1700000000000,
+    };
+    await importRosters([oldest]);
+    expect(await stored('oldest')).toEqual([oldest]);
+  });
+  const FORCE = { uid: 'f', forceEntryId: 'det', catalogueId: 'cat', selections: [] };
+  it.each([
+    ['no uid', { ...roster('x'), uid: undefined }],
+    ['an empty uid', roster('')],
+    ['a uid that is a number', { ...roster('x'), uid: 7 }],
+    ['no edit time', { ...roster('x'), updated: undefined }],
+    ['an edit time that is an object', { ...roster('x'), updated: {} }],
+    ['a detachment that is null', { ...roster('x'), forces: [null] }],
+    ['a detachment that is text', { ...roster('x'), forces: ['Patrol'] }],
+    ['a detachment with no army', { ...roster('x'), forces: [{ ...FORCE, catalogueId: undefined }] }],
+    ['a detachment with no type', { ...roster('x'), forces: [{ ...FORCE, forceEntryId: 7 }] }],
+    ['a detachment with no units', { ...roster('x'), forces: [{ ...FORCE, selections: 'none' }] }],
+  ])('skips a list with %s', async (_what, broken) => {
+    const before = (await db.rosters()).length;
+    await importRosters([broken]);
+    expect(await db.rosters()).toHaveLength(before);
+  });
 });
 
 describe('app state', () => {
