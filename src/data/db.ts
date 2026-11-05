@@ -99,19 +99,11 @@ export const db = {
 
 /** Ask the browser not to clear our storage when space runs low. */
 export async function persistStorage() {
-  try {
-    if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
-  } catch {
-    /* ignore */
-  }
+  if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
 }
 
-export async function storageUse(): Promise<{ used: number; quota: number; persisted: boolean } | null> {
-  try {
-    const e = await navigator.storage.estimate();
-    const persisted = (await navigator.storage.persisted?.()) ?? false;
-    return { used: e.usage ?? 0, quota: e.quota ?? 0, persisted };
-  } catch {
-    return null;
-  }
+export async function storageUse(): Promise<{ used: number; quota: number; persisted: boolean }> {
+  const e = await navigator.storage.estimate();
+  const persisted = (await navigator.storage.persisted?.()) ?? false;
+  return { used: e.usage ?? 0, quota: e.quota ?? 0, persisted };
 }

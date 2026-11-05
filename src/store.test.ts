@@ -85,7 +85,7 @@ describe('restoring a backup', () => {
   });
   it('skips anything that is not a list', async () => {
     const before = (await db.rosters()).length;
-    await importRosters([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }] as unknown as Roster[]);
+    await importRosters([null, {}, { uid: 'x' }, { uid: 'y', forces: 'nope' }]);
     expect(await db.rosters()).toHaveLength(before);
   });
 });

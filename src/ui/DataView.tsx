@@ -21,7 +21,7 @@ export function DataView() {
   const sync = useStore((s) => s.sync);
   const rosters = useStore((s) => s.rosters);
   const [input, setInput] = useState('');
-  const [usage, setUsage] = useState<Awaited<ReturnType<typeof storageUse>>>(null);
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof storageUse>>>();
   const [online, setOnline] = useState(navigator.onLine);
   const busy = Object.values(sync).some((p) => p.stage === 'checking' || p.stage === 'downloading');
 
