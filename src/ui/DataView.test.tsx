@@ -89,14 +89,27 @@ describe('DataView', () => {
     expect(await db.repos()).toEqual([]);
   });
 
-  it('shows a failed download on its card alone, with no toast', async () => {
+  it('shows a failed download on its card and in a toast with the reason', async () => {
     vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
     await renderScreen(<App />);
 
     addRepo('owner/data');
 
-    await screen.findByText('Repo not found (is it public?)');
-    expect(getState().toast).toBeUndefined();
+    await screen.findByText('Repo not found (is it public?)', { selector: '.card .error-text' });
+    await expectToast("Couldn't sync: Repo not found (is it public?)");
+  });
+
+  it('shows a download that fails while offline as offline in both places', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    await renderScreen(<App />);
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+    addRepo('owner/data');
+
+    await screen.findByText('You are offline', { selector: '.card .error-text' });
+    await expectToast("Couldn't sync: You are offline");
   });
 
   it('shows the reason in a toast when storage refuses a sync', async () => {

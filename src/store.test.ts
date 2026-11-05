@@ -5,6 +5,7 @@ import type { Roster } from './data/engine';
 import {
   deleteRoster,
   dismissToast,
+  failureMessage,
   getState,
   importRosters,
   init,
@@ -23,6 +24,20 @@ const stored = async (uid: string) => (await db.rosters()).filter((r) => r.uid =
 beforeEach(() => {
   vi.unstubAllGlobals();
   vi.stubGlobal('navigator', { onLine: false });
+});
+
+describe('failureMessage', () => {
+  it("gives an error's own message", () => {
+    expect(failureMessage('sync', new Error('Repo not found'))).toBe("Couldn't sync: Repo not found");
+  });
+
+  it("gives a DOM exception's own message", () => {
+    expect(failureMessage('save', new DOMException('Storage is full'))).toBe("Couldn't save: Storage is full");
+  });
+
+  it('gives the text of a reason that is not an error', () => {
+    expect(failureMessage('sync', 'You are offline')).toBe("Couldn't sync: You are offline");
+  });
 });
 
 describe('saving lists', () => {
