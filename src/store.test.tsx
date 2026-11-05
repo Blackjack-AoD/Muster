@@ -74,6 +74,35 @@ async function failASave() {
 
 const showUndo = () => toast('Removed Tactical Squad', { label: 'Undo', run: () => {} });
 
+// oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
+const realPut = IDBObjectStore.prototype.put;
+
+/** The next save writes to storage, but the app hears how it went only when the test answers. */
+function holdNextSave() {
+  let answer: { finish: () => void; fail: () => void } | undefined;
+  vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (this: IDBObjectStore, value: unknown) {
+    const t = this.transaction;
+    // the caller sets its handlers after this returns
+    queueMicrotask(() => {
+      const { oncomplete, onabort } = t;
+      t.oncomplete = null;
+      t.onabort = null;
+      answer = {
+        finish: () => oncomplete?.call(t, new Event('complete')),
+        fail: () => onabort?.call(t, new Event('abort')),
+      };
+    });
+    return realPut.call(this, value);
+  });
+  const answered = async (how: 'finish' | 'fail') => {
+    const held = await waitFor(() => answer ?? Promise.reject(new Error('the save has not started')));
+    held[how]();
+    // a trip to storage lets the save report whatever it does next
+    await db.rosters();
+  };
+  return { finish: () => answered('finish'), fail: () => answered('fail') };
+}
+
 beforeEach(stubBrowserGaps);
 afterEach(() => {
   vi.useRealTimers();
@@ -207,6 +236,88 @@ describe('a failed save', () => {
 
     expect(await db.rosters()).toEqual([]);
     expect(getState().rosters).toEqual([]);
+  });
+});
+
+describe('saves of one list that overlap', () => {
+  /** The list on screen with a failed save showing, and the app's next two saves held. */
+  async function twoHeldSaves(list: Roster) {
+    await renderWithToast(list);
+    const put = await failASave();
+    put.mockRestore();
+    const older = holdNextSave();
+    await addUnit();
+    const newer = holdNextSave();
+    await addUnit();
+    return { older, newer };
+  }
+
+  it('leaves the mark and the toast up when an older save finishes before a newer one answers', async () => {
+    const list = newList();
+    const { older, newer } = await twoHeldSaves(list);
+
+    await older.finish();
+    expect(getState().unsaved.has(list.uid)).toBe(true);
+    expect(getState().toast).toBe(SAVE_FAILED);
+
+    await newer.finish();
+    expect(getState().unsaved.size).toBe(0);
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('keeps a newer failure when an older save finishes after it', async () => {
+    const list = newList();
+    const { older, newer } = await twoHeldSaves(list);
+
+    await newer.fail();
+    await older.finish();
+
+    expect(getState().unsaved.has(list.uid)).toBe(true);
+    expect(getState().toast).toBe(SAVE_FAILED);
+  });
+
+  it('clears on a newer success, and a save still answering later leaves the next failure alone', async () => {
+    const list = newList();
+    const { older, newer } = await twoHeldSaves(list);
+
+    await newer.finish();
+    expect(getState().unsaved.size).toBe(0);
+    expect(getState().toast).toBeUndefined();
+
+    refuse('put');
+    await addUnit();
+    await expectToast(SAVE_FAILED);
+    await older.finish();
+
+    expect(getState().unsaved.has(list.uid)).toBe(true);
+    expect(getState().toast).toBe(SAVE_FAILED);
+  });
+
+  it('leaves the list unmarked when an older save fails after a newer success', async () => {
+    await renderWithToast(newList());
+    const older = holdNextSave();
+    await addUnit();
+    await addUnit();
+    await waitFor(async () => expect(await storedUnits()).toBe(2));
+
+    await older.fail();
+
+    expect(getState().unsaved.size).toBe(0);
+    expect(getState().toast).toBeUndefined();
+    expect(await storedUnits()).toBe(2);
+  });
+
+  it('counts saves for each list apart', async () => {
+    await renderWithToast(newList());
+    const put = await failASave();
+    put.mockRestore();
+    const held = holdNextSave();
+    await addUnit();
+
+    await saveRoster({ ...newList(), uid: 'other' });
+    await held.finish();
+
+    expect(getState().unsaved.size).toBe(0);
   });
 });
 
