@@ -50,7 +50,8 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function toast(msg: string, action?: { label: string; run: () => void }) {
   set({ toast: msg, toastAction: action });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => set({ toast: undefined, toastAction: undefined }), action ? 5000 : 2600);
+  if (action) return;
+  toastTimer = setTimeout(() => set({ toast: undefined, toastAction: undefined }), 2600);
 }
 export function dismissToast() {
   clearTimeout(toastTimer);
