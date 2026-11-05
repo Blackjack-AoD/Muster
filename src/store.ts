@@ -36,14 +36,20 @@ function set(patch: Partial<State>) {
 }
 export const getState = () => state;
 
+/** Calls `listener` after every change to state, until the function it returns is called. */
+export function watchState(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
 export function useStore<T>(sel: (s: State) => T): T {
   const [, force] = useState(0);
   useEffect(() => {
     const l = () => force((x) => x + 1);
-    listeners.add(l);
+    const stop = watchState(l);
     // catch any update that landed between render and subscribing
     l();
-    return () => void listeners.delete(l);
+    return stop;
   }, []);
   return sel(state);
 }

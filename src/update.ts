@@ -1,5 +1,6 @@
 // App updates: register the service worker ourselves so a newly installed version is picked up straight away,
 // and offer a manual "check for updates" and a cache reset on the Data tab.
+import { getState, watchState } from './store';
 
 declare const __APP_VERSION__: string;
 declare const __BUILD_TIME__: string;
@@ -8,15 +9,30 @@ export const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 
 
 let reloading = false;
 
+const hasUnsavedEdit = () => getState().unsaved.size > 0;
+
+/** Run the new version once no edit is at risk. If the player leaves first, it applies on the next open. */
+function reloadWhenSaved() {
+  if (reloading) return;
+  reloading = true;
+  if (!hasUnsavedEdit()) {
+    location.reload();
+    return;
+  }
+  const stop = watchState(() => {
+    if (hasUnsavedEdit()) return;
+    stop();
+    location.reload();
+  });
+}
+
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
   // Already controlled = this is an update taking over: reload once to run the new version.
   // (A first install takes control too, but there's nothing old to replace then.)
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading) return;
-    reloading = true;
-    location.reload();
+    if (hadController) reloadWhenSaved();
   });
   addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {
@@ -25,7 +41,7 @@ export function registerServiceWorker() {
   });
   // Automatic check at most once a week (on opening the app, or coming back to it); otherwise only on request.
   const weekly = () => {
-    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (document.visibilityState !== 'visible' || !navigator.onLine || hasUnsavedEdit()) return;
     if (Date.now() - lastCheck() < WEEK) return;
     checkForUpdate().catch(() => {});
   };
@@ -70,10 +86,7 @@ export async function checkForUpdate(): Promise<UpdateResult> {
       // older builds wait to be told to take over
       if (next.state === 'installed') next.postMessage({ type: 'SKIP_WAITING' });
       // fallback if the new worker activates without a controller change (e.g. the page wasn't controlled)
-      if (next.state === 'activated' && !reloading) {
-        reloading = true;
-        location.reload();
-      }
+      if (next.state === 'activated') reloadWhenSaved();
     });
     return 'updating';
   } catch {
