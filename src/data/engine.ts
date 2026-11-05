@@ -74,6 +74,9 @@ interface Where {
   opt?: Opt;
 }
 
+/** A list whose modifiers never settle stops here. */
+const MAX_EFF_PASSES = 5;
+
 export class Evaluator {
   forces: RForce[] = [];
   issues: Issue[] = [];
@@ -116,7 +119,7 @@ export class Evaluator {
       this.forces.push(rf);
     }
     // effective properties need the full tree, so compute after building
-    for (const rf of this.forces) for (const r of rf.roots) this.computeEff(r);
+    this.computeEffs();
     for (const rf of this.forces) {
       rf.total = rf.roots.reduce((t, r) => t + this.computeTotal(r), 0);
       this.total += rf.total;
@@ -148,9 +151,23 @@ export class Evaluator {
     return rs;
   }
 
-  private computeEff(rs: RSel) {
-    rs.eff = this.effective(rs.node, { self: rs, parent: rs.parent, force: rs.force }, rs.sel.categoryId);
-    rs.children.forEach((c) => this.computeEff(c));
+  /** Every pass reads only the pass before, so the order selections are visited in can't change a result. */
+  private computeEffs() {
+    const sels: RSel[] = [];
+    const collect = (rs: RSel) => {
+      sels.push(rs);
+      rs.children.forEach(collect);
+    };
+    for (const rf of this.forces) rf.roots.forEach(collect);
+    for (let pass = 0; pass < MAX_EFF_PASSES; pass++) {
+      const next = sels.map((rs) => ({
+        rs,
+        eff: this.effective(rs.node, { self: rs, parent: rs.parent, force: rs.force }, rs.sel.categoryId),
+      }));
+      const settled = next.every(({ rs, eff }) => sameEff(rs.eff, eff));
+      for (const { rs, eff } of next) rs.eff = eff;
+      if (settled) return;
+    }
   }
 
   /** A selection with number N stands for N identical models/items; its children are per one of them. */
@@ -720,6 +737,16 @@ export class Evaluator {
     visit(rs);
     return out;
   }
+}
+
+function sameEff(a: Eff, b: Eff): boolean {
+  if (a.name !== b.name || a.hidden !== b.hidden || a.primary !== b.primary || a.defaultId !== b.defaultId)
+    return false;
+  if (a.costs.size !== b.costs.size || a.categories.size !== b.categories.size) return false;
+  if (a.constraints.length !== b.constraints.length) return false;
+  for (const [id, value] of a.costs) if (b.costs.get(id) !== value) return false;
+  for (const id of a.categories) if (!b.categories.has(id)) return false;
+  return a.constraints.every((c, i) => c.value === b.constraints[i].value);
 }
 
 /** an option whose max is 0 can't be taken right now (data uses this instead of hiding) */
