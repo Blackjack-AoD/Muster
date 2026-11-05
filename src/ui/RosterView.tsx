@@ -65,10 +65,13 @@ export function RosterView({ uid: rid }: { uid: string }) {
 function RosterBody({ ctl }: { ctl: RosterCtl }) {
   const { roster, ev } = ctl;
   const repos = useStore((s) => s.repos);
-  const [sheet, setSheet] = useState<null | 'menu' | 'issues' | 'force' | { add: RForce; cat?: string }>(null);
+  const [sheet, setSheet] = useState<null | 'menu' | 'issues' | 'force' | { forceUid: string; cat?: string }>(null);
   const errors = ev.issues.filter((i) => i.level === 'error');
   const warns = ev.issues.filter((i) => i.level === 'warn');
   const pct = roster.costLimit > 0 ? Math.min(100, (ev.total / roster.costLimit) * 100) : 0;
+  // looked up on each render: a unit added with the sheet open has to count against the next one
+  const adding = typeof sheet === 'object' ? sheet : null;
+  const addTo = adding && ev.forces.find((f) => f.force.uid === adding.forceUid);
 
   return (
     <div class="page">
@@ -105,7 +108,7 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
       </div>
 
       {ev.forces.map((rf) => (
-        <ForceBlock key={rf.force.uid} ctl={ctl} rf={rf} onAdd={(cat) => setSheet({ add: rf, cat })} />
+        <ForceBlock key={rf.force.uid} ctl={ctl} rf={rf} onAdd={(cat) => setSheet({ forceUid: rf.force.uid, cat })} />
       ))}
 
       <div class="pad">
@@ -117,9 +120,7 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
       {sheet === 'issues' && <IssuesSheet issues={ev.issues} ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'menu' && <MenuSheet ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'force' && <AddForceSheet ctl={ctl} onClose={() => setSheet(null)} />}
-      {sheet && typeof sheet === 'object' && (
-        <AddUnitSheet ctl={ctl} rf={sheet.add} cat={sheet.cat} onClose={() => setSheet(null)} />
-      )}
+      {adding && addTo && <AddUnitSheet ctl={ctl} rf={addTo} cat={adding.cat} onClose={() => setSheet(null)} />}
     </div>
   );
 }
@@ -491,9 +492,8 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
     const list = forceRootOptions(rf.ctx, rf.entry);
     const prim = (o: Opt) => (o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0])?.targetId;
     return list
-      .filter((o) => !cat || prim(o) === cat)
-      .map((o) => ({ o, eff: ctl.ev.optionEff(o, null, rf), cat: prim(o) }))
-      .filter((x) => !x.eff.hidden && !unavailable(x.eff));
+      .filter((o) => (!cat || prim(o) === cat) && roomFor(ctl.ev, o, rf))
+      .map((o) => ({ o, eff: ctl.ev.optionEff(o, null, rf), cat: prim(o) }));
   }, [rf, cat, ctl.ev]);
   const pt = ctl.ev.pointsTypeId;
   const shown = options.filter((x) => x.eff.name.toLowerCase().includes(q.toLowerCase()));
