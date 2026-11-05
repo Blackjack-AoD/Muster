@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './db';
 import { DATA_FILE, importLocalFiles, normaliseRepo, syncRepo } from './sync';
+import { present } from '../test/fixture';
 import { makeZip } from '../test/zipfile';
 
 const xml = (id: string, name = id) =>
@@ -189,7 +190,7 @@ describe('syncRepo', () => {
     let tries = 0;
     github({ tree: [{ path: 'a.cat', sha: '1' }], bodies: {} });
     const api = vi.mocked(fetch);
-    const real = api.getMockImplementation()!;
+    const real = present(api.getMockImplementation(), 'the fetch stub');
     vi.stubGlobal('fetch', async (url: string) => {
       if (url.includes('raw.githubusercontent') && ++tries < 3) throw new Error('flaky');
       if (url.includes('raw.githubusercontent')) return new Response(xml('a'));
@@ -253,7 +254,10 @@ describe('importLocalFiles', () => {
       file('notes.txt', 'x'),
     ]);
     expect(added).toBe(2);
-    const state = (await db.repos()).find((r) => r.repo === repo)!;
+    const state = present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    );
     expect(state.files.map((f) => [f.path, f.sha, f.header?.id])).toEqual([
       ['a.cat', 'local-5', 'a'],
       ['b.catz', 'local-5', 'b'],
@@ -274,7 +278,11 @@ describe('importLocalFiles', () => {
         ])) as BlobPart,
       ),
     ]);
-    expect((await db.repos()).find((r) => r.repo === repo)!.files.map((f) => f.path)).toEqual(['a.cat', 'sub/b.cat']);
+    const stored = present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    );
+    expect(stored.files.map((f) => f.path)).toEqual(['a.cat', 'sub/b.cat']);
   });
 
   it('keeps folders when the zip has more than one at the top', async () => {
@@ -288,20 +296,31 @@ describe('importLocalFiles', () => {
         ])) as BlobPart,
       ),
     ]);
-    expect((await db.repos()).find((r) => r.repo === repo)!.files.map((f) => f.path)).toEqual(['a/x.cat', 'b/y.cat']);
+    const stored = present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    );
+    expect(stored.files.map((f) => f.path)).toEqual(['a/x.cat', 'b/y.cat']);
   });
 
   it('keeps paths when files sit at the top of the zip', async () => {
     const repo = repoName();
     await importLocalFiles(repo, [file('dl.zip', (await makeZip([{ name: 'x.cat', text: xml('x') }])) as BlobPart)]);
-    expect((await db.repos()).find((r) => r.repo === repo)!.files.map((f) => f.path)).toEqual(['x.cat']);
+    const stored = present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    );
+    expect(stored.files.map((f) => f.path)).toEqual(['x.cat']);
   });
 
   it('replaces a file of the same name and keeps the others', async () => {
     const repo = repoName();
     await importLocalFiles(repo, [file('a.cat', xml('a')), file('b.cat', xml('b'))]);
     await importLocalFiles(repo, [file('a.cat', xml('a', 'New'))]);
-    const files = (await db.repos()).find((r) => r.repo === repo)!.files;
+    const files = present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    ).files;
     expect(files.map((f) => f.header?.name)).toEqual(['New', 'b']);
   });
 });
