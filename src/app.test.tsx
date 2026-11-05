@@ -56,8 +56,6 @@ beforeEach(async () => {
   await stubBrowserGaps();
   scrollTo = vi.fn();
   vi.stubGlobal('scrollTo', scrollTo);
-  // the app's count of history steps outlives the store reset: each step it counts is one entry at most
-  for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
   openHash('#/');
 });
 
