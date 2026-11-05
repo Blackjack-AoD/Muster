@@ -1696,9 +1696,9 @@ describe('adding a unit fills in what it must have', () => {
     const w = world(unit('u', 'Squad', 10, children(guard)), {
       cat: `<sharedSelectionEntries>${entry('axe', 'Axe', 0)}</sharedSelectionEntries>`,
     });
-    const squad = w.add('Squad');
-    const model = w.ev().find(squad)!.children[0];
-    expect(names(w, model.sel.uid)).toEqual(['1x Axe']);
+    w.add('Squad');
+    const model = w.roster.forces[0].selections[0].children[0];
+    expect(names(w, model.uid)).toEqual(['1x Axe']);
     expect(w.ev().total).toBe(210); // 10 + 5 x 40
     expect(w.ev().issues).toEqual([]);
   });
