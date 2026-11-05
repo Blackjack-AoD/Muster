@@ -846,6 +846,10 @@ function entryGone(rf: RForce): boolean {
   return !rf.ctx.get(rf.force.forceEntryId);
 }
 
+export function issuesOn(_ev: Evaluator, _rs: RSel): Issue[] {
+  return [];
+}
+
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
 /** root options whose primary category belongs to this force type, and those with no category */
 export function forceRootOptions(ctx: Context, forceEntry: EntryNode): Opt[] {
@@ -916,6 +920,10 @@ export function locate(roster: Roster, selUid: string) {
 export function removeSel(roster: Roster, selUid: string) {
   const r = locate(roster, selUid);
   if (r) r.list.splice(r.list.indexOf(r.sel), 1);
+}
+
+export function duplicateSel(_roster: Roster, _selUid: string): Sel | null {
+  return null;
 }
 
 /**

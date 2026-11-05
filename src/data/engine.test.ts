@@ -3,8 +3,10 @@ import {
   Evaluator,
   addSel,
   defaultMember,
+  duplicateSel,
   fmt,
   forceRootOptions,
+  issuesOn,
   locate,
   removeSel,
   unavailable,
@@ -2201,5 +2203,61 @@ describe('fmt', () => {
     expect(fmt(20)).toBe('20');
     expect(fmt(12.25)).toBe('12.3');
     expect(fmt(0)).toBe('0');
+  });
+});
+
+describe('duplicateSel', () => {
+  const squad = () => {
+    const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 5))) + unit('x', 'Other'));
+    const u = w.add('Squad');
+    const gun = w.pick(u, 'Gun');
+    w.add('Other');
+    return { w, u, gun };
+  };
+
+  it('puts the copy straight after the original', () => {
+    const { w, u } = squad();
+    const copy = duplicateSel(w.roster, u);
+    expect(w.roster.forces[0].selections.map((s) => s.uid)).toEqual([u, copy?.uid, expect.anything()]);
+  });
+
+  it('gives the copy and everything in it new uids, and keeps the keys and numbers', () => {
+    const { w, u, gun } = squad();
+    const copy = duplicateSel(w.roster, u);
+    expect(copy?.uid).not.toBe(u);
+    expect(copy?.children.map((c) => c.uid)).not.toContain(gun);
+    expect(copy?.children.map((c) => [c.key, c.number])).toEqual([[w.beneath(u, 'Gun').key, 1]]);
+  });
+
+  it('adds nothing for a selection that is not there', () => {
+    const { w } = squad();
+    expect(duplicateSel(w.roster, 'gone')).toBeNull();
+    expect(w.roster.forces[0].selections).toHaveLength(2);
+  });
+});
+
+describe('issuesOn', () => {
+  const unitWithLimit = () => {
+    const gun = entry('g', 'Gun', 0, cons(max(1)));
+    const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, children(gun)))) + unit('x', 'Other'));
+    const u = w.add('Squad');
+    const m = w.pick(u, 'Model');
+    w.pick(m, 'Gun', 2);
+    return { w, u, m };
+  };
+  const messages = (w: ReturnType<typeof world>, uid: string) => {
+    const ev = w.ev();
+    return issuesOn(ev, present(ev.find(uid), 'the selection')).map((i) => i.message);
+  };
+
+  it('gives the issues on a selection and on anything beneath it', () => {
+    const { w, u, m } = unitWithLimit();
+    expect(messages(w, m)).toEqual(['Model › Gun: at most 1 allowed (has 2)']);
+    expect(messages(w, u)).toEqual(['Model › Gun: at most 1 allowed (has 2)']);
+  });
+
+  it('leaves out the issues on another unit', () => {
+    const { w } = unitWithLimit();
+    expect(messages(w, w.add('Other'))).toEqual([]);
   });
 });

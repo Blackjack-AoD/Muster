@@ -120,9 +120,17 @@ describe('adding a list', () => {
     await renderScreen(<p>Lists</p>);
     const list = { ...newList(), updated: 0 };
     await addRoster(list);
-    expect(list.updated).toBeGreaterThan(0);
-    expect(getState().rosters).toEqual([list]);
-    expect(await db.rosters()).toEqual([list]);
+    const [saved] = getState().rosters;
+    expect(saved.updated).toBeGreaterThan(0);
+    expect(saved).toEqual({ ...list, updated: saved.updated });
+    expect(await db.rosters()).toEqual([saved]);
+  });
+
+  it('leaves the list it was given as it was', async () => {
+    await renderScreen(<p>Lists</p>);
+    const list = { ...newList(), updated: 0 };
+    await addRoster(list);
+    expect(list.updated).toBe(0);
   });
 
   it('keeps its own copy in memory', async () => {
