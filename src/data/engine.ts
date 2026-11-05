@@ -1,5 +1,6 @@
 // Roster evaluation: option trees, modifiers/conditions, costs, and validation.
 import type { Context, Opt, RNode } from './catalog';
+import type { SavedUnit } from './db';
 import type { Condition, ConditionGroup, Constraint, EntryNode, Modifier, Profile, Repeat, Rule } from './model';
 
 export interface Sel {
@@ -1002,6 +1003,19 @@ export function addSel(
   // second pass: one model's picks can unlock another's (e.g. a sergeant's weapon mirrors the squad's choice)
   fillDefaults(roster, contexts, s.uid, 0, true);
   return s.uid;
+}
+
+export type AddSavedResult =
+  { added: true; uid: string } | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' };
+
+/** Add a copy of a saved unit to a detachment, rebuilt against the current data. */
+export function addSavedUnit(
+  _roster: Roster,
+  _contexts: Map<string, Context>,
+  _forceUid: string,
+  _unit: SavedUnit,
+): AddSavedResult {
+  return { added: true, uid: '' };
 }
 
 /** One step of `fillDefaults`: the selection it fills, read through a fresh evaluator. */

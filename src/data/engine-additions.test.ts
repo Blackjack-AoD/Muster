@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { unavailableHere } from './engine';
-import { FORCE, children, cons, entry, group, mods, unit, world } from '../test/fixture';
+import { Context } from './catalog';
+import type { SavedUnit } from './db';
+import { addSavedUnit, unavailableHere, type Sel } from './engine';
+import { FORCE, SWORD, catalogue, children, cons, entry, group, mods, unit, world } from '../test/fixture';
 
 const rules = (...names: string[]) =>
   `<rules>${names.map((n) => `<rule id="r-${n}" name="${n}"><description>Text</description></rule>`).join('')}</rules>`;
@@ -244,5 +246,119 @@ describe('fillDefaults at a cap of 0', () => {
   it('skips a required group at a list-wide cap of 0', () => {
     const w = world(unit('u', 'Squad', 0, group(cons(required, listCap) + children(entry('s', 'Sword', 5)))));
     expect(namesUnder(w, w.add('Squad'))).toEqual([]);
+  });
+});
+
+describe('addSavedUnit', () => {
+  const once = (id: string) =>
+    cons(
+      `<constraint id="${id}-min" type="min" field="selections" scope="parent" value="1"/>`,
+      `<constraint id="${id}-max" type="max" field="selections" scope="parent" value="1"/>`,
+    );
+  const SQUAD = unit(
+    'sq',
+    'Breacher Squad',
+    50,
+    children(
+      entry('sgt', 'Sergeant', 10, once('sgt') + children(entry('fist', 'Power Fist', 5))),
+      entry('mar', 'Marine', 10),
+    ),
+  );
+  const sel = (key: string, number = 1, kids: Sel[] = []): Sel => ({ uid: `old-${key}`, key, number, children: kids });
+  const savedUnit = (build: Sel): SavedUnit => ({
+    id: 'su1',
+    name: 'Squad Thrax',
+    repo: 'test/repo',
+    gameSystemId: 'gst',
+    catalogueId: 'cat',
+    key: build.key,
+    categoryId: 'troops',
+    build,
+    created: 0,
+    updated: 0,
+  });
+  const thrax = () => savedUnit(sel('sq', 1, [sel('sgt', 1, [sel('fist')]), sel('mar', 4)]));
+  /** What a selection holds, without its uids. */
+  type Shape = Pick<Sel, 'key' | 'number'> & { children: Shape[] };
+  const shape = (s: Sel): Shape => ({ key: s.key, number: s.number, children: s.children.map(shape) });
+  const uidsIn = (s: Sel): string[] => [s.uid, ...s.children.flatMap(uidsIn)];
+  const addedUid = (r: ReturnType<typeof addSavedUnit>) => {
+    expect(r).toMatchObject({ added: true });
+    return r.added ? r.uid : '';
+  };
+  const onlyRoot = (w: ReturnType<typeof world>, force = 0) => {
+    expect(w.roster.forces[force].selections).toHaveLength(1);
+    return w.roster.forces[force].selections[0];
+  };
+
+  it('adds the saved build as a root unit with its name, link and category', () => {
+    const w = world(SQUAD);
+    const uid = addedUid(addSavedUnit(w.roster, w.contexts, 'f1', thrax()));
+    const root = onlyRoot(w);
+    expect(root.uid).toBe(uid);
+    expect(shape(root)).toEqual(shape(thrax().build));
+    expect(root).toMatchObject({ name: 'Squad Thrax', saved: 'su1', categoryId: 'troops' });
+  });
+
+  it('gives the copy and every selection in it new uids', () => {
+    const w = world(SQUAD);
+    addSavedUnit(w.roster, w.contexts, 'f1', thrax());
+    const uids = uidsIn(onlyRoot(w));
+    expect(uids).toHaveLength(4);
+    expect(new Set(uids).size).toBe(4);
+    expect(uids.filter((u) => u.startsWith('old-'))).toEqual([]);
+  });
+
+  it("leaves the saved unit's build as it was", () => {
+    const w = world(SQUAD);
+    const unit = thrax();
+    addSavedUnit(w.roster, w.contexts, 'f1', unit);
+    expect(unit.build).toEqual(thrax().build);
+  });
+
+  it('leaves out an option the data no longer has, at any depth', () => {
+    const w = world(SQUAD);
+    const unit = savedUnit(sel('sq', 1, [sel('sgt', 1, [sel('fist'), sel('gone-fist')]), sel('gone-banner')]));
+    addSavedUnit(w.roster, w.contexts, 'f1', unit);
+    expect(shape(onlyRoot(w))).toEqual(shape(sel('sq', 1, [sel('sgt', 1, [sel('fist')])])));
+  });
+
+  it('fills in a mandatory option the saved build lacks', () => {
+    const w = world(unit('sq', 'Breacher Squad', 50, children(SWORD, entry('mar', 'Marine', 10))));
+    addSavedUnit(w.roster, w.contexts, 'f1', savedUnit(sel('sq', 1, [sel('mar', 4)])));
+    expect(shape(onlyRoot(w))).toEqual(shape(sel('sq', 1, [sel('mar', 4), sel('sword')])));
+  });
+
+  it('adds nothing to a detachment of another army file', () => {
+    const w = world(SQUAD);
+    const other = catalogue(`<selectionEntries>${SQUAD}</selectionEntries>`, 'cat2');
+    w.contexts.set(other.id, new Context(w.gst, other, []));
+    w.roster.forces.push({ uid: 'f2', forceEntryId: 'det', catalogueId: 'cat2', selections: [] });
+    expect(addSavedUnit(w.roster, w.contexts, 'f2', thrax())).toEqual({ added: false, reason: 'other-army-file' });
+    expect(w.roster.forces[1].selections).toEqual([]);
+  });
+
+  it('adds nothing to a detachment of the same army file id in another repo', () => {
+    const w = world(SQUAD);
+    w.roster.repo = 'someone/fork';
+    expect(addSavedUnit(w.roster, w.contexts, 'f1', thrax())).toEqual({ added: false, reason: 'other-army-file' });
+    expect(w.roster.forces[0].selections).toEqual([]);
+  });
+
+  it.each([
+    ['the same detachment', 'f1'],
+    ['another detachment', 'f2'],
+  ])('adds nothing when %s of the list already holds the saved unit', (_, forceUid) => {
+    const w = world(SQUAD);
+    w.addForce();
+    addedUid(addSavedUnit(w.roster, w.contexts, 'f1', thrax()));
+    expect(addSavedUnit(w.roster, w.contexts, forceUid, thrax())).toEqual({ added: false, reason: 'already-in-list' });
+    expect(w.roster.forces.map((f) => f.selections.length)).toEqual([1, 0]);
+  });
+
+  it('adds nothing when the list has no such detachment', () => {
+    const w = world(SQUAD);
+    expect(addSavedUnit(w.roster, w.contexts, 'nope', thrax())).toEqual({ added: false, reason: 'no-detachment' });
+    expect(w.roster.forces[0].selections).toEqual([]);
   });
 });
