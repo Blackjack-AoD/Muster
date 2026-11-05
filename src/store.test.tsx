@@ -221,4 +221,15 @@ describe('how long the failed save toast stays up', () => {
     vi.advanceTimersByTime(1);
     expect(getState().toast).toBeUndefined();
   });
+
+  it('clears when a later edit saves', async () => {
+    await renderWithToast(newList());
+    const put = await failASave();
+
+    put.mockRestore();
+    await addUnit();
+
+    expect(await storedUnits()).toBe(2);
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
 });
