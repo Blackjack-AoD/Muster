@@ -1,4 +1,4 @@
-// Tiny IndexedDB wrapper: data files, repo sync state, and saved rosters live on the phone.
+// Tiny IndexedDB wrapper: data files, repo sync state, saved rosters and saved units live on the phone.
 import type { Roster, Sel } from './engine';
 
 export interface FileHeader {
