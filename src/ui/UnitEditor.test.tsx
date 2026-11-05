@@ -127,6 +127,48 @@ describe('UnitEditor', () => {
     expect(option('radio', /Melta Gun/).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('taking another option in a full group drops the cheapest one taken', async () => {
+    const only = (id: string, name: string, pts: number) =>
+      entry(
+        id,
+        name,
+        pts,
+        `<constraints><constraint id="${id}-max" type="max" field="selections" scope="parent" value="1"/></constraints>`,
+      );
+    const group = `<selectionEntryGroups>
+      <selectionEntryGroup id="relics" name="Relics">
+        <constraints>
+          <constraint id="relics-max" type="max" field="selections" scope="parent" value="2"/>
+        </constraints>
+        ${children(only('cloak', 'Cloak', 5), only('banner', 'Banner', 10), only('blade', 'Blade', 20))}
+      </selectionEntryGroup>
+    </selectionEntryGroups>`;
+    await openUnit(unit('tac', 'Tactical Squad', 100, group));
+
+    fireEvent.click(option('checkbox', /Cloak/));
+    await waitFor(() => expect(topPoints()).toBe('105pts'));
+    fireEvent.click(option('checkbox', /Banner/));
+    await waitFor(() => expect(topPoints()).toBe('115pts'));
+    fireEvent.click(option('checkbox', /Blade/));
+
+    await waitFor(() => expect(topPoints()).toBe('130pts'));
+    expect(option('checkbox', /Cloak/).getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('Duplicate puts a copy of the unit straight after it', async () => {
+    const w = world(UNITS + ASSAULT, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    w.add('Assault Squad');
+    await openPage(w, tac, UNITS + ASSAULT);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+
+    await waitFor(async () => {
+      const [saved] = await db.rosters();
+      expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['tac', 'tac', 'assault']);
+    });
+  });
+
   it("a wargear choice reaches the list's row and total, and is saved", async () => {
     await openUnit();
 
