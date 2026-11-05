@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
@@ -39,17 +39,21 @@ describe('Lists', () => {
     await waitFor(() => expect(document.querySelector('.pts')?.textContent).toBe('0/1,500pts'));
   });
 
-  it("shows each saved list's name on a card that opens it", async () => {
+  it("shows each saved list's name and points limit on a card that opens it", async () => {
     const { roster } = world(UNITS);
     await renderScreen(<Lists />, {
       files: worldFiles(UNITS),
       rosters: [
-        { ...roster, uid: 'one', name: 'Strike Force' },
-        { ...roster, uid: 'two', name: 'Patrol' },
+        { ...roster, uid: 'one', name: 'Strike Force', costLimit: 1500 },
+        { ...roster, uid: 'two', name: 'Patrol', costLimit: 2000 },
       ],
     });
 
-    expect(screen.getByRole('link', { name: /Strike Force/ }).getAttribute('href')).toBe('#/r/one');
-    expect(screen.getByRole('link', { name: /Patrol/ }).getAttribute('href')).toBe('#/r/two');
+    const strikeForce = screen.getByRole('link', { name: /Strike Force/ });
+    const patrol = screen.getByRole('link', { name: /Patrol/ });
+    expect(strikeForce.getAttribute('href')).toBe('#/r/one');
+    expect(patrol.getAttribute('href')).toBe('#/r/two');
+    within(strikeForce).getByText('1,500');
+    within(patrol).getByText('2,000');
   });
 });
