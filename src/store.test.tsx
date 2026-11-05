@@ -281,7 +281,7 @@ describe('a Restore while a save has failed', () => {
     expect(getState().rosters.map(unitsIn)).toEqual([1, 1]);
   });
 
-  it('forgets a list that was deleted after its save failed', async () => {
+  it('forgets a list the player deleted after its save failed', async () => {
     const list = newList();
     await renderWithToast(list);
     const put = await failASave();
