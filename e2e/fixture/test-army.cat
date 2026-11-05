@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalogue id="army" name="Test Army" revision="1" gameSystemId="game">
+  <selectionEntries>
+    <selectionEntry id="centurion" name="Centurion" type="unit">
+      <costs>
+        <cost name="pts" typeId="pts" value="100"/>
+      </costs>
+      <categoryLinks>
+        <categoryLink id="centurion-hq" name="HQ" targetId="hq" primary="true"/>
+      </categoryLinks>
+      <selectionEntries>
+        <selectionEntry id="power-fist" name="Power Fist" type="upgrade">
+          <constraints>
+            <constraint id="one-fist" type="max" value="1" field="selections" scope="parent"/>
+          </constraints>
+          <costs>
+            <cost name="pts" typeId="pts" value="15"/>
+          </costs>
+        </selectionEntry>
+      </selectionEntries>
+    </selectionEntry>
+  </selectionEntries>
+</catalogue>
