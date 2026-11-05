@@ -174,14 +174,9 @@ export class Evaluator {
     return rs;
   }
 
-  /** Every pass reads only the pass before, so the order selections are visited in can't change a result. */
+  /** Each pass reads only the pass before, so the order it visits selections in can't change a result. */
   private computeEffs() {
-    const sels: RSel[] = [];
-    const collect = (rs: RSel) => {
-      sels.push(rs);
-      rs.children.forEach(collect);
-    };
-    for (const rf of this.forces) rf.roots.forEach(collect);
+    const sels = [...this.bySel.values()];
     for (let pass = 0; pass < MAX_EFF_PASSES; pass++) {
       const next = sels.map((rs) => ({
         rs,
