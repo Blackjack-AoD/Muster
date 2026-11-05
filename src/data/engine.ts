@@ -788,7 +788,7 @@ function entryGone(rf: RForce): boolean {
 }
 
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
-/** root options whose primary category belongs to this force type */
+/** root options whose primary category belongs to this force type, and those with no category */
 export function forceRootOptions(ctx: Context, forceEntry: EntryNode): Opt[] {
   let m = forceRootCache.get(forceEntry);
   if (!m) forceRootCache.set(forceEntry, (m = new Map()));
@@ -798,7 +798,8 @@ export function forceRootOptions(ctx: Context, forceEntry: EntryNode): Opt[] {
     r = rootOptionsCached(ctx).filter((o) => {
       if (!cats.size) return true;
       const prim = o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0];
-      return prim ? cats.has(prim.targetId) : false;
+      // an entry with no category (e.g. the choice of Chapter) takes no slot, so every force can have it
+      return prim ? cats.has(prim.targetId) : true;
     });
     m.set(ctx, r);
   }
