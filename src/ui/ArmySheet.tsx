@@ -68,20 +68,32 @@ export function ArmySheet({ snap }: { snap: Snapshot }) {
   );
 }
 
+const statRank = (type: string) =>
+  /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(type) ? 0 : /weapon/i.test(type) ? 1 : 2;
+
+const asStat = (p: SnapProfile) => ({
+  name: p.name,
+  characteristics: p.chars.map(([name, value]) => ({ name, value })),
+});
+
+/** Stat grids by type: unit stats first, then weapons, then the rest. */
+function statBlocks(profiles: readonly SnapProfile[]): SnapProfile[][] {
+  const byType = new Map<string, SnapProfile[]>();
+  for (const p of profiles) {
+    const group = byType.get(p.type);
+    if (group) group.push(p);
+    else byType.set(p.type, [p]);
+  }
+  const ranked: SnapProfile[][][] = [[], [], []];
+  for (const [type, group] of byType) {
+    const rank = statRank(type);
+    // wordy wargear descriptions are already in the rules/wargear lines; keep the sheet to stat grids
+    if (rank < 2 || group.every((p) => p.chars.every(([, v]) => v.length <= 12))) ranked[rank].push(group);
+  }
+  return ranked.flat();
+}
+
 function UnitCard({ u }: { u: SnapUnit }) {
-  // profiles grouped by type: unit stats first, then weapons, then the rest
-  const types = [...new Set(u.profiles.map((p) => p.type))];
-  const rank = (t: string) =>
-    /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t) ? 0 : /weapon/i.test(t) ? 1 : 2;
-  types.sort((a, b) => rank(a) - rank(b));
-  const asStat = (p: SnapProfile) => ({
-    name: p.name,
-    characteristics: p.chars.map(([name, value]) => ({ name, value })),
-  });
-  // wordy wargear descriptions are already in the rules/wargear lines; keep the sheet to stat grids
-  const statTypes = types.filter(
-    (t) => rank(t) < 2 || u.profiles.filter((p) => p.type === t).every((p) => p.chars.every(([, v]) => v.length <= 12)),
-  );
   return (
     <div class="as-unit">
       <div class="as-unit-head">
@@ -98,9 +110,9 @@ function UnitCard({ u }: { u: SnapUnit }) {
           ))}
         </ul>
       )}
-      {statTypes.map((t) => (
+      {statBlocks(u.profiles).map((block) => (
         <div class="as-stats">
-          <StatBlock profiles={u.profiles.filter((p) => p.type === t).map(asStat)} />
+          <StatBlock profiles={block.map(asStat)} />
         </div>
       ))}
       {u.rules.length > 0 && (
