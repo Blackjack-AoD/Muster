@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { Context, Opt } from '../data/catalog';
 import { addSel, rootOptionsCached, uid, type Roster, type RSel } from '../data/engine';
+import type { SavedUnit } from '../data/db';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
 import { failureReason } from '../data/sync';
 import { useRosterCtl, useStore } from '../store';
-import { Empty, Link, Loading, Pts, TopBar, fmtN } from './common';
+import { Empty, Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
 import { Rules } from './UnitEditor';
@@ -265,6 +266,7 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
   const allSaved = useStore((s) => s.savedUnits);
   const saved = allSaved.filter((u) => u.repo === repo && u.catalogueId === catId);
   const [q, setQ] = useState('');
+  const [naming, setNaming] = useState<SavedUnit>();
   const groups = useMemo(() => {
     if (!ctx) return [];
     const pts = ctx.pointsType()?.id ?? '';
@@ -314,11 +316,15 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
                 <span>
                   <b>{u.name}</b>
                 </span>
+                <button class="icon-btn sm" aria-label={`Rename ${u.name}`} onClick={() => setNaming(u)}>
+                  <Icon name="edit" size={16} />
+                </button>
               </div>
             ))}
           </div>
         </>
       )}
+      {naming && <RenameSavedSheet unit={naming} onClose={() => setNaming(undefined)} />}
       {groups.map((g) => {
         const items = g.items.filter((x) => x.o.node.name.toLowerCase().includes(ql));
         if (!items.length) return null;
@@ -339,6 +345,20 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
         );
       })}
     </div>
+  );
+}
+
+function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
+  const [name, setName] = useState(unit.name);
+  return (
+    <Sheet title="Rename saved unit" onClose={onClose}>
+      <div class="form">
+        <label>
+          Name
+          <input value={name} placeholder={unit.name} onInput={(e) => setName(e.currentTarget.value)} />
+        </label>
+      </div>
+    </Sheet>
   );
 }
 

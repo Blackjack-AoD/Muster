@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, within } from '@testing-library/preact';
+import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db, type SavedUnit } from '../data/db';
+import { getState } from '../store';
 import { unit } from '../test/fixture';
-import { expectError, failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import {
+  expectError,
+  expectToast,
+  failReads,
+  openHash,
+  refuse,
+  renderScreen,
+  stubBrowserGaps,
+  worldFiles,
+} from '../test/screen';
 
 const STATS =
   '<profiles><profile id="p" name="Tactical Marine" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">7</characteristic><characteristic name="Sv" typeId="s">3+</characteristic></characteristics></profile></profiles>';
@@ -167,6 +177,35 @@ describe('Library', () => {
       fireEvent.input(screen.getByPlaceholderText('Search units'), { target: { value: 'IRON' } });
 
       expect(savedNames()).toEqual(['Squad Iron']);
+    });
+
+    /** Opens the rename sheet of saved unit `name`, types `typed` and closes it. */
+    function rename(name: string, typed: string) {
+      fireEvent.click(screen.getByRole('button', { name: `Rename ${name}` }));
+      fireEvent.input(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Name' }), {
+        target: { value: typed },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    }
+    const storedName = async (id: string) => (await db.savedUnits()).find((u) => u.id === id)?.name;
+
+    it('renames a saved unit from its rename button', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+
+      rename('Squad Thrax', '  Squad Iron ');
+
+      await waitFor(() => expect(savedNames()).toEqual(['Squad Iron']));
+      expect(await storedName('thrax')).toBe('Squad Iron');
+    });
+
+    it('tells the player when storage refuses the rename, and keeps the old name', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+      refuse('put');
+
+      rename('Squad Thrax', 'Squad Iron');
+
+      await expectToast("Couldn't rename this saved unit: Storage is full");
+      expect(savedNames()).toEqual(['Squad Thrax']);
     });
   });
 });
