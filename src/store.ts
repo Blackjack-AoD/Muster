@@ -270,6 +270,11 @@ function saveEdit(r: Roster) {
   });
 }
 
+export function saveListEdit(r: Roster): Promise<void> {
+  saveEdit(r);
+  return Promise.resolve();
+}
+
 /** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void> {
   const force = r.forces.find((f) => f.uid === rs.force.force.uid);
