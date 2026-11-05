@@ -155,6 +155,9 @@ export async function deleteRoster(u: string) {
 /** Far deeper than any real unit, and shallow enough that copying a list's selections can't overflow the stack. */
 const MAX_SEL_LEVELS = 32;
 
+/** What `uid()` writes. A list's address holds its uid, and a `/` there leaves the list out of reach. */
+const LIST_UID = /^[a-z0-9]+$/;
+
 const isSel = (s: unknown, level: number): boolean =>
   level <= MAX_SEL_LEVELS &&
   isRecord(s) &&
@@ -178,7 +181,7 @@ function isRoster(r: unknown): r is Roster {
   return (
     isRecord(r) &&
     typeof r.uid === 'string' &&
-    r.uid !== '' &&
+    LIST_UID.test(r.uid) &&
     typeof r.name === 'string' &&
     typeof r.repo === 'string' &&
     typeof r.gameSystemId === 'string' &&
