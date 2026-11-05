@@ -66,6 +66,12 @@ export type Issue = IssuePlace & { level: 'error' | 'warn'; message: string };
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+function rootOf(rs: RSel): RSel {
+  let top = rs;
+  while (top.parent) top = top.parent;
+  return top;
+}
+
 export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -369,9 +375,8 @@ export class Evaluator {
         return [w.parent ? w.parent.children : w.force.roots];
       case 'primary-category': {
         // units in the force that share this unit's primary category (e.g. "other Elites")
-        let top: RSel | null = w.self ?? w.parent;
-        while (top?.parent) top = top.parent;
-        const prim = top ? top.eff.primary : w.opt?.node.categoryLinks.find((c) => c.primary)?.targetId;
+        const inside = w.self ?? w.parent;
+        const prim = inside ? rootOf(inside).eff.primary : w.opt?.node.categoryLinks.find((c) => c.primary)?.targetId;
         return prim ? [w.force.roots.filter((r) => r.eff.primary === prim)] : [w.force.roots];
       }
       case 'force':
@@ -672,10 +677,8 @@ export class Evaluator {
   private checkEntryLimit(rs: RSel, o: Opt, name: string, c: Constraint, n: number) {
     const [items = []] = this.scopeContainers(c.scope, { self: rs, parent: rs.parent, force: rs.force });
     const total = this.countIn(items, o.node.id, c.includeChildSelections, null);
-    let unit = rs;
-    while (unit.parent) unit = unit.parent;
     if (c.type === 'max' && n) {
-      this.report(c, total, name, { reach: 'unit', forceUid: rs.force.force.uid, selUid: unit.sel.uid });
+      this.report(c, total, name, { reach: 'unit', forceUid: rs.force.force.uid, selUid: rootOf(rs).sel.uid });
     }
   }
 
