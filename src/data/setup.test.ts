@@ -53,7 +53,9 @@ describe('addMandatoryRoots', () => {
     expect(rootNames(w)).toEqual(['Legion']);
   });
   it('adds a mandatory entry with no category to a force that has categories', () => {
-    const w = world(setupEntry('leg', 'Chapter Tactics', min1('force')), {
+    const mandatory =
+      '<constraints><constraint id="c" type="min" value="1" field="selections" scope="force"/></constraints>';
+    const w = world(setupEntry('leg', 'Chapter Tactics', mandatory), {
       gst: `<categoryEntries><categoryEntry id="hq" name="HQ"/></categoryEntries>
         <forceEntries><forceEntry id="det" name="Detachment"><categoryLinks>
           <categoryLink id="l-hq" name="HQ" targetId="hq"/>
@@ -105,6 +107,20 @@ describe('applyLoreAllegiance', () => {
     const a = w.add('Allegiance');
     applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
     expect(present(w.ev().find(a), 'the selection').children.map((c) => c.eff.name.trim())).toEqual(['Traitor']);
+  });
+  it('picks Loyalist for a loyalist army', () => {
+    const w = world(allegiance);
+    const a = w.add('Allegiance');
+    applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Ultramarines');
+    expect(present(w.ev().find(a), 'the selection').children.map((c) => c.eff.name.trim())).toEqual(['Loyalist']);
+  });
+  it('ignores a group with Traitor and no Loyalist', () => {
+    const w = world(
+      setupEntry('al', 'Other', group('g', 'Side', children(entry('z', 'Neutral'), entry('t', 'Traitor')))),
+    );
+    const a = w.add('Other');
+    applyLoreAllegiance(w.roster, w.contexts, 'f1', 'Sons of Horus');
+    expect(present(w.ev().find(a), 'the selection').children).toEqual([]);
   });
   it('ignores groups that are not an allegiance choice', () => {
     const w = world(
