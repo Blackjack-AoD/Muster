@@ -139,9 +139,12 @@ export async function deleteRoster(u: string) {
   set({ rosters: state.rosters.filter((x) => x.uid !== u) });
 }
 
-export async function importRosters(list: Roster[]) {
+const isRoster = (r: unknown): r is Roster =>
+  r instanceof Object && 'uid' in r && Boolean(r.uid) && 'forces' in r && Array.isArray(r.forces);
+
+export async function importRosters(list: readonly unknown[]) {
   for (const r of list) {
-    if (!r?.uid || !Array.isArray(r.forces)) continue;
+    if (!isRoster(r)) continue;
     if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
     await db.putRoster(r);
   }

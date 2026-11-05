@@ -5,7 +5,7 @@ import { clearCaches } from '../data/library';
 import { failureMessage, importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
-import { shareBackup } from './exporter';
+import { backupLists, shareBackup } from './exporter';
 import { APP_VERSION, BUILD_TIME, checkForUpdate, lastUpdateCheck, resetAppCache } from '../update';
 
 const mb = (b: number) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
@@ -59,7 +59,7 @@ export function DataView() {
           <span>
             Install Muster for full-screen, offline use:{' '}
             {installEvent ? (
-              <button class="link" onClick={() => installEvent?.prompt()}>
+              <button class="link" onClick={() => installEvent?.prompt().catch((e) => toast(failureMessage('install', e)))}>
                 Install app
               </button>
             ) : (
@@ -211,13 +211,18 @@ export function DataView() {
             onChange={async (e) => {
               const f = e.currentTarget.files?.[0];
               if (!f) return;
+              let lists: unknown[];
               try {
-                const data = JSON.parse(await f.text());
-                const list = Array.isArray(data) ? data : data.rosters;
-                await importRosters(list);
-                toast(`Restored ${list.length} list(s)`);
+                lists = backupLists(await f.text());
               } catch {
                 toast("That file isn't a Muster backup");
+                return;
+              }
+              try {
+                await importRosters(lists);
+                toast(`Restored ${lists.length} list(s)`);
+              } catch (err) {
+                toast(failureMessage('restore', err));
               }
             }}
           />
