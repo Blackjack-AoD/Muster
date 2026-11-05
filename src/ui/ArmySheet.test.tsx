@@ -167,6 +167,17 @@ describe('Share link', () => {
     expect(new URL(url).hash).toBe(await linkHash(WITH_RULES));
   });
 
+  it('says the copied link leaves out the rule text when the share sheet fails', async () => {
+    const { copied } = stubSharing({
+      share: async () => {
+        throw REFUSED;
+      },
+    });
+    await pressShareLink(SHARED);
+    await expectToast("Couldn't share: Permission denied. Copied it instead (rule text left out to keep it short)");
+    expect(copied).toHaveBeenCalledOnce();
+  });
+
   it("gives the share sheet's reason when the clipboard refuses too", async () => {
     const { copied } = stubSharing({
       share: async () => {

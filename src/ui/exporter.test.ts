@@ -77,6 +77,14 @@ describe('shareText', () => {
     expect(getState().toast).toBe("Couldn't share: Permission denied. Copied it instead");
   });
 
+  it("gives one full stop when the share sheet's reason ends in one", async () => {
+    const denied = new DOMException('The user denied permission.', 'NotAllowedError');
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(denied), clipboard: { writeText } });
+    await shareText(TEXT, TITLE);
+    expect(getState().toast).toBe("Couldn't share: The user denied permission. Copied it instead");
+  });
+
   it("gives the share sheet's reason when the clipboard refuses too", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('denied'));
     vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
