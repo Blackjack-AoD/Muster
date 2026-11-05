@@ -690,7 +690,7 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
             .map((f) => ({ id: f.id, name: f.name })),
         ),
       )
-      .catch((e) => toast(failureMessage('load this army', e)));
+      .catch((e: unknown) => toast(failureMessage('load this army', e)));
   }, [catId]);
 
   if (!sys || !repo)

@@ -61,7 +61,7 @@ export function DataView() {
             {installEvent ? (
               <button
                 class="link"
-                onClick={() => installEvent?.prompt().catch((e) => toast(failureMessage('install', e)))}
+                onClick={() => installEvent?.prompt().catch((e: unknown) => toast(failureMessage('install', e)))}
               >
                 Install app
               </button>
@@ -122,7 +122,7 @@ export function DataView() {
                   aria-label={'Remove ' + name}
                   onClick={() => {
                     if (confirm(`Remove ${name} data from this phone? Lists using it will need it re-downloaded.`))
-                      removeRepo(name).catch((e) => toast(failureMessage('remove', e)));
+                      removeRepo(name).catch((e: unknown) => toast(failureMessage('remove', e)));
                   }}
                 >
                   <Icon name="trash" />
@@ -201,7 +201,7 @@ export function DataView() {
           class="btn grow"
           disabled={!rosters.length}
           onClick={() => {
-            shareBackup(rosters).catch((e) => toast(failureMessage('share', e)));
+            shareBackup(rosters).catch((e: unknown) => toast(failureMessage('share', e)));
           }}
         >
           <Icon name="share" /> Back up {rosters.length} list{rosters.length === 1 ? '' : 's'}
@@ -302,7 +302,7 @@ function AppUpdate({ online }: { online: boolean }) {
             disabled={!online}
             onClick={() => {
               if (confirm('Reload a fresh copy of the app? Your lists and data are kept.'))
-                resetAppCache().catch((e) => toast(failureMessage('reload a fresh copy', e)));
+                resetAppCache().catch((e: unknown) => toast(failureMessage('reload a fresh copy', e)));
             }}
           >
             Reload a fresh copy
