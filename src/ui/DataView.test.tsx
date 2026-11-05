@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
-import { getState } from '../store';
+import { getState, toast } from '../store';
 import { world } from '../test/fixture';
 import { github } from '../test/github';
 import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
@@ -190,6 +190,18 @@ describe('DataView', () => {
       restoreFile(backup);
 
       await expectToast("Couldn't restore: Storage is full");
+    });
+
+    it('keeps the Retry toast up, and shows the restored lists with no message', async () => {
+      await renderScreen(<App />);
+      toast("Couldn't save this list", { label: 'Retry', run: () => {}, failedSave: 'edited' });
+
+      restoreFile(backup);
+
+      await screen.findByRole('button', { name: 'Back up 1 list' });
+      // a trip to storage lets the Restore finish whatever it does after the lists appear
+      await db.rosters();
+      expect(screen.queryByRole('status')?.textContent).toBe("Couldn't save this listRetry");
     });
   });
 

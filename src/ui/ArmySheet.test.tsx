@@ -155,15 +155,31 @@ describe('Share link', () => {
     expect(getState().toast).toBeUndefined();
   });
 
-  it('shows the reason when the share sheet fails, and copies nothing', async () => {
+  it('copies the link when the share sheet fails, and gives the reason', async () => {
     const { copied } = stubSharing({
       share: async () => {
         throw REFUSED;
       },
     });
+    await pressShareLink(WITH_RULES);
+    await expectToast("Couldn't share: Permission denied. Copied it instead");
+    const [url] = copied.mock.calls[0];
+    expect(new URL(url).hash).toBe(await linkHash(WITH_RULES));
+  });
+
+  it("gives the share sheet's reason when the clipboard refuses too", async () => {
+    const { copied } = stubSharing({
+      share: async () => {
+        throw REFUSED;
+      },
+      copy: async () => {
+        throw new Error('Clipboard blocked');
+      },
+    });
     await pressShareLink(SHARED);
+    await waitFor(() => expect(copied).toHaveBeenCalled());
+    await copied.mock.results[0].value.catch(() => {});
     await expectToast("Couldn't share: Permission denied");
-    expect(copied).not.toHaveBeenCalled();
   });
 
   it('copies the link where there is no share sheet', async () => {

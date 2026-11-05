@@ -69,11 +69,19 @@ describe('shareText', () => {
     expect(getState().toast).toBeUndefined();
   });
 
-  it('shows the reason when the share sheet fails, and leaves the clipboard alone', async () => {
+  it('copies the text when the share sheet fails, and gives the reason', async () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
     await shareText(TEXT, TITLE);
-    expect(writeText).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith(TEXT);
+    expect(getState().toast).toBe("Couldn't share: Permission denied. Copied it instead");
+  });
+
+  it("gives the share sheet's reason when the clipboard refuses too", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
+    await shareText(TEXT, TITLE);
+    expect(writeText).toHaveBeenCalledWith(TEXT);
     expect(getState().toast).toBe("Couldn't share: Permission denied");
   });
 });
