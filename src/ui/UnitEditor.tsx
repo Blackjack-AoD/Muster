@@ -22,17 +22,26 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
     );
   }
   const isRoot = !rs.parent;
-  const issues = ctl.ev.issues.filter((i) => i.level === 'error' && i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)));
+  const issues = ctl.ev.issues.filter(
+    (i) => i.level === 'error' && i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)),
+  );
   const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
   const unitLike = rs.node.type === 'unit' || rs.node.type === 'model';
   // set-up entries (e.g. Expanded Army Lists) often have no profiles or rules: then there's only Options, and no tabs
   const hasStats = ctl.ev.profilesFor(rs).length > 0;
   const hasRules = ctl.ev.rulesFor(rs).length > 0;
-  const tabs = (['options', 'stats', 'rules'] as const).filter((t) => t === 'options' || (t === 'stats' ? hasStats : hasRules));
+  const tabs = (['options', 'stats', 'rules'] as const).filter(
+    (t) => t === 'options' || (t === 'stats' ? hasStats : hasRules),
+  );
 
   return (
     <div class="page unit-page">
-      <TopBar title={rs.eff.name} sub={cat} backTo={backTo} right={unitLike || rs.total ? <Pts v={rs.total} /> : null} />
+      <TopBar
+        title={rs.eff.name}
+        sub={cat}
+        backTo={backTo}
+        right={unitLike || rs.total ? <Pts v={rs.total} /> : null}
+      />
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -43,30 +52,57 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         </div>
       )}
       {issues.length > 0 && tab === 'options' && (
-        <ul class="issues inline">{issues.map((i) => <li class="error"><Icon name="warn" size={16} /><span>{i.message.split(' › ').pop()}</span></li>)}</ul>
+        <ul class="issues inline">
+          {issues.map((i) => (
+            <li class="error">
+              <Icon name="warn" size={16} />
+              <span>{i.message.split(' › ').pop()}</span>
+            </li>
+          ))}
+        </ul>
       )}
       {tab === 'options' && (
         <>
           <ProfileStrip ctl={ctl} rs={rs} />
           {switchesOnly(ctl, rs) ? (
-            <div class="opts switches">{switchesOnly(ctl, rs)!.map(({ g, pair }) => <ToggleRow key={g.key} ctl={ctl} rs={rs} g={g} pair={pair} />)}</div>
+            <div class="opts switches">
+              {switchesOnly(ctl, rs)!.map(({ g, pair }) => (
+                <ToggleRow key={g.key} ctl={ctl} rs={rs} g={g} pair={pair} />
+              ))}
+            </div>
           ) : (
             <OptList ctl={ctl} rs={rs} opts={rs.force.ctx.options(rs.node)} depth={0} />
           )}
           {!hasVisibleOptions(ctl, rs) && (
-            <p class="muted pad">Nothing to choose here yet. Some choices open up once other units or options are in the list (for example, a Rite of War needs a Primarch, or a character with Master of the Legion).</p>
+            <p class="muted pad">
+              Nothing to choose here yet. Some choices open up once other units or options are in the list (for example,
+              a Rite of War needs a Primarch, or a character with Master of the Legion).
+            </p>
           )}
           {!ctl.scratch && isRoot && unitLike && (
             <div class="unit-actions">
-              <button class="btn" onClick={() => {
-                ctl.mutate((r) => {
-                  const f = r.forces.find((x) => x.uid === rs.force.force.uid)!;
-                  const copy = reUid(structuredClone(rs.sel));
-                  f.selections.splice(f.selections.findIndex((s) => s.uid === rs.sel.uid) + 1, 0, copy);
-                });
-                back(backTo);
-              }}><Icon name="copy" /> Duplicate</button>
-              <button class="btn danger" onClick={() => { ctl.mutate((r) => removeSel(r, rs.sel.uid)); back(backTo); }}><Icon name="trash" /> Remove</button>
+              <button
+                class="btn"
+                onClick={() => {
+                  ctl.mutate((r) => {
+                    const f = r.forces.find((x) => x.uid === rs.force.force.uid)!;
+                    const copy = reUid(structuredClone(rs.sel));
+                    f.selections.splice(f.selections.findIndex((s) => s.uid === rs.sel.uid) + 1, 0, copy);
+                  });
+                  back(backTo);
+                }}
+              >
+                <Icon name="copy" /> Duplicate
+              </button>
+              <button
+                class="btn danger"
+                onClick={() => {
+                  ctl.mutate((r) => removeSel(r, rs.sel.uid));
+                  back(backTo);
+                }}
+              >
+                <Icon name="trash" /> Remove
+              </button>
             </div>
           )}
         </>
@@ -91,10 +127,16 @@ function hasVisibleMember(ev: RosterCtl['ev'], rs: RSel, g: Opt, d = 0): boolean
 function ToggleRow({ ctl, rs, g, pair }: { ctl: RosterCtl; rs: RSel; g: Opt; pair: Pair }) {
   const on = ctl.ev.selected(g, rs, rs.force).some((c) => c.opt.key === pair.on.key);
   return (
-    <button class={'toggle-row' + (on ? ' on' : '')} role="switch" aria-checked={on}
-      onClick={() => ctl.mutate((r) => pick(r, ctl.contexts, rs, g, on ? pair.off : pair.on))}>
+    <button
+      class={'toggle-row' + (on ? ' on' : '')}
+      role="switch"
+      aria-checked={on}
+      onClick={() => ctl.mutate((r) => pick(r, ctl.contexts, rs, g, on ? pair.off : pair.on))}
+    >
       <span class="o-name">{ctl.ev.optionEff(g, rs, rs.force).name}</span>
-      <span class="switch"><span class="knob" /></span>
+      <span class="switch">
+        <span class="knob" />
+      </span>
     </button>
   );
 }
@@ -144,13 +186,23 @@ function ProfileStrip({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
   const main = types.find((t) => /unit|model|vehicle|knight|titan|walker|infantry|primarch/i.test(t)) ?? types[0];
   const list = all.filter((p) => p.typeName === main && p.characteristics.every((c) => c.value.length < 30));
   if (!list.length) return null;
-  return <div class="strip"><StatBlock profiles={list} /></div>;
+  return (
+    <div class="strip">
+      <StatBlock profiles={list} />
+    </div>
+  );
 }
 
 function OptList({ ctl, rs, opts, depth }: { ctl: RosterCtl; rs: RSel; opts: Opt[]; depth: number }) {
   return (
     <div class={'opts' + (depth ? ' nested' : '')}>
-      {opts.map((o) => (o.kind === 'group' ? <GroupBlock key={o.key} ctl={ctl} rs={rs} g={o} depth={depth} /> : <OptRow key={o.key} ctl={ctl} rs={rs} o={o} depth={depth} />))}
+      {opts.map((o) =>
+        o.kind === 'group' ? (
+          <GroupBlock key={o.key} ctl={ctl} rs={rs} g={o} depth={depth} />
+        ) : (
+          <OptRow key={o.key} ctl={ctl} rs={rs} o={o} depth={depth} />
+        ),
+      )}
     </div>
   );
 }
@@ -175,10 +227,12 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
   // a heading with nothing under it right now (every option hidden by conditions) is just noise
   if (!n && !hasVisibleMember(ev, rs, g)) return null;
   // "X On" / "X Off" pair: a single switch
-  const pair = onOffPair(g.members.filter((m) => {
-    const e = ev.optionEff(m, rs, rs.force);
-    return !e.hidden && !unavailable(e);
-  }));
+  const pair = onOffPair(
+    g.members.filter((m) => {
+      const e = ev.optionEff(m, rs, rs.force);
+      return !e.hidden && !unavailable(e);
+    }),
+  );
   if (pair) return <ToggleRow ctl={ctl} rs={rs} g={g} pair={pair} />;
   const radio = max === 1 && g.members.every((m) => m.kind === 'entry');
   // a group of On/Off switches needs no "· n" count
@@ -189,18 +243,22 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
     <div class="group">
       <button class="group-head" onClick={() => setOpen(!open)}>
         <span class="g-name">{eff.name}</span>
-        <span class={'g-lim' + (bad ? ' bad' : '')}>{limitText(min, max)}{max !== 1 && n && !allSwitches ? ` · ${n}` : ''}</span>
+        <span class={'g-lim' + (bad ? ' bad' : '')}>
+          {limitText(min, max)}
+          {max !== 1 && n && !allSwitches ? ` · ${n}` : ''}
+        </span>
         <Icon name={open ? 'down' : 'chev'} size={16} />
       </button>
-      {open && (
-        radio ? (
+      {open &&
+        (radio ? (
           <div class="opts">
-            {g.members.map((m) => <RadioRow key={m.key} ctl={ctl} rs={rs} g={g} o={m} required={min >= 1} depth={depth} />)}
+            {g.members.map((m) => (
+              <RadioRow key={m.key} ctl={ctl} rs={rs} g={g} o={m} required={min >= 1} depth={depth} />
+            ))}
           </div>
         ) : (
           <OptList ctl={ctl} rs={rs} opts={g.members} depth={depth} />
-        )
-      )}
+        ))}
     </div>
   );
 }
@@ -257,9 +315,15 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
   });
 }
 
-function costLabel(ctl: RosterCtl, v: number | undefined, each = false) {
+function costLabel(v: number | undefined, each = false) {
   if (!v) return null;
-  return <span class="o-pts">{v > 0 ? '+' : ''}{fmtN(v)}{each ? <small> ea</small> : null}</span>;
+  return (
+    <span class="o-pts">
+      {v > 0 ? '+' : ''}
+      {fmtN(v)}
+      {each ? <small> ea</small> : null}
+    </span>
+  );
 }
 
 function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
@@ -301,38 +365,66 @@ function OptRow({ ctl, rs, o, depth }: { ctl: RosterCtl; rs: RSel; o: Opt; depth
   const cost = eff.costs.get(ev.pointsTypeId);
   const bad = (min > 0 && n < min) || (max >= 0 && n > max);
 
-  const control = max === 1 ? (
-    <button
-      class={'check' + (n ? ' on' : '')}
-      role="checkbox"
-      aria-checked={n > 0}
-      disabled={n > 0 && min >= 1}
-      onClick={() => (n ? setCount(ctl, rs, o, 0) : full ? swapIn(ctl, rs, o, 1) : setCount(ctl, rs, o, 1))}
-    >
-      <span class="box">{n > 0 && <Icon name="check" size={16} />}</span>
-      <span class="o-name">{eff.name}</span>
-      {costLabel(ctl, cost, rs.sel.number > 1)}
-    </button>
-  ) : (
-    <div class={'stepper-row' + (bad ? ' bad' : '')}>
-      <span class="o-name">{eff.name}{max > 1 && <small class="muted"> (max {max})</small>}</span>
-      {costLabel(ctl, cost, rs.sel.number > 1)}
-      <div class="stepper">
-        <button aria-label={'Fewer ' + eff.name} disabled={n <= min} onClick={() => setCount(ctl, rs, o, n - 1)}><Icon name="minus" size={18} /></button>
-        <span class={'count' + (n ? ' on' : '')}>{n}</span>
-        <button aria-label={'More ' + eff.name} disabled={max >= 0 && n >= max} onClick={() => (full ? swapIn(ctl, rs, o, n + 1) : setCount(ctl, rs, o, n + 1))}><Icon name="plus" size={18} /></button>
+  const control =
+    max === 1 ? (
+      <button
+        class={'check' + (n ? ' on' : '')}
+        role="checkbox"
+        aria-checked={n > 0}
+        disabled={n > 0 && min >= 1}
+        onClick={() => (n ? setCount(ctl, rs, o, 0) : full ? swapIn(ctl, rs, o, 1) : setCount(ctl, rs, o, 1))}
+      >
+        <span class="box">{n > 0 && <Icon name="check" size={16} />}</span>
+        <span class="o-name">{eff.name}</span>
+        {costLabel(cost, rs.sel.number > 1)}
+      </button>
+    ) : (
+      <div class={'stepper-row' + (bad ? ' bad' : '')}>
+        <span class="o-name">
+          {eff.name}
+          {max > 1 && <small class="muted"> (max {max})</small>}
+        </span>
+        {costLabel(cost, rs.sel.number > 1)}
+        <div class="stepper">
+          <button aria-label={'Fewer ' + eff.name} disabled={n <= min} onClick={() => setCount(ctl, rs, o, n - 1)}>
+            <Icon name="minus" size={18} />
+          </button>
+          <span class={'count' + (n ? ' on' : '')}>{n}</span>
+          <button
+            aria-label={'More ' + eff.name}
+            disabled={max >= 0 && n >= max}
+            onClick={() => (full ? swapIn(ctl, rs, o, n + 1) : setCount(ctl, rs, o, n + 1))}
+          >
+            <Icon name="plus" size={18} />
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
   return (
     <div class="opt">
       {control}
-      {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
+      {chosen.map((c) => (
+        <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />
+      ))}
     </div>
   );
 }
 
-function RadioRow({ ctl, rs, g, o, required, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; o: Opt; required: boolean; depth: number }) {
+function RadioRow({
+  ctl,
+  rs,
+  g,
+  o,
+  required,
+  depth,
+}: {
+  ctl: RosterCtl;
+  rs: RSel;
+  g: Opt;
+  o: Opt;
+  required: boolean;
+  depth: number;
+}) {
   const { ev } = ctl;
   const eff = ev.optionEff(o, rs, rs.force);
   const chosen = ev.selected(o, rs, rs.force);
@@ -355,9 +447,11 @@ function RadioRow({ ctl, rs, g, o, required, depth }: { ctl: RosterCtl; rs: RSel
       <button class={'radio' + (on ? ' on' : '')} role="radio" aria-checked={on} onClick={pick}>
         <span class="dot" />
         <span class="o-name">{eff.name}</span>
-        {costLabel(ctl, cost, rs.sel.number > 1)}
+        {costLabel(cost, rs.sel.number > 1)}
       </button>
-      {chosen.map((c) => <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />)}
+      {chosen.map((c) => (
+        <Sub key={c.sel.uid} ctl={ctl} rs={c} depth={depth} />
+      ))}
     </div>
   );
 }
@@ -381,14 +475,25 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
       <div class="sub-bar">
         <button class="sub-head" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Icon name={open ? 'down' : 'chev'} size={14} />
-          <span>{n > 1 ? `${n}× ` : siblings.length > 1 ? "1× " : ""}{rs.eff.name}</span>
+          <span>
+            {n > 1 ? `${n}× ` : siblings.length > 1 ? '1× ' : ''}
+            {rs.eff.name}
+          </span>
           {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
         </button>
         {n > 1 && !ctl.scratch && (
-          <button class="mini" title="Give one model different wargear" onClick={() => splitOne(ctl, rs)}>Split 1</button>
+          <button class="mini" title="Give one model different wargear" onClick={() => splitOne(ctl, rs)}>
+            Split 1
+          </button>
         )}
         {twin && !ctl.scratch && (
-          <button class="mini" title="Same wargear as another group: combine them" onClick={() => mergeInto(ctl, rs, twin)}>Merge</button>
+          <button
+            class="mini"
+            title="Same wargear as another group: combine them"
+            onClick={() => mergeInto(ctl, rs, twin)}
+          >
+            Merge
+          </button>
         )}
       </div>
       {open && <OptList ctl={ctl} rs={rs} opts={visible} depth={depth + 1} />}
@@ -398,7 +503,10 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
 
 /** same option tree and counts (ignoring uids) */
 function gearSig(s: Sel): string {
-  return s.children.map((c) => `${c.key}*${c.number}(${gearSig(c)})`).sort().join(',');
+  return s.children
+    .map((c) => `${c.key}*${c.number}(${gearSig(c)})`)
+    .sort()
+    .join(',');
 }
 function sameGear(a: Sel, b: Sel) {
   return gearSig(a) === gearSig(b);
@@ -434,16 +542,30 @@ export function Profiles({ ctl, profiles }: { ctl: RosterCtl; profiles: Profile[
     <div class="profiles">
       {types.map((t) => {
         const list = profiles.filter((p) => p.typeName === t);
-        const long = list.some((p) => p.characteristics.some((c) => c.value.length > 40)) || list[0].characteristics.length <= 1;
+        const long =
+          list.some((p) => p.characteristics.some((c) => c.value.length > 40)) || list[0].characteristics.length <= 1;
         return (
           <section class="ptype">
             <h3>{t}</h3>
-            {long ? list.map((p) => (
-              <div class="pcard">
-                <b>{p.name}</b>
-                {p.characteristics.map((c) => c.value && <p><span class="muted">{c.name}:</span> {c.value}</p>)}
+            {long ? (
+              list.map((p) => (
+                <div class="pcard">
+                  <b>{p.name}</b>
+                  {p.characteristics.map(
+                    (c) =>
+                      c.value && (
+                        <p>
+                          <span class="muted">{c.name}:</span> {c.value}
+                        </p>
+                      ),
+                  )}
+                </div>
+              ))
+            ) : (
+              <div class="pad-x">
+                <StatBlock profiles={list} />
               </div>
-            )) : <div class="pad-x"><StatBlock profiles={list} /></div>}
+            )}
           </section>
         );
       })}
@@ -458,10 +580,22 @@ export function ProfileTable({ profiles }: { profiles: Profile[] }) {
   return (
     <div class="table-wrap">
       <table class="ptable">
-        <thead><tr><th>Name</th>{cols.map((c) => <th>{c}</th>)}</tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th>
+            {cols.map((c) => (
+              <th>{c}</th>
+            ))}
+          </tr>
+        </thead>
         <tbody>
           {profiles.map((p) => (
-            <tr><td class="pname">{p.name}</td>{cols.map((c) => <td>{p.characteristics.find((x) => x.name === c)?.value ?? ''}</td>)}</tr>
+            <tr>
+              <td class="pname">{p.name}</td>
+              {cols.map((c) => (
+                <td>{p.characteristics.find((x) => x.name === c)?.value ?? ''}</td>
+              ))}
+            </tr>
           ))}
         </tbody>
       </table>
@@ -487,7 +621,12 @@ export function Rules({ ctl, rs }: { ctl: RosterCtl; rs: RSel }) {
   const shownArmy = army.filter(match);
   return (
     <div class="rules">
-      {rules.length + army.length > 8 && <div class="search"><Icon name="search" size={18} /><input placeholder="Search rules" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>}
+      {rules.length + army.length > 8 && (
+        <div class="search">
+          <Icon name="search" size={18} />
+          <input placeholder="Search rules" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+        </div>
+      )}
       {rules.filter(match).map(item)}
       {shownArmy.length > 0 && (
         <>

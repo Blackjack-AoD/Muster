@@ -22,7 +22,10 @@ export function readZip(buf: ArrayBuffer | Uint8Array): ZipEntry[] {
   // find the end-of-central-directory record (it sits in the last 64 KB + 22 bytes)
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
-    if (u32(v, i) === 0x06054b50) { eocd = i; break; }
+    if (u32(v, i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
   }
   if (eocd < 0) throw new Error('Not a zip file');
   const count = u16(v, eocd + 10);

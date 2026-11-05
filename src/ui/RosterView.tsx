@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { back, go } from '../app';
-import { addSel, forceRootOptions, locate, removeSel, uid, unavailable, type Evaluator, type Issue, type RForce, type RSel, type Roster, type Sel } from '../data/engine';
+import { go } from '../app';
+import {
+  addSel,
+  forceRootOptions,
+  locate,
+  removeSel,
+  uid,
+  unavailable,
+  type Evaluator,
+  type Issue,
+  type RForce,
+  type RSel,
+  type Roster,
+  type Sel,
+} from '../data/engine';
 import type { Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
 import { deleteRoster, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
-import { Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
+import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
@@ -16,9 +29,27 @@ export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
 export function RosterView({ uid: rid }: { uid: string }) {
   const roster = useStore((s) => s.rosters.find((r) => r.uid === rid));
   const { ctl, error, loading } = useRosterCtl(roster);
-  if (loading) return <div class="page"><TopBar title={roster?.name ?? 'List'} backTo="/" /><Loading label="Loading army data…" /></div>;
-  if (!roster) return <div class="page"><TopBar title="List" backTo="/" /><p class="muted pad">This list has been deleted.</p></div>;
-  if (!ctl) return <div class="page"><TopBar title="List" backTo="/" /><p class="error-text pad">{error}</p></div>;
+  if (loading)
+    return (
+      <div class="page">
+        <TopBar title={roster?.name ?? 'List'} backTo="/" />
+        <Loading label="Loading army data…" />
+      </div>
+    );
+  if (!roster)
+    return (
+      <div class="page">
+        <TopBar title="List" backTo="/" />
+        <p class="muted pad">This list has been deleted.</p>
+      </div>
+    );
+  if (!ctl)
+    return (
+      <div class="page">
+        <TopBar title="List" backTo="/" />
+        <p class="error-text pad">{error}</p>
+      </div>
+    );
   return <RosterBody ctl={ctl} />;
 }
 
@@ -36,29 +67,50 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
         title={roster.name}
         sub={[...new Set(roster.forces.map((f) => catalogueName(repos, roster.repo, f.catalogueId)))].join(' · ')}
         backTo="/"
-        right={<button class="icon-btn" aria-label="List options" onClick={() => setSheet('menu')}><Icon name="more" /></button>}
+        right={
+          <button class="icon-btn" aria-label="List options" onClick={() => setSheet('menu')}>
+            <Icon name="more" />
+          </button>
+        }
       />
       <div class="sum-bar">
         <div class="sum-row">
           <Pts v={ev.total} limit={roster.costLimit} />
-          <button class={'chip ' + (errors.length ? 'bad' : warns.length ? 'warn' : 'good')} onClick={() => setSheet('issues')}>
+          <button
+            class={'chip ' + (errors.length ? 'bad' : warns.length ? 'warn' : 'good')}
+            onClick={() => setSheet('issues')}
+          >
             <Icon name={errors.length || warns.length ? 'warn' : 'check'} size={16} />
-            {errors.length ? `${errors.length} issue${errors.length > 1 ? 's' : ''}` : warns.length ? `${warns.length} note${warns.length > 1 ? 's' : ''}` : 'Valid'}
+            {errors.length
+              ? `${errors.length} issue${errors.length > 1 ? 's' : ''}`
+              : warns.length
+                ? `${warns.length} note${warns.length > 1 ? 's' : ''}`
+                : 'Valid'}
           </button>
         </div>
-        {roster.costLimit > 0 && <div class="meter"><div class={'meter-fill' + (ev.total > roster.costLimit ? ' over' : '')} style={{ width: pct + '%' }} /></div>}
+        {roster.costLimit > 0 && (
+          <div class="meter">
+            <div class={'meter-fill' + (ev.total > roster.costLimit ? ' over' : '')} style={{ width: pct + '%' }} />
+          </div>
+        )}
       </div>
 
-      {ev.forces.map((rf) => <ForceBlock key={rf.force.uid} ctl={ctl} rf={rf} onAdd={(cat) => setSheet({ add: rf, cat })} />)}
+      {ev.forces.map((rf) => (
+        <ForceBlock key={rf.force.uid} ctl={ctl} rf={rf} onAdd={(cat) => setSheet({ add: rf, cat })} />
+      ))}
 
       <div class="pad">
-        <button class="btn ghost wide" onClick={() => setSheet('force')}><Icon name="plus" /> Add detachment</button>
+        <button class="btn ghost wide" onClick={() => setSheet('force')}>
+          <Icon name="plus" /> Add detachment
+        </button>
       </div>
 
       {sheet === 'issues' && <IssuesSheet issues={ev.issues} ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'menu' && <MenuSheet ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'force' && <AddForceSheet ctl={ctl} onClose={() => setSheet(null)} />}
-      {sheet && typeof sheet === 'object' && <AddUnitSheet ctl={ctl} rf={sheet.add} cat={sheet.cat} onClose={() => setSheet(null)} />}
+      {sheet && typeof sheet === 'object' && (
+        <AddUnitSheet ctl={ctl} rf={sheet.add} cat={sheet.cat} onClose={() => setSheet(null)} />
+      )}
     </div>
   );
 }
@@ -116,26 +168,51 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
                   {showCount && (
                     <span class={'cat-count' + (lim.bad ? ' bad' : '')}>
                       {all.reduce((t, u) => t + u.sel.number, 0)}
-                      {(lim.min > 0 || lim.max >= 0) && <small> ({lim.min}–{lim.max < 0 ? '∞' : lim.max})</small>}
+                      {(lim.min > 0 || lim.max >= 0) && (
+                        <small>
+                          {' '}
+                          ({lim.min}–{lim.max < 0 ? '∞' : lim.max})
+                        </small>
+                      )}
                     </span>
                   )}
-                  {plus && <button class="icon-btn sm" aria-label={'Add ' + cleanCat(rf.ctx.categoryName(c))} onClick={() => onAdd(c)}><Icon name="plus" size={20} /></button>}
+                  {plus && (
+                    <button
+                      class="icon-btn sm"
+                      aria-label={'Add ' + cleanCat(rf.ctx.categoryName(c))}
+                      onClick={() => onAdd(c)}
+                    >
+                      <Icon name="plus" size={20} />
+                    </button>
+                  )}
                 </div>
                 {units.map((u) => {
                   const ch = inlineChoice(ctl.ev, u);
-                  return ch ? <ChoiceRow key={u.sel.uid} ctl={ctl} u={u} choice={ch} /> : <UnitRow key={u.sel.uid} ctl={ctl} u={u} />;
+                  return ch ? (
+                    <ChoiceRow key={u.sel.uid} ctl={ctl} u={u} choice={ch} />
+                  ) : (
+                    <UnitRow key={u.sel.uid} ctl={ctl} u={u} />
+                  );
                 })}
               </div>
             );
           })}
           {other.length > 0 && (
             <div class="cat">
-              <div class="cat-head"><span class="cat-name">Other</span></div>
-              {other.map((u) => <UnitRow key={u.sel.uid} ctl={ctl} u={u} />)}
+              <div class="cat-head">
+                <span class="cat-name">Other</span>
+              </div>
+              {other.map((u) => (
+                <UnitRow key={u.sel.uid} ctl={ctl} u={u} />
+              ))}
             </div>
           )}
-          {rf.broken.length > 0 && <p class="muted pad-x small">{rf.broken.length} unit(s) from an older data version couldn't be found.</p>}
-          <button class="btn ghost wide add-any" onClick={() => onAdd()}><Icon name="plus" /> Add unit</button>
+          {rf.broken.length > 0 && (
+            <p class="muted pad-x small">{rf.broken.length} unit(s) from an older data version couldn't be found.</p>
+          )}
+          <button class="btn ghost wide add-any" onClick={() => onAdd()}>
+            <Icon name="plus" /> Add unit
+          </button>
         </div>
       )}
     </section>
@@ -155,7 +232,10 @@ export function unitSummary(u: RSel): string {
     }
   };
   walk(u, 0, u.sel.number);
-  return [...counts].slice(0, 6).map(([name, n]) => (n > 1 ? `${n}× ${name}` : name)).join(' · ');
+  return [...counts]
+    .slice(0, 6)
+    .map(([name, n]) => (n > 1 ? `${n}× ${name}` : name))
+    .join(' · ');
 }
 
 const isUnitLike = (o: Opt) => o.node.type === 'unit' || o.node.type === 'model';
@@ -209,10 +289,17 @@ function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: O
       {choice.members.map((m) => {
         const on = u.children.some((c) => c.opt.key === m.key);
         return (
-          <button role="radio" aria-checked={on} class={on ? 'on' : ''} onClick={() => {
-            if (on) return;
-            ctl.mutate((r) => pick(r, ctl.contexts, u, choice.g, m));
-          }}>{ctl.ev.optionEff(m, u, u.force).name}</button>
+          <button
+            role="radio"
+            aria-checked={on}
+            class={on ? 'on' : ''}
+            onClick={() => {
+              if (on) return;
+              ctl.mutate((r) => pick(r, ctl.contexts, u, choice.g, m));
+            }}
+          >
+            {ctl.ev.optionEff(m, u, u.force).name}
+          </button>
         );
       })}
     </div>
@@ -225,10 +312,11 @@ function reUid(s: Sel): Sel {
   return s;
 }
 
-
 /** Tap to open. Swipe left to delete (with Undo), swipe right to duplicate. */
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
-  const bad = ctl.ev.issues.some((i) => i.level === 'error' && i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)));
+  const bad = ctl.ev.issues.some(
+    (i) => i.level === 'error' && i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)),
+  );
   const summary = unitSummary(u);
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; id: number; swiping: boolean; moved: boolean } | null>(null);
@@ -244,10 +332,11 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
     ctl.mutate((r) => removeSel(r, u.sel.uid));
     toast(`Removed ${u.eff.name}`, {
       label: 'Undo',
-      run: () => ctl.mutate((r) => {
-        const f = r.forces.find((x) => x.uid === forceUid);
-        if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, saved);
-      }),
+      run: () =>
+        ctl.mutate((r) => {
+          const f = r.forces.find((x) => x.uid === forceUid);
+          if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, saved);
+        }),
     });
   };
   const duplicate = () => {
@@ -269,7 +358,10 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
     const mx = e.clientX - d.x;
     const my = e.clientY - d.y;
     if (!d.swiping) {
-      if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { drag.current = null; return; } // scrolling
+      if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) {
+        drag.current = null;
+        return;
+      } // scrolling
       if (Math.abs(mx) < 12) return;
       d.swiping = true;
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -295,25 +387,38 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
     <div class={'swipe' + (dx > 0 ? ' dup' : dx < 0 ? ' del' : '')}>
       {swipeable && (
         <div class="swipe-bg" aria-hidden="true">
-          <span class={'sb-dup' + (dx >= SWIPE ? ' armed' : '')}><Icon name="copy" size={18} /> Duplicate</span>
-          <span class={'sb-del' + (dx <= -SWIPE ? ' armed' : '')}>Delete <Icon name="trash" size={18} /></span>
+          <span class={'sb-dup' + (dx >= SWIPE ? ' armed' : '')}>
+            <Icon name="copy" size={18} /> Duplicate
+          </span>
+          <span class={'sb-del' + (dx <= -SWIPE ? ' armed' : '')}>
+            Delete <Icon name="trash" size={18} />
+          </span>
         </div>
       )}
       <a
         class={'unit-row' + (bad ? ' bad' : '') + (dx ? ' dragging' : '')}
         href={'#' + to}
         style={dx ? { transform: `translateX(${dx}px)` } : undefined}
-        onClick={(e) => { e.preventDefault(); if (!suppressClick.current) go(to); }}
+        onClick={(e) => {
+          e.preventDefault();
+          if (!suppressClick.current) go(to);
+        }}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
-        onPointerCancel={() => { drag.current = null; setDx(0); }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setDx(0);
+        }}
       >
         <div class="ur-main">
-          <div class="ur-name">{u.sel.number > 1 ? `${u.sel.number}× ` : ''}{u.eff.name}</div>
+          <div class="ur-name">
+            {u.sel.number > 1 ? `${u.sel.number}× ` : ''}
+            {u.eff.name}
+          </div>
           {summary && <div class="ur-sub">{summary}</div>}
         </div>
-        {(u.total || swipeable) ? <span class="ur-pts">{fmtN(u.total)}</span> : <Icon name="chev" size={18} />}
+        {u.total || swipeable ? <span class="ur-pts">{fmtN(u.total)}</span> : <Icon name="chev" size={18} />}
       </a>
     </div>
   );
@@ -329,15 +434,43 @@ function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: s
   return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
 }
 
-function PickRow({ name, pts, added, onTap, onSwipe }: { name: string; pts: number; added: number; onTap: () => void; onSwipe: () => void }) {
+function PickRow({
+  name,
+  pts,
+  added,
+  onTap,
+  onSwipe,
+}: {
+  name: string;
+  pts: number;
+  added: number;
+  onTap: () => void;
+  onSwipe: () => void;
+}) {
   const { dx, handlers, tap } = useSwipe({ onRight: onSwipe });
   return (
     <div class={'pick-swipe' + (dx ? ' active' : '')}>
-      <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true"><Icon name="plus" size={18} /> Add with standard options</div>
-      <button class={'pick' + (dx ? ' dragging' : '')} style={dx ? { transform: `translateX(${dx}px)` } : undefined}
-        onClick={tap(onTap)} {...handlers}>
-        <span><b>{name}</b></span>
-        <span class="pick-pts">{fmtN(pts)}{added > 0 && <small class="pick-added" aria-label={`${added} added`}> ×{added}</small>}</span>
+      <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true">
+        <Icon name="plus" size={18} /> Add with standard options
+      </div>
+      <button
+        class={'pick' + (dx ? ' dragging' : '')}
+        style={dx ? { transform: `translateX(${dx}px)` } : undefined}
+        onClick={tap(onTap)}
+        {...handlers}
+      >
+        <span>
+          <b>{name}</b>
+        </span>
+        <span class="pick-pts">
+          {fmtN(pts)}
+          {added > 0 && (
+            <small class="pick-added" aria-label={`${added} added`}>
+              {' '}
+              ×{added}
+            </small>
+          )}
+        </span>
       </button>
     </div>
   );
@@ -360,29 +493,46 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
 
   const add = (o: Opt, catId?: string) => {
     let newUid = '';
-    ctl.mutate((r) => { newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId); });
+    ctl.mutate((r) => {
+      newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId);
+    });
     onClose();
     go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
   };
   // swipe right: add with standard options and stay here; counts shown only while this list is open
   const [quick, setQuick] = useState<Record<string, number>>({});
   const quickAdd = (o: Opt, catId?: string) => {
-    ctl.mutate((r) => { addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId); });
+    ctl.mutate((r) => {
+      addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId);
+    });
     setQuick((m) => ({ ...m, [o.key]: (m[o.key] ?? 0) + 1 }));
   };
 
   return (
     <Sheet title={cat ? `Add ${cleanCat(rf.ctx.categoryName(cat))}` : 'Add unit'} onClose={onClose} full>
-      <div class="search"><Icon name="search" size={18} /><input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
+      <div class="search">
+        <Icon name="search" size={18} />
+        <input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+      </div>
       {!shown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
-      {shown.length > 0 && <p class="muted small pad-x pick-hint">Tap to add and open a unit. Swipe right to add it with its standard options.</p>}
+      {shown.length > 0 && (
+        <p class="muted small pad-x pick-hint">
+          Tap to add and open a unit. Swipe right to add it with its standard options.
+        </p>
+      )}
       {[...groups].map(([c, items]) => (
         <div key={c}>
           {!cat && <div class="list-label">{cleanCat(rf.ctx.categoryName(c)) || 'Other'}</div>}
           <div class="pick-list">
             {items.map(({ o, eff, cat: oc }) => (
-              <PickRow key={o.key} name={eff.name} pts={startPts(rf, o, eff, pt)} added={quick[o.key] ?? 0}
-                onTap={() => add(o, oc)} onSwipe={() => quickAdd(o, oc)} />
+              <PickRow
+                key={o.key}
+                name={eff.name}
+                pts={startPts(rf, o, eff, pt)}
+                added={quick[o.key] ?? 0}
+                onTap={() => add(o, oc)}
+                onSwipe={() => quickAdd(o, oc)}
+              />
             ))}
           </div>
         </div>
@@ -394,14 +544,27 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
 function IssuesSheet({ issues, ctl, onClose }: { issues: Issue[]; ctl: RosterCtl; onClose: () => void }) {
   return (
     <Sheet title="List check" onClose={onClose}>
-      {!issues.length && <p class="good-text">No problems found. Remember the app checks points and limits, not every special rule.</p>}
+      {!issues.length && (
+        <p class="good-text">No problems found. Remember the app checks points and limits, not every special rule.</p>
+      )}
       <ul class="issues">
         {issues.map((i) => (
           <li class={i.level}>
             <Icon name="warn" size={16} />
             {i.selUid ? (
-              <a href={`#/r/${ctl.roster.uid}/u/${i.selUid}`} onClick={(e) => { e.preventDefault(); onClose(); go(`/r/${ctl.roster.uid}/u/${i.selUid}`, true); }}>{i.message}</a>
-            ) : <span>{i.message}</span>}
+              <a
+                href={`#/r/${ctl.roster.uid}/u/${i.selUid}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onClose();
+                  go(`/r/${ctl.roster.uid}/u/${i.selUid}`, true);
+                }}
+              >
+                {i.message}
+              </a>
+            ) : (
+              <span>{i.message}</span>
+            )}
           </li>
         ))}
       </ul>
@@ -413,30 +576,81 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
   const repos = useStore((s) => s.repos);
   const [name, setName] = useState(ctl.roster.name);
   const [limit, setLimit] = useState(String(ctl.roster.costLimit || ''));
-  const save = () => ctl.mutate((r) => { r.name = name.trim() || r.name; r.costLimit = Number(limit) || 0; });
+  const save = () =>
+    ctl.mutate((r) => {
+      r.name = name.trim() || r.name;
+      r.costLimit = Number(limit) || 0;
+    });
   return (
-    <Sheet title="List" onClose={() => { save(); onClose(); }}>
+    <Sheet
+      title="List"
+      onClose={() => {
+        save();
+        onClose();
+      }}
+    >
       <div class="form">
-        <label>Name<input value={name} onInput={(e) => setName(e.currentTarget.value)} onBlur={save} /></label>
-        <label>Points limit<input type="number" inputMode="numeric" value={limit} onInput={(e) => setLimit(e.currentTarget.value)} onBlur={save} /></label>
+        <label>
+          Name
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} onBlur={save} />
+        </label>
+        <label>
+          Points limit
+          <input
+            type="number"
+            inputMode="numeric"
+            value={limit}
+            onInput={(e) => setLimit(e.currentTarget.value)}
+            onBlur={save}
+          />
+        </label>
       </div>
       <div class="menu">
-        <button onClick={() => { save(); onClose(); go(`/r/${ctl.roster.uid}/sheet`, true); }}><Icon name="book" /> Army sheet: print, PDF or share link</button>
-        <button onClick={() => { save(); shareText(rosterText(ctl, repos), ctl.roster.name); }}><Icon name="share" /> Share as text</button>
-        <button onClick={async () => {
-          save();
-          const copy: Roster = { ...structuredClone(ctl.roster), uid: uid(), name: ctl.roster.name + ' (copy)', created: Date.now() };
-          await saveRoster(copy);
-          onClose();
-          go(`/r/${copy.uid}`, true);
-          toast('List duplicated');
-        }}><Icon name="copy" /> Duplicate list</button>
-        <button class="danger" onClick={async () => {
-          if (!confirm(`Delete "${ctl.roster.name}"? This can't be undone.`)) return;
-          await deleteRoster(ctl.roster.uid);
-          onClose();
-          go('/', true);
-        }}><Icon name="trash" /> Delete list</button>
+        <button
+          onClick={() => {
+            save();
+            onClose();
+            go(`/r/${ctl.roster.uid}/sheet`, true);
+          }}
+        >
+          <Icon name="book" /> Army sheet: print, PDF or share link
+        </button>
+        <button
+          onClick={() => {
+            save();
+            shareText(rosterText(ctl, repos), ctl.roster.name);
+          }}
+        >
+          <Icon name="share" /> Share as text
+        </button>
+        <button
+          onClick={async () => {
+            save();
+            const copy: Roster = {
+              ...structuredClone(ctl.roster),
+              uid: uid(),
+              name: ctl.roster.name + ' (copy)',
+              created: Date.now(),
+            };
+            await saveRoster(copy);
+            onClose();
+            go(`/r/${copy.uid}`, true);
+            toast('List duplicated');
+          }}
+        >
+          <Icon name="copy" /> Duplicate list
+        </button>
+        <button
+          class="danger"
+          onClick={async () => {
+            if (!confirm(`Delete "${ctl.roster.name}"? This can't be undone.`)) return;
+            await deleteRoster(ctl.roster.uid);
+            onClose();
+            go('/', true);
+          }}
+        >
+          <Icon name="trash" /> Delete list
+        </button>
       </div>
     </Sheet>
   );
@@ -454,18 +668,45 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
   useEffect(() => {
     if (!repo || !catId) return;
     setForces(undefined);
-    getContext(repo, catId).then((c) => setForces(c.forceEntries().filter((f) => !f.hidden).map((f) => ({ id: f.id, name: f.name }))));
+    getContext(repo, catId).then((c) =>
+      setForces(
+        c
+          .forceEntries()
+          .filter((f) => !f.hidden)
+          .map((f) => ({ id: f.id, name: f.name })),
+      ),
+    );
   }, [catId]);
 
-  if (!sys || !repo) return <Sheet title="Add detachment" onClose={onClose}><p class="error-text">This list's data isn't on the phone.</p></Sheet>;
+  if (!sys || !repo)
+    return (
+      <Sheet title="Add detachment" onClose={onClose}>
+        <p class="error-text">This list's data isn't on the phone.</p>
+      </Sheet>
+    );
   if (picking) {
     return (
       <Sheet title="Army" onClose={() => setPicking(false)} full>
-        <div class="search"><Icon name="search" size={18} /><input placeholder="Search armies" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
+        <div class="search">
+          <Icon name="search" size={18} />
+          <input placeholder="Search armies" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+        </div>
         <div class="pick-list">
-          {sys.catalogues.filter((c) => c.header!.name.toLowerCase().includes(q.toLowerCase())).map((c) => (
-            <button class="pick" onClick={() => { setCatId(c.header!.id); setPicking(false); }}><span><b>{c.header!.name}</b></span></button>
-          ))}
+          {sys.catalogues
+            .filter((c) => c.header!.name.toLowerCase().includes(q.toLowerCase()))
+            .map((c) => (
+              <button
+                class="pick"
+                onClick={() => {
+                  setCatId(c.header!.id);
+                  setPicking(false);
+                }}
+              >
+                <span>
+                  <b>{c.header!.name}</b>
+                </span>
+              </button>
+            ))}
         </div>
       </Sheet>
     );
@@ -474,22 +715,40 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
     <Sheet title="Add detachment" onClose={onClose}>
       <div class="label">Army</div>
       <button class="pick" onClick={() => setPicking(true)}>
-        <span><b>{catalogueName(repos, ctl.roster.repo, catId!)}</b><small>Tap to change</small></span><Icon name="chev" />
+        <span>
+          <b>{catalogueName(repos, ctl.roster.repo, catId)}</b>
+          <small>Tap to change</small>
+        </span>
+        <Icon name="chev" />
       </button>
       <div class="label">Detachment</div>
-      {!forces ? <Loading /> : (
+      {!forces ? (
+        <Loading />
+      ) : (
         <div class="pick-list compact">
           {forces.map((f) => (
-            <button class="pick" onClick={async () => {
-              const ctx = await getContext(repo, catId!);
-              const contexts = new Map(ctl.contexts).set(catId!, ctx);
-              ctl.mutate((r) => {
-                const fu = uid();
-                r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId!, selections: [] });
-                try { setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId!)); } catch (e) { console.warn('set-up skipped', e); }
-              });
-              onClose();
-            }}><span><b>{f.name}</b></span><Icon name="plus" /></button>
+            <button
+              class="pick"
+              onClick={async () => {
+                const ctx = await getContext(repo, catId);
+                const contexts = new Map(ctl.contexts).set(catId, ctx);
+                ctl.mutate((r) => {
+                  const fu = uid();
+                  r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId, selections: [] });
+                  try {
+                    setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId));
+                  } catch (e) {
+                    console.warn('set-up skipped', e);
+                  }
+                });
+                onClose();
+              }}
+            >
+              <span>
+                <b>{f.name}</b>
+              </span>
+              <Icon name="plus" />
+            </button>
           ))}
         </div>
       )}
@@ -498,11 +757,18 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
           <div class="label">Remove a detachment</div>
           <div class="menu">
             {ctl.ev.forces.map((rf) => (
-              <button class="danger" onClick={() => {
-                if (!confirm(`Remove ${rf.entry.name} and its ${rf.roots.length} unit(s)?`)) return;
-                ctl.mutate((r) => { r.forces = r.forces.filter((f) => f.uid !== rf.force.uid); });
-                onClose();
-              }}><Icon name="trash" /> {rf.entry.name} · {catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}</button>
+              <button
+                class="danger"
+                onClick={() => {
+                  if (!confirm(`Remove ${rf.entry.name} and its ${rf.roots.length} unit(s)?`)) return;
+                  ctl.mutate((r) => {
+                    r.forces = r.forces.filter((f) => f.uid !== rf.force.uid);
+                  });
+                  onClose();
+                }}
+              >
+                <Icon name="trash" /> {rf.entry.name} · {catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}
+              </button>
             ))}
           </div>
         </>

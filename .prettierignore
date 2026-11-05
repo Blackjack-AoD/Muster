@@ -1,0 +1,9 @@
+dist
+coverage
+public
+.claude
+package-lock.json
+*.md
+scripts/*.cjs
+scripts/compare.ts
+scripts/test-engine.ts

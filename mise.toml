@@ -1,0 +1,62 @@
+[tools]
+node = "22"
+
+[tasks.install]
+description = "Install dependencies (skipped when the lockfile hasn't changed)"
+run = "npm ci"
+sources = ["package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks.dev]
+description = "Start the local dev server"
+depends = ["install"]
+run = "npm run dev"
+
+[tasks.typecheck]
+description = "Type-check src/"
+depends = ["install"]
+run = "npx tsc -p ."
+
+[tasks.test]
+description = "Run the unit tests"
+depends = ["install"]
+run = "npm test"
+
+[tasks.coverage]
+description = "Run the unit tests and report coverage"
+depends = ["install"]
+run = "npm run test:coverage"
+
+[tasks.lint]
+description = "Lint src/ and the sweep"
+depends = ["install"]
+run = "npm run lint"
+
+[tasks.format]
+description = "Format the code with Prettier"
+depends = ["install"]
+run = "npm run format"
+
+[tasks.format-check]
+description = "Check the formatting without changing anything"
+depends = ["install"]
+run = "npm run format:check"
+
+[tasks.build]
+description = "Type-check and build into dist/"
+depends = ["install"]
+run = "npm run build"
+
+[tasks.preview]
+description = "Serve the production build from dist/"
+depends = ["build"]
+run = "npm run preview"
+
+[tasks.sweep]
+description = "Look for unit test cases in real data: mise run sweep <data-dir> [army filter]"
+depends = ["install"]
+run = "npm run sweep --"
+
+[tasks.clean]
+description = "Remove dist/ and node_modules/"
+run = "rm -rf dist node_modules"

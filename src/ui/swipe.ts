@@ -21,7 +21,10 @@ export function useSwipe({ onLeft, onRight }: { onLeft?: () => void; onRight?: (
       const mx = e.clientX - d.x;
       const my = e.clientY - d.y;
       if (!d.swiping) {
-        if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { drag.current = null; return; } // scrolling
+        if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) {
+          drag.current = null;
+          return;
+        } // scrolling
         if (Math.abs(mx) < 12 || !clamp(mx)) return;
         d.swiping = true;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -42,9 +45,15 @@ export function useSwipe({ onLeft, onRight }: { onLeft?: () => void; onRight?: (
       suppress.current = true;
       setTimeout(() => (suppress.current = false), 60);
     },
-    onPointerCancel: () => { drag.current = null; last.current = 0; setDx(0); },
+    onPointerCancel: () => {
+      drag.current = null;
+      last.current = 0;
+      setDx(0);
+    },
   };
   /** wrap a click handler so it ignores the click at the end of a swipe */
-  const tap = (fn: () => void) => () => { if (!suppress.current) fn(); };
+  const tap = (fn: () => void) => () => {
+    if (!suppress.current) fn();
+  };
   return { dx, handlers, tap };
 }

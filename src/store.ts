@@ -19,7 +19,13 @@ interface State {
 }
 
 const GAME_KEY = 'muster.game';
-const savedGame = (() => { try { return localStorage.getItem(GAME_KEY) || undefined; } catch { return undefined; } })();
+const savedGame = (() => {
+  try {
+    return localStorage.getItem(GAME_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+})();
 let state: State = { ready: false, repos: [], rosters: [], sync: {}, game: savedGame };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
@@ -63,7 +69,9 @@ export function setGame(game: string | undefined) {
   try {
     if (game) localStorage.setItem(GAME_KEY, game);
     else localStorage.removeItem(GAME_KEY);
-  } catch { /* storage unavailable: keep it for this session only */ }
+  } catch {
+    /* storage unavailable: keep it for this session only */
+  }
   set({ game });
 }
 
@@ -121,7 +129,10 @@ export interface RosterCtl {
 }
 
 /** Load contexts for a roster and keep an evaluator in sync with edits. */
-export function useRosterCtl(source: Roster | undefined, scratch = false): { ctl?: RosterCtl; error?: string; loading: boolean } {
+export function useRosterCtl(
+  source: Roster | undefined,
+  scratch = false,
+): { ctl?: RosterCtl; error?: string; loading: boolean } {
   const repos = useStore((s) => s.repos);
   const [contexts, setContexts] = useState<Map<string, Context>>();
   const [error, setError] = useState<string>();
