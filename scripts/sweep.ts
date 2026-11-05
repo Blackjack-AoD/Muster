@@ -78,9 +78,9 @@ interface Problem {
 }
 const problems = new Map<string, Problem>();
 const nodes = (s: Sel[]): number => s.reduce((t, x) => t + 1 + nodes(x.children), 0);
-const note = (kind: string, size: number, example: string) => {
+const note = (kind: string, size: number, example: string, count = 1) => {
   const p = problems.get(kind) ?? { count: 0, size: Infinity, example };
-  p.count++;
+  p.count += count;
   if (size < p.size) {
     p.size = size;
     p.example = example;
@@ -102,9 +102,8 @@ for (const m of meta.values()) {
   // A problem the set-up raises on its own belongs to the army, not to each unit added after it.
   const armyWide = new Set<string>();
   const noteOnce = (kind: string, size: number, example: string) => {
-    if (armyWide.has(kind)) return;
+    note(kind, size, example, armyWide.has(kind) ? 0 : 1);
     armyWide.add(kind);
-    note(kind, size, example);
   };
   for (const fe of ctx.forceEntries()) {
     if (fe.hidden) continue; // the app doesn't offer it
