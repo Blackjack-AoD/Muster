@@ -209,4 +209,16 @@ describe('how long the failed save toast stays up', () => {
     vi.advanceTimersByTime(5000);
     expect(getState().toast).toBe(SAVE_FAILED);
   });
+
+  it("doesn't stop an Undo toast that replaced it from timing out", async () => {
+    await renderWithToast(newList());
+    await fakeClock();
+    await failASave();
+    showUndo();
+
+    vi.advanceTimersByTime(4999);
+    expect(getState().toast).toBe('Removed Tactical Squad');
+    vi.advanceTimersByTime(1);
+    expect(getState().toast).toBeUndefined();
+  });
 });
