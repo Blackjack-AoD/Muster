@@ -319,9 +319,16 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
     if (v.number > 1) v.number--;
     else parent.children = parent.children.filter((c) => c !== v);
     const mine = parent.children.filter((c) => c.key === o.key);
-    if (mine.length) mine[mine.length - 1].number++;
+    if (mine.length) addModels(r, ctl, rs, o, mine, 1);
     else addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, newCount);
   });
+}
+
+/** New models join the biggest unnamed row, copying its wargear. A named row holds 1, so with none they get a new row. */
+function addModels(r: Roster, ctl: RosterCtl, rs: RSel, o: Opt, mine: Sel[], n: number) {
+  const unnamed = mine.filter((c) => c.name === undefined);
+  if (unnamed.length) unnamed.reduce((a, c) => (c.number > a.number ? c : a)).number += n;
+  else addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, n);
 }
 
 function costLabel(v: number | undefined, each = false) {
@@ -347,8 +354,7 @@ function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
     if (mine.length) {
       let diff = n - mine.reduce((t, c) => t + c.number, 0);
       if (diff > 0) {
-        // new models join the biggest group (they copy its wargear)
-        mine.reduce((a, c) => (c.number > a.number ? c : a)).number += diff;
+        addModels(r, ctl, rs, o, mine, diff);
         return;
       }
       // fewer: take from split-off rows first (the latest), then the main group
