@@ -23,6 +23,7 @@ mise run lint                              # type-aware lint with oxlint
 mise run typecheck                         # type-check src/ and the tests
 mise run build                             # type-check and build into dist/
 mise run preview                           # build, then serve dist/
+mise run e2e                               # build the site and run the Playwright journeys at phone size
 mise run sweep <data-dir> ["<army name filter>"]   # look for unit test cases in real data
 mise run clean                             # remove dist/ and node_modules/
 mise exec -- npx tsx scripts/test-engine.ts <data-dir> "<catalogue name>" "<unit>" ...   # engine smoke test
@@ -30,9 +31,11 @@ mise exec -- npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>  
 ```
 
 ## Testing
-Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. A deploy stops if they fail. They cover the data layer, storage, backups and share links; the UI screens and `src/update.ts` aren't covered yet.
+Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. A deploy stops if they fail. They cover the data layer, storage, backups, share links, `src/update.ts` and the share and download helpers.
 
-A screen test is a `*.test.tsx` file that starts with `// @vitest-environment jsdom` and calls `renderScreen` from `src/test/screen.ts`. It renders on the real store with seeded data and lists, and resets the store after each test. Every other test runs in node.
+Screen tests cover each screen's main journey and the app shell. A screen test is a `*.test.tsx` file that calls `renderScreen` from `src/test/screen.ts`. It renders on the real store with seeded data and lists, and resets the store after each test. A test that needs a browser, as every screen test does, starts with `// @vitest-environment jsdom`. Every other test runs in node.
+
+The Playwright journeys in `e2e/` download data and build a list, reopen a list offline, and open a share link. Run them with `mise run e2e`. They use a small fixture repo with a faked GitHub, and run at phone size against the built site. They don't run in the deploy, so run them by hand before pushing a change to the app shell, the service worker or the build.
 
 `it.fails` marks a known bug: the test states the right behaviour and passes while the bug exists. Fixing the bug turns it red, and it then becomes a normal `it`.
 
@@ -80,7 +83,8 @@ Two contracts sit behind the skills:
 - **Games**: pick the game you're playing. Lists, Library and new lists then only show that game (or pick "All games").
 - **Lists**: build and edit lists. All squad sizes and wargear choices happen here.
 - **Library**: read-only. **Armies** shows each unit with two tabs: **Profiles** (stat line fitted to the screen width, standard weapons, wargear) and **Rules** (its special rules). **Rules** searches every rule in every data file of the chosen game, with differently worded copies of a rule grouped together and labelled by army.
-- **List building**: a new list (or detachment) starts with its mandatory set-up already in place. For Horus Heresy that's the Legion (hidden, since there's nothing to choose), Allegiance set to the Legion's side in the lore (tap Loyalist / Traitor to change it), Rite of War, and Expanded Army Lists with every switch On. Swipe a unit left to delete it (with Undo), or right to duplicate it.
+- **List building**: a new list (or detachment) starts with its mandatory set-up already in place. For Horus Heresy that's the Legion (hidden, since there's nothing to choose), Allegiance set to the Legion's side in the lore (tap Loyalist / Traitor to change it), Rite of War, and Expanded Army Lists with every switch On. Swipe a unit left to delete it (with Undo), or right to duplicate it. A unit's warnings show on its row and its page. A detachment type or unit gone from the data shows as a warning in the list check.
+- **Failed saves**: a list that doesn't save shows a toast with **Retry**. The toast doesn't time out.
 - The phone's back button steps back one screen at a time and closes any open pop-up first.
 - **Army sheet** (list menu → Army sheet): every unit with points, wargear, stats and rules, plus a rules reference. **Print / save PDF** uses the phone's print dialog (choose "Save as PDF"). **Share link** sends a link (WhatsApp etc.) that opens a read-only copy of the list in any browser, no Muster data needed. Very long lists leave the rules reference out of the link to keep it short.
 - **Updates**: the app checks for a new version once a week (when opened with a connection) and restarts into it. Data tab → App → **Check for updates** does it on demand; **Reload a fresh copy** fixes a stuck update without touching lists or data.
@@ -95,9 +99,9 @@ Two contracts sit behind the skills:
 - Percentage limits (e.g. "no more than 25% of the army's points") are checked against the current total.
 
 ## Tested data
-Every unit of every army has been added without a crash in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e. That shows the app copes with the data, not that its points are right; that's what the unit tests are for.
+Every unit the app offers in every army has been added, with its set-up in place, without a crash in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e. That shows the app copes with the data, not that its points are right; that's what the unit tests are for.
 
 ## Not yet covered
 - **Child forces** (forces inside forces, e.g. Age of Sigmar 4's regiments inside an army). AoS data loads, but lists can't be built properly yet.
-- Some BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), and `self`-scoped constraints.
+- Some BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), `self`-scoped constraints, a min scoped to an entry id, and the `add` modifiers on `error`, `warning` and `info` that show a player a message.
 - New Recruit's extensions aren't implemented: modifiers that reach other entries (`affects`, used by 10th edition wargear that changes stats), the `replace`, `floor` and `ceil` modifier types, and scopes such as `root-entry` and `model`.
