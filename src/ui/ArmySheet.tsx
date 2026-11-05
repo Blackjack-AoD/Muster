@@ -1,6 +1,6 @@
 // Army sheet: every unit with its points, wargear, stats and rules, plus a rules reference.
 // Shown from a list (with Print / Share), and from a shared link (no game data needed).
-import { useEffect, useErrorBoundary, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import { failureMessage, toast, useRosterCtl, useStore } from '../store';
 import { Loading, TopBar, fmtN } from './common';
@@ -178,14 +178,12 @@ export function SheetPage({ rosterUid }: { rosterUid: string }) {
 export function SharedView({ data }: { data: string }) {
   const [snap, setSnap] = useState<Snapshot>();
   const [undecodable, setUndecodable] = useState(false);
-  // a link can unpack cleanly and still hold a list the sheet can't draw
-  const [undrawable] = useErrorBoundary();
   useEffect(() => {
     decodeSnapshot(data)
       .then(setSnap)
       .catch(() => setUndecodable(true));
   }, [data]);
-  if (undecodable || undrawable)
+  if (undecodable)
     return (
       <div class="page">
         <TopBar title="Shared list" />

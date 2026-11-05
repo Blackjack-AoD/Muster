@@ -140,10 +140,39 @@ export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withR
   return { data: await pack({ ...s, rules: undefined }), withRules: false };
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'string');
+const isListOf = (v: unknown, each: (x: unknown) => boolean) => Array.isArray(v) && v.every(each);
+
+const isProfile = (p: unknown) => isRecord(p) && isListOf(p.chars, isTextPair);
+const isUnit = (u: unknown) =>
+  isRecord(u) &&
+  typeof u.pts === 'number' &&
+  isListOf(u.gear, isRecord) &&
+  isListOf(u.profiles, isProfile) &&
+  Array.isArray(u.rules);
+const isForce = (f: unknown) =>
+  isRecord(f) &&
+  typeof f.pts === 'number' &&
+  isListOf(f.units, isUnit) &&
+  (f.setup === undefined || Array.isArray(f.setup));
+
+/** The fields the sheet can't draw without, in the shapes `buildSnapshot` writes, so old v1 links still pass. */
+function isSnapshot(s: unknown): s is Snapshot {
+  return (
+    isRecord(s) &&
+    s.v === 1 &&
+    typeof s.pts === 'number' &&
+    typeof s.limit === 'number' &&
+    isListOf(s.forces, isForce) &&
+    (s.rules === undefined || isListOf(s.rules, isTextPair))
+  );
+}
+
 export async function decodeSnapshot(data: string): Promise<Snapshot> {
   const json = new TextDecoder().decode(await pipe(unb64url(data), new DecompressionStream('deflate-raw')));
-  const s = JSON.parse(json) as Snapshot;
-  if (s?.v !== 1 || !Array.isArray(s.forces)) throw new Error('Not a Muster list');
+  const s: unknown = JSON.parse(json);
+  if (!isSnapshot(s)) throw new Error('Not a Muster list');
   return s;
 }
 
