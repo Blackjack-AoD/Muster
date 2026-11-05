@@ -16,7 +16,7 @@ import {
 } from '../data/engine';
 import type { Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
-import { deleteRoster, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
+import { deleteRoster, failureMessage, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
@@ -668,14 +668,16 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
   useEffect(() => {
     if (!repo || !catId) return;
     setForces(undefined);
-    getContext(repo, catId).then((c) =>
-      setForces(
-        c
-          .forceEntries()
-          .filter((f) => !f.hidden)
-          .map((f) => ({ id: f.id, name: f.name })),
-      ),
-    );
+    getContext(repo, catId)
+      .then((c) =>
+        setForces(
+          c
+            .forceEntries()
+            .filter((f) => !f.hidden)
+            .map((f) => ({ id: f.id, name: f.name })),
+        ),
+      )
+      .catch((e) => toast(failureMessage('load this army', e)));
   }, [catId]);
 
   if (!sys || !repo)
