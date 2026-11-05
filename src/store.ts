@@ -147,10 +147,23 @@ export async function deleteRoster(u: string) {
   forgetUnsaved(u);
 }
 
-const isForce = (f: unknown) =>
-  isRecord(f) && typeof f.catalogueId === 'string' && typeof f.forceEntryId === 'string' && Array.isArray(f.selections);
+const isSel = (s: unknown): boolean =>
+  isRecord(s) &&
+  typeof s.uid === 'string' &&
+  typeof s.key === 'string' &&
+  typeof s.number === 'number' &&
+  (s.categoryId === undefined || typeof s.categoryId === 'string') &&
+  Array.isArray(s.children) &&
+  s.children.every(isSel);
 
-/** The fields Lists can't draw without. Every release has written all of them. */
+const isForce = (f: unknown) =>
+  isRecord(f) &&
+  typeof f.catalogueId === 'string' &&
+  typeof f.forceEntryId === 'string' &&
+  Array.isArray(f.selections) &&
+  f.selections.every(isSel);
+
+/** The fields Lists can't draw without, and every selection. Every release has written all of them. */
 function isRoster(r: unknown): r is Roster {
   return (
     isRecord(r) &&
@@ -166,9 +179,20 @@ function isRoster(r: unknown): r is Roster {
   );
 }
 
+/** A crafted list can nest too deep for the stack, in the check or in the copies `db.putRoster` and a screen make. */
+function isStorable(r: unknown): r is Roster {
+  try {
+    if (!isRoster(r)) return false;
+    structuredClone(JSON.parse(JSON.stringify(r)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Returns how many lists it restored. Anything that isn't a list is skipped. */
 export async function importRosters(list: readonly unknown[]): Promise<number> {
-  const lists = list.filter(isRoster);
+  const lists = list.filter(isStorable);
   for (const r of lists) {
     if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
     await db.putRoster(r);
