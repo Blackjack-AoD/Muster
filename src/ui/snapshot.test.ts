@@ -304,6 +304,25 @@ describe('share links', () => {
         await expect(decodeSnapshot(await pack(split))).rejects.toThrow('Not a Muster list');
       });
     });
+
+    describe('with many gear lines', () => {
+      const gear = (n: number) => Array.from({ length: n }, () => servitor.gear[0]);
+      const withGear = (...counts: number[]) => ({
+        ...FULL,
+        forces: counts.map((n) => ({ ...force, units: [{ ...servitor, gear: gear(n) }] })),
+      });
+      it('opens a unit with 10,000', async () => {
+        const opened = await decodeSnapshot(await pack(withGear(10_000)));
+        expect(opened.forces[0].units[0].gear).toHaveLength(10_000);
+      });
+      it('counts them per unit, so a list can hold more than 10,000 in all', async () => {
+        const opened = await decodeSnapshot(await pack(withGear(10_000, 10_000)));
+        expect(opened.forces.flatMap((f) => f.units)).toHaveLength(2);
+      });
+      it('rejects 10,001 in one unit, wherever it sits in the list', async () => {
+        await expect(decodeSnapshot(await pack(withGear(1, 10_001)))).rejects.toThrow('Not a Muster list');
+      });
+    });
   });
 
   it('reject garbage', async () => {

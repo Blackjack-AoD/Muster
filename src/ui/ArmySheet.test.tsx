@@ -38,6 +38,15 @@ const tooManyUnits: Snapshot = {
   ...SHARED,
   forces: [{ ...SHARED.forces[0], units: Array.from({ length: 2001 }, () => SHARED.forces[0].units[0]) }],
 };
+const tooManyGearLines: Snapshot = {
+  ...SHARED,
+  forces: [
+    {
+      ...SHARED.forces[0],
+      units: [{ ...SHARED.forces[0].units[0], gear: Array.from({ length: 10_001 }, () => ({ d: 0, t: 'Servo Arm' })) }],
+    },
+  ],
+};
 /** Each unit on the sheet as its name and the points it shows. */
 const sheetUnits = () =>
   [...document.querySelectorAll('.as-unit')].map((card) => [
@@ -95,6 +104,7 @@ describe('SharedView', () => {
     { broken: 'a list from a newer Muster', hash: () => linkHashOf({ ...SHARED, v: 2 }) },
     { broken: 'a link that unpacks past 5 MB', hash: () => linkHashOf({ ...SHARED, name: 'x'.repeat(5_000_001) }) },
     { broken: 'a link with too many units', hash: () => linkHash(tooManyUnits) },
+    { broken: 'a link with too many gear lines', hash: () => linkHash(tooManyGearLines) },
     { broken: 'a list name that is a nested list', hash: () => linkHashOf({ ...SHARED, name: [[{}]] }) },
   ])('shows the readable error for $broken', async ({ hash }) => {
     openHash(await hash());
