@@ -150,25 +150,31 @@ const isText = (v: unknown) => typeof v === 'string';
 const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(isText);
 const isListOf = (v: unknown, each: (x: unknown) => boolean) => Array.isArray(v) && v.every(each);
 
-const isGearLine = (g: unknown) => isRecord(g) && typeof g.d === 'number';
-const isSnapProfile = (p: unknown) => isRecord(p) && typeof p.type === 'string' && isListOf(p.chars, isTextPair);
+const isGearLine = (g: unknown) => isRecord(g) && typeof g.d === 'number' && isText(g.t);
+const isSnapProfile = (p: unknown) => isRecord(p) && isText(p.name) && isText(p.type) && isListOf(p.chars, isTextPair);
 const isSnapUnit = (u: unknown) =>
   isRecord(u) &&
+  isText(u.name) &&
+  isText(u.cat) &&
   typeof u.pts === 'number' &&
   isListOf(u.gear, isGearLine) &&
   isListOf(u.profiles, isSnapProfile) &&
   isListOf(u.rules, isText);
 const isSnapForce = (f: unknown): f is SnapForce =>
   isRecord(f) &&
+  isText(f.name) &&
+  isText(f.army) &&
   typeof f.pts === 'number' &&
   isListOf(f.units, isSnapUnit) &&
   (f.setup === undefined || isListOf(f.setup, isText));
 
-/** The fields the sheet uses as numbers or joins as text. Only `rules` and `setup` may be absent from a link. */
+/** Every field the sheet draws. Only `rules` and `setup` may be absent from a link. */
 function isSnapshot(s: unknown): s is Snapshot {
   return (
     isRecord(s) &&
     s.v === 1 &&
+    isText(s.name) &&
+    isText(s.game) &&
     typeof s.pts === 'number' &&
     typeof s.limit === 'number' &&
     typeof s.issues === 'number' &&
