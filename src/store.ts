@@ -83,7 +83,7 @@ export function setGame(game: string | undefined) {
   set({ game });
 }
 
-/** A failed download shows on the repo's card and in a toast, and the next repo still syncs. A failed save stops here. */
+/** A failed download shows on the repo's card and in a toast, and the next repo still syncs. A failed save stops. */
 export async function syncAll(list?: string[]) {
   const targets = list ?? state.repos.map((r) => r.repo);
   const show = (p: SyncProgress) => set({ sync: { ...state.sync, [p.repo]: p } });

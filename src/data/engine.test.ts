@@ -1106,7 +1106,7 @@ describe('validation', () => {
       expect(w.warnings()).toEqual([]);
     });
 
-    it('knows itself by the id of the link it was added through', () => {
+    it('knows itself by the id of its link', () => {
       const shared = entry(
         'u',
         'Squad',

@@ -489,7 +489,7 @@ export class Evaluator {
   private checkRootEntry(rf: RForce, o: Opt) {
     const w: Where = { self: null, parent: null, force: rf, opt: o };
     const eff = this.effective(o.node, w);
-    // the same entry can be linked more than once (often one link is switched off): judge each link by its own picks
+    // data can link an entry more than once, often switching one link off: judge each link by its own picks
     const have = rf.roots.filter((r) => r.opt.key === o.key);
     if ((eff.hidden || unavailable(eff)) && !have.length) return;
     for (const c of eff.constraints) {

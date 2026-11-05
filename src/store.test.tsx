@@ -126,7 +126,7 @@ describe('adding a list', () => {
     expect(await db.rosters()).toEqual([saved]);
   });
 
-  it('leaves the list it was given as it was', async () => {
+  it('leaves the list it gets unchanged', async () => {
     await renderScreen(<p>Lists</p>);
     const list = { ...newList(), updated: 0 };
     await addRoster(list);
