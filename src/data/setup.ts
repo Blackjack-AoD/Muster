@@ -80,10 +80,11 @@ export function applyLoreAllegiance(
   for (const rs of rf.roots) {
     for (const g of rf.ctx.options(rs.node)) {
       if (g.kind !== 'group') continue;
-      const names = g.members.map((m) => m.node.name.trim().toLowerCase());
-      if (!(names.includes('loyalist') && names.includes('traitor'))) continue;
-      const target = g.members.find((m) => m.node.name.trim().toLowerCase() === want.toLowerCase())!;
-      pick(roster, contexts, rs, g, target);
+      const named = (name: string) => g.members.find((m) => m.node.name.trim().toLowerCase() === name);
+      const loyalist = named('loyalist');
+      const traitor = named('traitor');
+      if (!loyalist || !traitor) continue;
+      pick(roster, contexts, rs, g, want === 'Traitor' ? traitor : loyalist);
     }
   }
 }
