@@ -59,6 +59,8 @@ export interface Eff {
 }
 export interface Issue {
   level: 'error' | 'warn';
+  /** how far the issue applies: issues merge only within this */
+  reach: 'list' | 'force' | 'unit';
   message: string;
   forceUid?: string;
   selUid?: string;
@@ -72,6 +74,25 @@ interface Where {
   force: RForce;
   /** candidate (not yet selected) option being evaluated */
   opt?: Opt;
+}
+
+/** The reach of a limit that counts across units, so it belongs to no one unit. */
+const wideReach = (c: Constraint): Issue['reach'] => (c.scope === 'roster' ? 'list' : 'force');
+
+/** Issues with the same text are one issue when this matches. */
+function reachId(i: Issue): string | undefined {
+  switch (i.reach) {
+    case 'list':
+      return undefined;
+    case 'force':
+      return i.forceUid;
+    case 'unit':
+      return i.selUid;
+    default: {
+      const unknown: never = i.reach;
+      throw new Error(`Unknown issue reach: ${String(unknown)}`);
+    }
+  }
 }
 
 /** A list whose modifiers never settle stops here. */
@@ -435,6 +456,7 @@ export class Evaluator {
       if (rf.broken.length)
         issues.push({
           level: 'warn',
+          reach: 'force',
           forceUid: rf.force.uid,
           message: `${rf.broken.length} unit(s) no longer exist in the data and were skipped`,
         });
@@ -463,12 +485,13 @@ export class Evaluator {
             (t, items) => t + this.countIn(items, o.node.id, c.includeChildSelections, field),
             0,
           );
-          this.report(this.pct(c, containers), n, `${eff.name}`, rf.force.uid, have[0]?.sel.uid);
+          this.report(this.pct(c, containers), n, `${eff.name}`, wideReach(c), rf.force.uid, have[0]?.sel.uid);
         }
         if (eff.hidden && have.length && this.hiddenByOthers(o.node, w))
           for (const h of have)
             issues.push({
               level: 'warn',
+              reach: 'unit',
               forceUid: rf.force.uid,
               selUid: h.sel.uid,
               message: `${eff.name} is not available with the current choices`,
@@ -476,32 +499,37 @@ export class Evaluator {
       }
       for (const r of rf.roots) this.validateSel(r);
     }
-    // a list-wide limit is checked from every unit that has the entry: say it once
-    const seenMsg = new Set<string>();
-    this.issues = issues.filter((i) => {
-      const k = i.level + '|' + i.message;
-      if (seenMsg.has(k)) return false;
-      seenMsg.add(k);
-      return true;
-    });
-    // added after the filter: forces that lost their entry, and units that lost wargear, can share a message
     for (const rf of this.forces)
       if (entryGone(rf))
-        this.issues.push({
+        issues.push({
           level: 'warn',
+          reach: 'force',
           forceUid: rf.force.uid,
           message: "This detachment's type is no longer in the data",
         });
     for (const rs of this.bySel.values())
       if (rs.broken.length)
-        this.issues.push({
+        issues.push({
           level: 'warn',
+          reach: 'unit',
           forceUid: rs.force.force.uid,
           selUid: rs.sel.uid,
           message: `${rs.eff.name}: ${rs.broken.length} item(s) no longer exist in the data and were skipped`,
         });
+    // a wide limit is checked from every unit that has the entry: say it once within its reach
+    const seen = new Set<string>();
+    this.issues = issues.filter((i) => {
+      const k = [i.level, i.reach, reachId(i), i.message].join('|');
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
-      this.issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
+      this.issues.push({
+        level: 'error',
+        reach: 'list',
+        message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}`,
+      });
     }
   }
 
@@ -559,7 +587,7 @@ export class Evaluator {
         t + this.countCat(items, catId, c.includeChildSelections, c.field === 'selections' ? null : c.field),
       0,
     );
-    this.report(this.pct(c, containers), n, name, rf.force.uid);
+    this.report(this.pct(c, containers), n, name, wideReach(c), rf.force.uid);
   }
 
   /** percentage limits (e.g. "no more than 25% of the army's points") become absolute numbers */
@@ -583,13 +611,14 @@ export class Evaluator {
     return t;
   }
 
-  private report(c: Constraint, n: number, name: string, forceUid?: string, selUid?: string) {
+  private report(c: Constraint, n: number, name: string, reach: Issue['reach'], forceUid?: string, selUid?: string) {
     // say where a wide limit applies ("one per 1,000 points" style caps live at list level)
     const where = c.scope === 'roster' ? ' in the list' : c.scope === 'force' ? ' in this detachment' : '';
     const unit = c.field === 'selections' ? '' : ' pts';
     if (c.type === 'min' && c.value > 0 && n < c.value) {
       this.issues.push({
         level: 'error',
+        reach,
         forceUid,
         selUid,
         message: `${name}: needs at least ${fmt(c.value)}${unit}${where} (has ${fmt(n)})`,
@@ -598,6 +627,7 @@ export class Evaluator {
     if (c.type === 'max' && c.value >= 0 && n > c.value) {
       this.issues.push({
         level: 'error',
+        reach,
         forceUid,
         selUid,
         message: `${name}: at most ${fmt(c.value)}${unit} allowed${where} (has ${fmt(n)})`,
@@ -614,12 +644,13 @@ export class Evaluator {
         if ((eff.hidden || unavailable(eff)) && !n) continue;
         for (const c of eff.constraints) {
           if (c.field !== 'selections') continue;
-          if (c.scope === 'parent') this.report(c, n, `${rs.eff.name} › ${eff.name}`, rs.force.force.uid, rs.sel.uid);
+          if (c.scope === 'parent')
+            this.report(c, n, `${rs.eff.name} › ${eff.name}`, 'unit', rs.force.force.uid, rs.sel.uid);
           else if (c.scope === 'force' || c.scope === 'roster') {
             const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rs.force.roots];
             const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
             if (c.type === 'max' && c.value >= 0 && total > c.value && n)
-              this.report(c, total, eff.name, rs.force.force.uid, rs.sel.uid);
+              this.report(c, total, eff.name, wideReach(c), rs.force.force.uid, rs.sel.uid);
           }
         }
         if (o.kind === 'group') walk(o.members);
