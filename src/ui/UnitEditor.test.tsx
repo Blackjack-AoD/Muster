@@ -37,18 +37,47 @@ const VOX_REQUIRED = voxUnit(`
   <constraint id="vox-min" type="min" field="selections" scope="parent" value="1"/>
   <constraint id="vox-max" type="max" field="selections" scope="parent" value="1"/>`);
 
+const sergeant = (gear = '') =>
+  entry(
+    'sgt',
+    'Sergeant',
+    20,
+    `<constraints>
+      <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
+      <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
+    </constraints>${gear}`,
+  );
+const SWORD = entry(
+  'sword',
+  'Sword',
+  5,
+  `<constraints>
+    <constraint id="sword-min" type="min" field="selections" scope="parent" value="1"/>
+    <constraint id="sword-max" type="max" field="selections" scope="parent" value="1"/>
+  </constraints>`,
+);
+const ASSAULT = unit('assault', 'Assault Squad', 80);
+
 const openHash = (hash: string) => history.replaceState(null, '', hash);
 
 const topPoints = () => document.querySelector('.topbar .pts')?.textContent;
 
 const inlineIssues = () => [...document.querySelectorAll('.issues.inline li')].map((li) => li.textContent);
 
+/** The class and text of each message on the unit's page. */
+const inlineLevels = () =>
+  [...document.querySelectorAll('.issues.inline li')].map((li) => [li.className, li.textContent]);
+
 const option = (role: 'checkbox' | 'radio', name: RegExp) => screen.getByRole(role, { name });
 
 /** Opens the page of a list's only unit. A list can be built on `builtOn`, data older than what's on the phone. */
 async function openUnit(units = UNITS, builtOn = units) {
   const w = world(builtOn, { costLimit: 2000 });
-  const sel = w.add('Tactical Squad');
+  await openPage(w, w.add('Tactical Squad'), units);
+}
+
+/** Opens the page of one unit in a list, on `units` as the data on the phone. */
+async function openPage(w: ReturnType<typeof world>, sel: string, units: string) {
   openHash(`#/r/r/u/${sel}`);
   await renderScreen(<App />, { files: worldFiles(units), rosters: [w.roster] });
   await screen.findByRole('heading', { name: 'Tactical Squad' });
@@ -118,6 +147,90 @@ describe('UnitEditor', () => {
     fireEvent.click(option('checkbox', /Vox Caster/));
 
     await waitFor(() => expect(topPoints()).toBe('110pts'));
+    expect(inlineIssues()).toEqual([]);
+  });
+
+  it('shows wargear gone from the data as a warning on its unit', async () => {
+    await openUnit(unit('tac', 'Tactical Squad', 100), unit('tac', 'Tactical Squad', 100, children(sergeant())));
+
+    expect(inlineLevels()).toEqual([
+      ['warn', 'Tactical Squad: 1 item(s) no longer exist in the data and were skipped'],
+    ]);
+  });
+
+  it('shows a warning on a selection under the unit', async () => {
+    await openUnit(
+      unit('tac', 'Tactical Squad', 100, children(sergeant())),
+      unit('tac', 'Tactical Squad', 100, children(sergeant(children(SWORD)))),
+    );
+
+    expect(inlineLevels()).toEqual([['warn', 'Sergeant: 1 item(s) no longer exist in the data and were skipped']]);
+  });
+
+  it('shows a unit that the choices rule out as a warning', async () => {
+    const units =
+      unit(
+        'tac',
+        'Tactical Squad',
+        100,
+        `<modifiers>
+          <modifier type="set" field="hidden" value="true">
+            <conditions>
+              <condition type="atLeast" value="1" field="selections" scope="force" childId="assault"/>
+            </conditions>
+          </modifier>
+        </modifiers>`,
+      ) + ASSAULT;
+    const w = world(units);
+    const sel = w.add('Tactical Squad');
+    w.add('Assault Squad');
+
+    await openPage(w, sel, units);
+
+    expect(inlineLevels()).toEqual([['warn', 'Tactical Squad is not available with the current choices']]);
+  });
+
+  it('shows an error and a warning on one unit, each as what it is', async () => {
+    const lostSergeant = unit(
+      'tac',
+      'Tactical Squad',
+      100,
+      children(
+        sergeant(),
+        entry(
+          'vox',
+          'Vox Caster',
+          10,
+          `<constraints>
+            <constraint id="vox-max" type="max" field="selections" scope="parent" value="1"/>
+          </constraints>`,
+        ),
+      ),
+    );
+
+    await openUnit(VOX_REQUIRED, lostSergeant);
+
+    expect(inlineLevels()).toEqual([
+      ['error', 'Vox Caster: needs at least 1 (has 0)'],
+      ['warn', 'Tactical Squad: 1 item(s) no longer exist in the data and were skipped'],
+    ]);
+  });
+
+  it("keeps a unit's warning, and one for the whole list, off another unit's page", async () => {
+    const live = unit('tac', 'Tactical Squad', 100) + ASSAULT;
+    const w = world(
+      unit('tac', 'Tactical Squad', 100, children(sergeant())) + ASSAULT + unit('gone', 'Gone Squad', 50),
+    );
+    const sel = w.add('Tactical Squad');
+    w.add('Assault Squad');
+    w.add('Gone Squad');
+    await openPage(w, sel, live);
+    expect(inlineIssues()).toEqual(['Tactical Squad: 1 item(s) no longer exist in the data and were skipped']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(await screen.findByRole('link', { name: /Assault Squad/ }));
+
+    await screen.findByRole('heading', { name: 'Assault Squad' });
     expect(inlineIssues()).toEqual([]);
   });
 });

@@ -49,6 +49,14 @@ const unitRows = () =>
     row.querySelector('.ur-pts')?.textContent,
   ]);
 
+/** Each unit on the list as its name, the class of its row and any note on it. */
+const rowMarks = () =>
+  [...document.querySelectorAll('.unit-row')].map((row) => [
+    row.querySelector('.ur-name')?.textContent,
+    row.className,
+    row.querySelector('.ur-note')?.textContent,
+  ]);
+
 /** Opens the add sheet from one of the buttons with this name, and returns it. */
 async function openAddSheet(name: string, nth = 0) {
   const button = screen.getAllByRole('button', { name })[nth];
@@ -139,6 +147,103 @@ describe('RosterView', () => {
 
     expect(issues()).toEqual([['warn', '1 unit(s) no longer exist in the data and were skipped']]);
     expect(sumPoints()).toBe('80pts');
+  });
+
+  describe('warnings on a unit row', () => {
+    const SWORD = entry(
+      'sword',
+      'Sword',
+      5,
+      `<constraints>
+        <constraint id="sword-min" type="min" field="selections" scope="parent" value="1"/>
+        <constraint id="sword-max" type="max" field="selections" scope="parent" value="1"/>
+      </constraints>`,
+    );
+    const ARMED_SERGEANT = entry(
+      'sgt',
+      'Sergeant',
+      20,
+      `<constraints>
+        <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
+        <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
+      </constraints>${children(SWORD)}`,
+    );
+    const BARE = unit('tac', 'Tactical Squad', 100);
+
+    it('marks a unit that has lost wargear with a note', async () => {
+      const w = world(UNITS);
+      w.add('Tactical Squad');
+      await openList(w, BARE);
+
+      expect(rowMarks()).toEqual([['Tactical Squad', 'unit-row warn', 'note']]);
+    });
+
+    it('marks a unit for a warning on a selection under it', async () => {
+      const w = world(unit('tac', 'Tactical Squad', 100, children(ARMED_SERGEANT)));
+      w.add('Tactical Squad');
+      await openList(w, UNITS);
+
+      expect(rowMarks()).toEqual([['Tactical Squad', 'unit-row warn', 'note']]);
+    });
+
+    it('marks a unit that the choices rule out with a note', async () => {
+      const units =
+        unit(
+          'tac',
+          'Tactical Squad',
+          100,
+          `<modifiers>
+            <modifier type="set" field="hidden" value="true">
+              <conditions>
+                <condition type="atLeast" value="1" field="selections" scope="force" childId="assault"/>
+              </conditions>
+            </modifier>
+          </modifiers>`,
+        ) + ASSAULT;
+      const w = world(units);
+      w.add('Tactical Squad');
+      w.add('Assault Squad');
+      await openList(w, units);
+
+      expect(rowMarks()).toEqual([
+        ['Tactical Squad', 'unit-row warn', 'note'],
+        ['Assault Squad', 'unit-row', undefined],
+      ]);
+    });
+
+    it('shows a unit with an error and a warning as an error, unlike a unit with only the warning', async () => {
+      const capped = (inner = '') =>
+        unit(
+          'vet',
+          'Veteran Squad',
+          100,
+          `<constraints>
+            <constraint id="vet-max" type="max" field="selections" scope="parent" value="1"/>
+          </constraints>${inner}`,
+        );
+      const w = world(UNITS + capped(children(SERGEANT)));
+      w.add('Tactical Squad');
+      w.add('Veteran Squad', 3);
+      await openList(w, BARE + capped());
+
+      expect(rowMarks()).toEqual([
+        ['Tactical Squad', 'unit-row warn', 'note'],
+        ['3× Veteran Squad', 'unit-row bad', undefined],
+      ]);
+    });
+
+    it("leaves a unit plain when the warnings are another unit's or the whole list's", async () => {
+      const w = world(UNITS + unit('gone', 'Gone Squad', 50));
+      w.add('Tactical Squad');
+      w.add('Assault Squad');
+      w.add('Gone Squad');
+      await openList(w, BARE + ASSAULT);
+
+      expect(rowMarks()).toEqual([
+        ['Tactical Squad', 'unit-row warn', 'note'],
+        ['Assault Squad', 'unit-row', undefined],
+      ]);
+    });
   });
 
   it('says so in the issues sheet when a list has no issues', async () => {
