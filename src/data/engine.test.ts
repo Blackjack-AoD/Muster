@@ -1017,6 +1017,37 @@ describe('validation', () => {
     w.add('Other');
     expect(w.warnings()).toEqual(['Squad is not available with the current choices']);
   });
+  it('does not warn about an entry that hides itself once one is taken', () => {
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        mods(
+          `<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</modifier>`,
+        ),
+      ),
+    );
+    w.add('Squad');
+    expect(w.ev().optionEff(w.root('Squad'), null, w.ev().forces[0]).hidden).toBe(true);
+    expect(w.warnings()).toEqual([]);
+  });
+  it('still warns when something else hides a self-hiding entry', () => {
+    const w = world(
+      unit(
+        'u',
+        'Squad',
+        0,
+        mods(
+          `<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</modifier>`,
+          `<modifier type="set" field="hidden" value="true">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}</modifier>`,
+        ),
+      ) + unit('x', 'Other', 0),
+    );
+    w.add('Squad');
+    w.add('Other');
+    expect(w.warnings()).toEqual(['Squad is not available with the current choices']);
+  });
   it('warns about units that are gone from the data, and keeps them in the list', () => {
     const w = world(unit('u', 'Squad', 10));
     const u = w.add('Squad');
