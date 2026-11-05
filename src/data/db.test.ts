@@ -70,7 +70,15 @@ describe('storage', () => {
   it('survives a browser without it', async () => {
     vi.stubGlobal('navigator', {});
     await expect(persistStorage()).resolves.toBeUndefined();
-    expect(await storageUse()).toBeNull();
+  });
+  it('leaves a refused request to its caller', async () => {
+    const storage = { persisted: async () => false, persist: async () => Promise.reject(new Error('denied')) };
+    vi.stubGlobal('navigator', { storage });
+    await expect(persistStorage()).rejects.toThrow('denied');
+  });
+  it('leaves a refused estimate to its caller', async () => {
+    vi.stubGlobal('navigator', { storage: { estimate: async () => Promise.reject(new Error('denied')) } });
+    await expect(storageUse()).rejects.toThrow('denied');
   });
   it('reports how much is used', async () => {
     stub(true);
