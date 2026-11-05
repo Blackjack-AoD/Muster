@@ -1006,11 +1006,13 @@ export function addSel(
 }
 
 export type AddSavedResult =
-  { added: true; uid: string } | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' };
+  | { added: true; uid: string; dropped: number }
+  | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' | 'unit-gone' };
 
 /**
  * Add a copy of a saved unit to a detachment, rebuilt against the current data: options the data
- * no longer has are left out and mandatory defaults filled. A list holds a saved unit at most once.
+ * no longer has are left out and counted in `dropped`, and mandatory defaults filled.
+ * A list holds a saved unit at most once.
  */
 export function addSavedUnit(
   roster: Roster,
@@ -1029,16 +1031,24 @@ export function addSavedUnit(
   s.name = unit.name;
   s.saved = unit.id;
   force.selections.push(s);
-  const rs = new Evaluator(roster, contexts).find(s.uid);
-  if (rs) dropBroken(rs);
+  const ev = new Evaluator(roster, contexts);
+  if (ev.forces.some((rf) => rf.broken.includes(s))) {
+    force.selections.pop();
+    return { added: false, reason: 'unit-gone' };
+  }
+  const rs = ev.find(s.uid);
+  const dropped = rs ? dropBroken(rs) : 0;
   fillDefaults(roster, contexts, s.uid, 0);
   fillDefaults(roster, contexts, s.uid, 0, true);
-  return { added: true, uid: s.uid };
+  return { added: true, uid: s.uid, dropped };
 }
 
-function dropBroken(rs: RSel) {
+/** Removes the selections the data no longer has, under rs at any depth, and returns how many. */
+function dropBroken(rs: RSel): number {
   rs.sel.children = rs.sel.children.filter((c) => !rs.broken.includes(c));
-  rs.children.forEach(dropBroken);
+  let n = rs.broken.length;
+  for (const c of rs.children) n += dropBroken(c);
+  return n;
 }
 
 /** One step of `fillDefaults`: the selection it fills, read through a fresh evaluator. */
