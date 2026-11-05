@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-import { fireEvent, screen } from '@testing-library/preact';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
-import { getState, useRosterCtl } from './store';
+import { deleteRoster, getState, useRosterCtl } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
 const FILES = worldFiles(unit('tac', 'Tactical Squad', 100));
+const SAVE_FAILED = "Couldn't save this list";
 
 function ListEditor({ source, scratch }: { source?: Roster; scratch?: boolean }) {
   const { ctl, error, loading } = useRosterCtl(source, scratch);
@@ -33,6 +35,29 @@ const unitsIn = (r?: Roster) => r?.forces[0].selections.length;
 const storedUnits = async () => unitsIn((await db.rosters())[0]);
 const unitsInMemory = () => unitsIn(getState().rosters[0]);
 const addUnit = async () => fireEvent.click(await screen.findByRole('button', { name: 'Add a unit' }));
+const pressRetry = async () => fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+/** Storage refuses every write until restored, as a full phone would. */
+const failSaves = () =>
+  vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+    throw new DOMException('Storage is full', 'QuotaExceededError');
+  });
+
+/** The App shell draws the toast and its button. */
+async function renderWithToast(source: Roster) {
+  await renderScreen(
+    <>
+      <App />
+      <ListEditor source={source} />
+    </>,
+    { files: FILES, rosters: [source] },
+  );
+}
+
+beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterEach(() => vi.restoreAllMocks());
 
 describe('useRosterCtl', () => {
   it('shows loading, then the list and its points once its data has loaded', async () => {
@@ -66,5 +91,66 @@ describe('useRosterCtl', () => {
     await screen.findByText('Points: 100');
     expect(unitsInMemory()).toBe(0);
     expect(await storedUnits()).toBe(0);
+  });
+});
+
+describe('a failed save', () => {
+  it('shows a toast with Retry when a save fails, and keeps the edit on screen', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    failSaves();
+    await addUnit();
+    await waitFor(() => expect(screen.queryByRole('status')?.textContent).toBe(`${SAVE_FAILED}Retry`));
+    expect(screen.queryByText('Points: 100')).not.toBeNull();
+    expect(unitsInMemory()).toBe(1);
+    expect(await storedUnits()).toBe(0);
+  });
+
+  it('Retry saves the list as it is at that moment, and a success clears the toast', async () => {
+    await renderWithToast(newList());
+    const put = failSaves();
+    await addUnit();
+    await addUnit();
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    expect(await storedUnits()).toBe(0);
+
+    put.mockRestore();
+    await pressRetry();
+
+    expect(await storedUnits()).toBe(2);
+    expect(getState().toast).toBeUndefined();
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
+  it('shows the toast again when a Retry fails', async () => {
+    await renderWithToast(newList());
+    const put = failSaves();
+    await addUnit();
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+
+    await pressRetry();
+    expect(getState().toast).toBeUndefined();
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    expect(put).toHaveBeenCalledTimes(2);
+
+    put.mockRestore();
+    await pressRetry();
+    expect(await storedUnits()).toBe(1);
+  });
+
+  it("Retry doesn't bring back a list deleted after the failed save", async () => {
+    const list = newList();
+    await renderWithToast(list);
+    const put = failSaves();
+    await addUnit();
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+
+    put.mockRestore();
+    await deleteRoster(list.uid);
+    await pressRetry();
+
+    expect(await db.rosters()).toEqual([]);
+    expect(getState().rosters).toEqual([]);
   });
 });
