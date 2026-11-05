@@ -1715,6 +1715,15 @@ describe('adding a unit fills in what it must have', () => {
     const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + nested)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Dagger']);
   });
+  // BUG: pickIn returns to the first nested group with a default even after that group's own min is met,
+  // so a second pick from it goes in ahead of the other group's free default.
+  it.fails('takes the default of each nested group before paying for a second pick from one', () => {
+    const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15), entry('sword', 'Chainsword', 0))}</selectionEntryGroup>`;
+    const ranged = `<selectionEntryGroup id="ranged" name="Ranged" defaultSelectionEntryId="pistol">${cons(max(1))}${children(entry('pistol', 'Pistol', 0))}</selectionEntryGroup>`;
+    const inner = cons(min(2), max(2)) + `<selectionEntryGroups>${melee}${ranged}</selectionEntryGroups>`;
+    const w = world(unit('u', 'Squad', 0, group(inner)));
+    expect(names(w, w.add('Squad')).sort()).toEqual(['1x Chainsword', '1x Pistol']);
+  });
   it('respects a limit elsewhere in the force when choosing', () => {
     const limited = entry(
       'a',
