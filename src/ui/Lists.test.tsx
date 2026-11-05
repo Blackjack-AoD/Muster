@@ -5,7 +5,16 @@ import { db } from '../data/db';
 import { removeRepo } from '../store';
 import { unit, world } from '../test/fixture';
 import { App } from '../app';
-import { failReads, openCreateList, openHash, press, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import {
+  expectError,
+  failReads,
+  openCreateList,
+  openHash,
+  press,
+  renderScreen,
+  stubBrowserGaps,
+  worldFiles,
+} from '../test/screen';
 import { Lists } from './Lists';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
@@ -55,7 +64,7 @@ describe('Lists', () => {
     await press('New list');
     await press('Test Army');
 
-    await waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe('Storage is gone'));
+    await expectError('Storage is gone');
   });
 
   it("shows each saved list's name and points limit on a card that opens it", async () => {

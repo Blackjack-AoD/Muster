@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { fireEvent, screen, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { unit } from '../test/fixture';
-import { failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { expectError, failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const STATS =
   '<profiles><profile id="p" name="Tactical Marine" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">7</characteristic><characteristic name="Sv" typeId="s">3+</characteristic></characteristics></profile></profiles>';
@@ -28,9 +28,6 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-const expectError = (text: string) =>
-  waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe(text));
 
 describe('Library', () => {
   it('opening a unit from Armies shows its profile, and its rules on the Rules tab', async () => {

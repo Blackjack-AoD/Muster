@@ -46,6 +46,9 @@ export const failReads = (reason: string) =>
 
 export const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
+export const expectError = (text: string) =>
+  waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe(text));
+
 export const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
 
 type Point = readonly [x: number, y: number];
