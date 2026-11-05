@@ -48,6 +48,13 @@ async function openOptions() {
   await screen.findByRole('dialog');
 }
 
+async function openArmyPicker() {
+  await openListFromGames();
+  fireEvent.click(screen.getByRole('button', { name: 'Add detachment' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Tap to change/ }));
+  await heading('Army')();
+}
+
 const noPopUp = () => waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
 let scrollTo: Mock;
@@ -184,10 +191,7 @@ describe('the back button', () => {
   });
 
   it('steps back through a pop-up opened from a pop-up, and leaves only once both are closed', async () => {
-    await openListFromGames();
-    fireEvent.click(screen.getByRole('button', { name: 'Add detachment' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Tap to change/ }));
-    await heading('Army')();
+    await openArmyPicker();
 
     await pressBack();
 
@@ -206,12 +210,6 @@ describe('the back button', () => {
 });
 
 describe('a pop-up opened from a pop-up', () => {
-  async function openArmyPicker() {
-    await openListFromGames();
-    fireEvent.click(screen.getByRole('button', { name: 'Add detachment' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Tap to change/ }));
-    await heading('Army')();
-  }
 
   it('leaves no step behind when Back closes the inner one and the X closes the outer one', async () => {
     await openArmyPicker();
