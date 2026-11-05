@@ -321,6 +321,17 @@ describe('UnitEditor', () => {
     expect(title()).toBe('Tactical Squad');
   });
 
+  it('closing the name sheet untouched keeps the name it opened with', async () => {
+    await openSquad([1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Brother Kael');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(rows()).toEqual(['Brother Kael']);
+    expect(await savedModels()).toEqual([[1, 'Brother Kael']]);
+  });
+
   it('naming one model of a group of 5 splits it off as a named row of 1', async () => {
     await openSquad([5]);
 
