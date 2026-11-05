@@ -16,7 +16,16 @@ import {
 } from '../data/engine';
 import type { Context, Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
-import { addRoster, deleteRoster, failureMessage, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
+import {
+  addRoster,
+  deleteRoster,
+  failureMessage,
+  getState,
+  toast,
+  useRosterCtl,
+  useStore,
+  type RosterCtl,
+} from '../store';
 import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
@@ -635,7 +644,8 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
             try {
               await addRoster(copy);
             } catch (e) {
-              toast(failureMessage('copy this list', e));
+              // the Retry toast from save() is the only way left to save this list's edit
+              if (!getState().toastAction?.failedSave) toast(failureMessage('copy this list', e));
               return;
             }
             onClose();
