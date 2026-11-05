@@ -1722,6 +1722,13 @@ describe('adding a unit fills in what it must have', () => {
     const w = world(unit('u', 'Squad', 0, group(inner)));
     expect(names(w, w.add('Squad')).sort()).toEqual(['1x Chainsword', '1x Pistol']);
   });
+  it('stays with the first nested default when the group has no max', () => {
+    const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15), entry('sword', 'Chainsword', 0))}</selectionEntryGroup>`;
+    const ranged = `<selectionEntryGroup id="ranged" name="Ranged" defaultSelectionEntryId="pistol">${cons(max(1))}${children(entry('pistol', 'Pistol', 0))}</selectionEntryGroup>`;
+    const inner = cons(min(2)) + `<selectionEntryGroups>${melee}${ranged}</selectionEntryGroups>`;
+    const w = world(unit('u', 'Squad', 0, group(inner)));
+    expect(names(w, w.add('Squad'))).toEqual(['2x Chainsword']);
+  });
   it('gives each model the free default of both weapon groups', () => {
     const capped = cons(max(1));
     const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15, capped), entry('sword', 'Chainsword', 0, capped))}</selectionEntryGroup>`;
