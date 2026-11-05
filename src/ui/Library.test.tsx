@@ -153,5 +153,20 @@ describe('Library', () => {
       expect(savedNames()).toEqual(['Squad Thrax']);
       expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual(['Saved units', 'Other']);
     });
+
+    it('shows no Saved units section for an army with no saved units', async () => {
+      await openArmy([saved('orks', 'Da Boyz', { catalogueId: 'orks' })]);
+
+      expect(screen.queryByRole('group', { name: 'Saved units' })).toBeNull();
+      expect(screen.queryByText('Saved units')).toBeNull();
+    });
+
+    it('searching units narrows the saved units by name', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax'), saved('iron', 'Squad Iron')]);
+
+      fireEvent.input(screen.getByPlaceholderText('Search units'), { target: { value: 'IRON' } });
+
+      expect(savedNames()).toEqual(['Squad Iron']);
+    });
   });
 });
