@@ -323,6 +323,30 @@ describe('addSavedUnit', () => {
     expect(shape(onlyRoot(w))).toEqual(shape(sel('sq', 1, [sel('sgt', 1, [sel('fist')])])));
   });
 
+  it('reports no options left out when the data still has every one', () => {
+    const w = world(SQUAD);
+    expect(addSavedUnit(w.roster, w.contexts, 'f1', thrax())).toMatchObject({ added: true, dropped: 0 });
+  });
+
+  it('counts each option it leaves out, at any depth', () => {
+    const w = world(SQUAD);
+    const unit = savedUnit(sel('sq', 1, [sel('sgt', 1, [sel('fist'), sel('gone-fist')]), sel('gone-banner')]));
+    expect(addSavedUnit(w.roster, w.contexts, 'f1', unit)).toMatchObject({ added: true, dropped: 2 });
+  });
+
+  it('counts a left-out option with options under it as one', () => {
+    const w = world(SQUAD);
+    const unit = savedUnit(sel('sq', 1, [sel('mar', 4), sel('gone-banner', 1, [sel('fist'), sel('gone-pole')])]));
+    expect(addSavedUnit(w.roster, w.contexts, 'f1', unit)).toMatchObject({ added: true, dropped: 1 });
+  });
+
+  it('adds nothing when the data no longer has the unit', () => {
+    const w = world(SQUAD);
+    const unit = savedUnit(sel('gone-sq', 1, [sel('sgt', 1, [sel('fist')])]));
+    expect(addSavedUnit(w.roster, w.contexts, 'f1', unit)).toEqual({ added: false, reason: 'unit-gone' });
+    expect(w.roster.forces[0].selections).toEqual([]);
+  });
+
   it('fills in a mandatory option the saved build lacks', () => {
     const w = world(unit('sq', 'Breacher Squad', 50, children(SWORD, entry('mar', 'Marine', 10))));
     addSavedUnit(w.roster, w.contexts, 'f1', savedUnit(sel('sq', 1, [sel('mar', 4)])));
