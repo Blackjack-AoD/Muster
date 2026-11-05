@@ -48,15 +48,45 @@ describe('normaliseRepo', () => {
     ['https://github.com/owner/repo', 'owner/repo'],
     ['https://github.com/owner/repo.git', 'owner/repo'],
     ['https://github.com/owner/repo/', 'owner/repo'],
+    ['github.com/owner/repo', 'owner/repo'],
+    ['https://GitHub.com/owner/repo', 'owner/repo'],
+    ['git@github.com:owner/repo.git', 'owner/repo'],
+    ['ssh://git@github.com/owner/repo.git', 'owner/repo'],
+    ['https://github.com/owner/my repo', null],
     ['just-a-word', null],
     ['', null],
   ])('%s', (input, expected) => {
     expect(normaliseRepo(input)).toBe(expected);
   });
 
-  // BUG: the pattern takes the last two path segments, so this becomes "tree/main".
-  it.fails('copes with a link to a branch page', () => {
+  it('copes with a link to a branch page', () => {
     expect(normaliseRepo('https://github.com/owner/repo/tree/main')).toBe('owner/repo');
+  });
+
+  it.each([
+    'https://github.com/owner/repo/tree/feature/x',
+    'https://github.com/owner/repo/blob/main/x.cat',
+    'https://github.com/owner/repo/tree/main/sub/dir',
+    'github.com/owner/repo/tree/main',
+    'https://github.com/owner/repo?tab=readme-ov-file',
+    'https://github.com/owner/repo#readme',
+    'https://github.com/owner/repo/blob/main/x.cat?raw=1',
+  ])('drops everything after owner/repo in %s', (input) => {
+    expect(normaliseRepo(input)).toBe('owner/repo');
+  });
+
+  it('keeps dots and hyphens in the name when a link goes inside the repo', () => {
+    expect(normaliseRepo('https://github.com/my-org/wh40k-10e.data/tree/main')).toBe('my-org/wh40k-10e.data');
+  });
+
+  // BUG: the trailing slash hides ".git" from the pattern, so the name keeps it.
+  it.fails('drops .git before a trailing slash', () => {
+    expect(normaliseRepo('https://github.com/owner/repo.git/')).toBe('owner/repo');
+  });
+
+  // BUG: with no repo in the link, the host is taken for the owner.
+  it.fails('rejects a link to an owner page', () => {
+    expect(normaliseRepo('https://github.com/owner')).toBeNull();
   });
 });
 
