@@ -258,7 +258,8 @@ export function DataView() {
   );
 }
 
-const UNSAVED_WARNING = "A list has an edit that isn't saved, and reloading loses it. Carry on?";
+const UPDATE_WAITS = "A list has an edit that isn't saved. The update waits until it saves. Carry on?";
+const RELOAD_LOSES_EDIT = "A list has an edit that isn't saved, and reloading loses it. Carry on?";
 const hasUnsavedEdit = () => getState().unsaved.size > 0;
 
 function AppUpdate({ online }: { online: boolean }) {
@@ -268,14 +269,14 @@ function AppUpdate({ online }: { online: boolean }) {
     ? new Date(BUILD_TIME).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '';
   const check = async () => {
-    if (hasUnsavedEdit() && !confirm(UNSAVED_WARNING)) return;
+    if (hasUnsavedEdit() && !confirm(UPDATE_WAITS)) return;
     setBusy(true);
     setStatus('Checking…');
     const r = await checkForUpdate();
     setBusy(r === 'updating');
     setStatus(
       {
-        updating: 'New version found. Installing, the app will restart by itself in a moment…',
+        updating: `New version found. Installing, the app will restart by itself ${hasUnsavedEdit() ? 'once the edit has saved' : 'in a moment'}…`,
         latest: "You're on the latest version.",
         offline: "You're offline. Connect to check for updates.",
         unsupported: "This browser can't check for updates. Close and reopen the app, or reload the page.",
@@ -309,7 +310,7 @@ function AppUpdate({ online }: { online: boolean }) {
             disabled={!online}
             onClick={() => {
               const question = hasUnsavedEdit()
-                ? UNSAVED_WARNING
+                ? RELOAD_LOSES_EDIT
                 : 'Reload a fresh copy of the app? Your lists and data are kept.';
               if (confirm(question))
                 resetAppCache().catch((e: unknown) => toast(failureMessage('reload a fresh copy', e)));
