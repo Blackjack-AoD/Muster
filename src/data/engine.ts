@@ -321,6 +321,12 @@ export class Evaluator {
       const fs = c.scope === 'roster' || c.scope === 'force' ? this.forces : this.forces;
       return fs.filter((f) => this.forceMatches(f, c.childId)).length;
     }
+    if (c.field === 'selections' && (c.scope === 'roster' || c.scope === 'force')) {
+      // the data also counts a detachment as a selection of its force entry
+      const inScope = c.scope === 'force' ? [w.force] : this.forces;
+      const detachments = inScope.filter((f) => f.force.forceEntryId === c.childId).length;
+      if (detachments) return detachments;
+    }
     const containers = this.scopeContainers(c.scope, w);
     const deep =
       c.includeChildSelections || c.scope === 'force' || c.scope === 'roster' ? c.includeChildSelections : false;
