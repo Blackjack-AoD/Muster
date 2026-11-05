@@ -123,6 +123,8 @@ export async function saveRoster(r: Roster) {
   if (state.toastAction?.failedSave === r.uid) dismissToast();
 }
 
+export async function addRoster(_r: Roster) {}
+
 export async function deleteRoster(u: string) {
   await db.delRoster(u);
   set({ rosters: state.rosters.filter((x) => x.uid !== u) });

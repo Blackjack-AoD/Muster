@@ -5,7 +5,7 @@ import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
 import { DEFAULT_REPOS } from './data/sync';
-import { deleteRoster, getState, init, removeRepo, saveRoster, toast, useRosterCtl } from './store';
+import { addRoster, deleteRoster, getState, init, removeRepo, saveRoster, toast, useRosterCtl } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
@@ -110,6 +110,25 @@ describe('useRosterCtl', () => {
     await screen.findByText('Points: 100');
     expect(unitsInMemory()).toBe(0);
     expect(await storedUnits()).toBe(0);
+  });
+});
+
+describe('adding a list', () => {
+  it('saves a new list to memory and storage, stamping the time', async () => {
+    await renderScreen(<p>Lists</p>);
+    const list = { ...newList(), updated: 0 };
+    await addRoster(list);
+    expect(list.updated).toBeGreaterThan(0);
+    expect(getState().rosters).toEqual([list]);
+    expect(await db.rosters()).toEqual([list]);
+  });
+
+  it('keeps its own copy in memory', async () => {
+    await renderScreen(<p>Lists</p>);
+    const list = newList();
+    await addRoster(list);
+    list.name = 'Edited later';
+    expect(getState().rosters.map((r) => r.name)).toEqual(['Test list']);
   });
 });
 
