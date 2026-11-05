@@ -631,40 +631,45 @@ export class Evaluator {
   }
 
   private validateSel(rs: RSel) {
-    const walk = (opts: Opt[]) => {
-      for (const o of opts) {
-        const eff = this.optionEff(o, rs, rs.force);
-        const have = this.selected(o, rs, rs.force);
-        const n = have.reduce((t, h) => t + h.sel.number, 0);
-        if ((eff.hidden || unavailable(eff)) && !n) continue;
-        for (const c of eff.constraints) {
-          if (c.field !== 'selections') continue;
-          if (c.scope === 'parent')
-            this.report(c, n, `${rs.eff.name} › ${eff.name}`, {
-              reach: 'unit',
-              forceUid: rs.force.force.uid,
-              selUid: rs.sel.uid,
-            });
-          else if (c.scope === 'force' || c.scope === 'roster') {
-            const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rs.force.roots];
-            const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
-            if (c.type === 'max' && c.value >= 0 && total > c.value && n)
-              this.report(c, total, eff.name, widePlace(c, rs.force.force.uid, rs.sel.uid));
-          } else if (rs.force.ctx.get(c.scope)) {
-            // scope is an id, not a word: the limit covers what sits inside the nearest selection of that entry
-            const [items = []] = this.scopeContainers(c.scope, { self: rs, parent: rs.parent, force: rs.force });
-            const total = this.countIn(items, o.node.id, c.includeChildSelections, null);
-            let unit = rs;
-            while (unit.parent) unit = unit.parent;
-            if (c.type === 'max' && c.value >= 0 && total > c.value && n)
-              this.report(c, total, eff.name, { reach: 'unit', forceUid: rs.force.force.uid, selUid: unit.sel.uid });
-          }
-        }
-        if (o.kind === 'group') walk(o.members);
-      }
-    };
-    walk(rs.force.ctx.options(rs.node));
+    this.checkOptions(rs, rs.force.ctx.options(rs.node));
     rs.children.forEach((c) => this.validateSel(c));
+  }
+
+  private checkOptions(rs: RSel, opts: Opt[]) {
+    for (const o of opts) {
+      const eff = this.optionEff(o, rs, rs.force);
+      const n = this.selected(o, rs, rs.force).reduce((t, h) => t + h.sel.number, 0);
+      if ((eff.hidden || unavailable(eff)) && !n) continue;
+      for (const c of eff.constraints) {
+        if (c.field !== 'selections') continue;
+        if (c.scope === 'parent') this.checkParentLimit(rs, eff.name, c, n);
+        else if (c.scope === 'force' || c.scope === 'roster') this.checkWideLimit(rs, o, eff.name, c, n);
+        else if (rs.force.ctx.get(c.scope)) this.checkEntryLimit(rs, o, eff.name, c, n);
+      }
+      if (o.kind === 'group') this.checkOptions(rs, o.members);
+    }
+  }
+
+  private checkParentLimit(rs: RSel, name: string, c: Constraint, n: number) {
+    const place = { reach: 'unit', forceUid: rs.force.force.uid, selUid: rs.sel.uid } as const;
+    this.report(c, n, `${rs.eff.name} › ${name}`, place);
+  }
+
+  private checkWideLimit(rs: RSel, o: Opt, name: string, c: Constraint, n: number) {
+    const containers = c.scope === 'roster' ? this.forces.map((f) => f.roots) : [rs.force.roots];
+    const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
+    if (c.type === 'max' && c.value >= 0 && total > c.value && n)
+      this.report(c, total, name, widePlace(c, rs.force.force.uid, rs.sel.uid));
+  }
+
+  /** the scope is an id, not a word: the limit covers what sits inside the nearest selection of that entry */
+  private checkEntryLimit(rs: RSel, o: Opt, name: string, c: Constraint, n: number) {
+    const [items = []] = this.scopeContainers(c.scope, { self: rs, parent: rs.parent, force: rs.force });
+    const total = this.countIn(items, o.node.id, c.includeChildSelections, null);
+    let unit = rs;
+    while (unit.parent) unit = unit.parent;
+    if (c.type === 'max' && c.value >= 0 && total > c.value && n)
+      this.report(c, total, name, { reach: 'unit', forceUid: rs.force.force.uid, selUid: unit.sel.uid });
   }
 
   // ---------- display helpers ----------
