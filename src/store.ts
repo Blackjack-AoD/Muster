@@ -162,15 +162,17 @@ function isRoster(r: unknown): r is Roster {
   );
 }
 
-export async function importRosters(list: readonly unknown[]) {
-  for (const r of list) {
-    if (!isRoster(r)) continue;
+/** Returns how many lists it restored. Anything that isn't a list is skipped. */
+export async function importRosters(list: readonly unknown[]): Promise<number> {
+  const lists = list.filter(isRoster);
+  for (const r of lists) {
     if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
     await db.putRoster(r);
   }
   // storage still holds the old copy of a list whose save failed, and only memory has the edit
   const stored = (await db.rosters()).filter((r) => !state.unsaved.has(r.uid));
   set({ rosters: [...stored, ...state.rosters.filter((r) => state.unsaved.has(r.uid))] });
+  return lists.length;
 }
 
 /** Retry reads memory, which holds every edit, as `r` may be stale or deleted by then. */

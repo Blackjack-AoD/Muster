@@ -222,9 +222,12 @@ export function DataView() {
                 return;
               }
               try {
-                await importRosters(lists);
+                const restored = await importRosters(lists);
+                const skipped = lists.length - restored;
                 // the Retry toast is the only way left to save a list's edit
-                if (!getState().toastAction?.failedSave) toast(`Restored ${lists.length} list(s)`);
+                if (!getState().toastAction?.failedSave) {
+                  toast(`Restored ${restored} list(s)${skipped ? `, skipped ${skipped}` : ''}`);
+                }
               } catch (err) {
                 toast(failureMessage('restore', err));
               }
