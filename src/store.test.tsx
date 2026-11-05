@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
-import { deleteRoster, getState, useRosterCtl } from './store';
+import { deleteRoster, getState, toast, useRosterCtl } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
@@ -54,10 +54,28 @@ async function renderWithToast(source: Roster) {
   );
 }
 
+/** Installed once the list has loaded, as loading waits on a timer. Leaves storage's own scheduling real. */
+async function fakeClock() {
+  await screen.findByRole('button', { name: 'Add a unit' });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+}
+
+async function failASave() {
+  const put = failSaves();
+  await addUnit();
+  await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+  return put;
+}
+
+const showUndo = () => toast('Removed Tactical Squad', { label: 'Undo', run: () => {} });
+
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('useRosterCtl', () => {
   it('shows loading, then the list and its points once its data has loaded', async () => {
@@ -152,5 +170,43 @@ describe('a failed save', () => {
 
     expect(await db.rosters()).toEqual([]);
     expect(getState().rosters).toEqual([]);
+  });
+});
+
+describe('how long the failed save toast stays up', () => {
+  it('outlasts a normal toast, and Retry still works', async () => {
+    await renderWithToast(newList());
+    await fakeClock();
+    const put = await failASave();
+
+    vi.advanceTimersByTime(60_000);
+    expect(getState().toast).toBe(SAVE_FAILED);
+
+    put.mockRestore();
+    await pressRetry();
+    expect(await storedUnits()).toBe(1);
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('comes back and stays when the save still fails after another toast replaced it', async () => {
+    await renderWithToast(newList());
+    await fakeClock();
+    await failASave();
+    showUndo();
+
+    await addUnit();
+    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    vi.advanceTimersByTime(60_000);
+    expect(getState().toast).toBe(SAVE_FAILED);
+  });
+
+  it('outlives the timer of an Undo toast it replaced', async () => {
+    await renderWithToast(newList());
+    await fakeClock();
+    showUndo();
+    await failASave();
+
+    vi.advanceTimersByTime(5000);
+    expect(getState().toast).toBe(SAVE_FAILED);
   });
 });
