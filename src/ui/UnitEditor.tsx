@@ -4,7 +4,7 @@ import type { Opt } from '../data/catalog';
 import { addSel, duplicateSel, issuesOn, locate, removeSel, unavailable, type RSel, type Sel } from '../data/engine';
 import type { Profile, Rule } from '../data/model';
 import type { RosterCtl } from '../store';
-import { Pts, TopBar, fmtN } from './common';
+import { Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { onOffPair, pick } from '../data/setup';
 import { StatBlock } from './StatBlock';
@@ -13,6 +13,7 @@ import { cleanCat } from './RosterView';
 export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: string; backTo: string }) {
   const rs = ctl.ev.find(selUid);
   const [tab, setTab] = useState<'options' | 'stats' | 'rules'>('options');
+  const [naming, setNaming] = useState(false);
   if (!rs) {
     return (
       <div class="page">
@@ -39,8 +40,16 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         title={rs.eff.name}
         sub={cat}
         backTo={backTo}
-        right={unitLike || rs.total ? <Pts v={rs.total} /> : null}
+        right={
+          <>
+            <button class="icon-btn" aria-label="Rename unit" onClick={() => setNaming(true)}>
+              <Icon name="edit" />
+            </button>
+            {unitLike || rs.total ? <Pts v={rs.total} /> : null}
+          </>
+        }
       />
+      {naming && <NameSheet title="Unit" onClose={() => setNaming(false)} />}
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -455,6 +464,7 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
   const siblings = rs.parent ? rs.parent.children.filter((c) => c.opt.key === rs.opt.key) : [];
   // a model just split off its group opens straight away, ready for its own wargear
   const [open, setOpen] = useState(depth < 1 || (siblings.length > 1 && siblings.indexOf(rs) > 0));
+  const [naming, setNaming] = useState(false);
   if (!visible.length || depth > 6) return null;
   // offer "Merge" on the later row only, back into an earlier row with identical wargear
   const twin = siblings.slice(0, siblings.indexOf(rs)).find((c) => sameGear(c.sel, rs.sel));
@@ -470,6 +480,11 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
           </span>
           {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
         </button>
+        {rs.node.type === 'model' && (
+          <button class="icon-btn sm" aria-label="Rename model" onClick={() => setNaming(true)}>
+            <Icon name="edit" size={16} />
+          </button>
+        )}
         {n > 1 && !ctl.scratch && (
           <button class="mini" title="Give one model different wargear" onClick={() => splitOne(ctl, rs)}>
             Split 1
@@ -486,7 +501,25 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
         )}
       </div>
       {open && <OptList ctl={ctl} rs={rs} opts={visible} depth={depth + 1} />}
+      {naming && <NameSheet title="Model" onClose={() => setNaming(false)} />}
     </div>
+  );
+}
+
+function NameSheet({ title, onClose }: { title: string; onClose: () => void }) {
+  const [name, setName] = useState('');
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div class="form">
+        <label>
+          Name
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} />
+        </label>
+      </div>
+      <div class="menu">
+        <button onClick={onClose}>Clear</button>
+      </div>
+    </Sheet>
   );
 }
 

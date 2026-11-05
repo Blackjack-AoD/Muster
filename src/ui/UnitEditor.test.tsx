@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
+import type { Sel } from '../data/engine';
 import { ASSAULT, RULED_OUT_BY_ASSAULT, SWORD, children, cons, entry, sergeant, unit, world } from '../test/fixture';
 import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { UnitEditor } from './UnitEditor';
 
 const FIST = entry(
   'fist',
@@ -53,6 +55,38 @@ async function openPage(w: ReturnType<typeof world>, sel: string, units: string)
   openHash(`#/r/r/u/${sel}`);
   await renderScreen(<App />, { files: worldFiles(units), rosters: [w.roster] });
   await screen.findByRole('heading', { name: 'Tactical Squad' });
+}
+
+/** A squad whose models each have wargear, so each model or group has its own row. */
+const MARINE = entry('marine', 'Marine', 10, children(GRENADE), 'type="model"');
+const SQUAD = unit('tac', 'Tactical Squad', 100, children(MARINE));
+
+const title = () => document.querySelector('.topbar h1')?.textContent;
+
+/** The label of each model or group row, such as "4× Marine". */
+const rows = () => [...document.querySelectorAll('.sub-head > span:not(.o-pts)')].map((s) => s.textContent);
+
+const savedUnit = async () => (await db.rosters())[0]?.forces[0]?.selections[0];
+
+/** The model rows of the saved unit, as count and name. */
+const savedModels = async () => (await savedUnit())?.children.map((c: Sel) => [c.number, c.name]);
+
+/** Types a name into the open name sheet and closes it. */
+function nameAs(name: string) {
+  fireEvent.input(screen.getByLabelText('Name'), { target: { value: name } });
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+}
+
+/** Opens a squad holding Marine rows of these counts, where `named` gives the name of each row by its index. */
+async function openSquad(counts: number[], named: Record<number, string> = {}) {
+  const w = world(SQUAD, { costLimit: 2000 });
+  const tac = w.add('Tactical Squad');
+  for (const n of counts) w.pick(tac, 'Marine', n);
+  w.roster.forces[0]?.selections[0]?.children.forEach((c, i) => {
+    if (named[i]) c.name = named[i];
+  });
+  await openPage(w, tac, SQUAD);
+  return tac;
 }
 
 beforeEach(stubBrowserGaps);
@@ -259,5 +293,82 @@ describe('UnitEditor', () => {
 
     await screen.findByRole('heading', { name: 'Assault Squad' });
     expect(inlineIssues()).toEqual([]);
+  });
+
+  it('renaming the unit shows the name as its title and stores it on the unit', async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('Squad Thrax');
+
+    await waitFor(() => expect(title()).toBe('Squad Thrax'));
+    await waitFor(async () => expect((await savedUnit())?.name).toBe('Squad Thrax'));
+  });
+
+  it('Clear takes the name off the unit, and the title shows the data name again', async () => {
+    const w = world(UNITS, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    const root = w.roster.forces[0]?.selections[0];
+    if (root) root.name = 'Squad Thrax';
+    openHash(`#/r/r/u/${tac}`);
+    await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [w.roster] });
+    await screen.findByRole('heading', { name: /Squad Thrax|Tactical Squad/ });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    await waitFor(async () => expect(await savedUnit()).not.toHaveProperty('name'));
+    expect(title()).toBe('Tactical Squad');
+  });
+
+  it('naming one model of a group of 5 splits it off as a named row of 1', async () => {
+    await openSquad([5]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    nameAs('Brother Kael');
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [4, undefined],
+        [1, 'Brother Kael'],
+      ]),
+    );
+    expect(rows()).toEqual(['4× Marine', '1× Brother Kael']);
+  });
+
+  it('a named model offers no Merge into its twin', async () => {
+    await openSquad([1, 1], { 1: 'Brother Kael' });
+
+    expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull();
+    expect(rows()).toEqual(['1× Marine', '1× Brother Kael']);
+  });
+
+  it('an unnamed model offers no Merge into a named twin', async () => {
+    await openSquad([1, 1], { 0: 'Brother Kael' });
+
+    expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull();
+    expect(rows()).toEqual(['1× Brother Kael', '1× Marine']);
+  });
+
+  it('offers renaming in a list, and none in a read-only preview', () => {
+    const w = world(SQUAD);
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Marine', 2);
+    const page = (scratch: boolean) =>
+      render(
+        <UnitEditor
+          ctl={{ roster: w.roster, contexts: w.contexts, ev: w.ev(), mutate: () => {}, scratch }}
+          selUid={tac}
+          backTo="/"
+        />,
+      );
+    const renames = () => screen.queryAllByRole('button', { name: /^Rename/ }).map((b) => b.getAttribute('aria-label'));
+
+    const list = page(false);
+    expect(renames()).toEqual(['Rename unit', 'Rename model']);
+    list.unmount();
+
+    page(true);
+    expect(renames()).toEqual([]);
   });
 });
