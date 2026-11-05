@@ -186,6 +186,27 @@ describe('the back button', () => {
     await heading('Muster')();
     expect(location.hash).toBe('#/');
   });
+
+  it('steps back through a pop-up opened from a pop-up, and leaves only once both are closed', async () => {
+    await openListFromGames();
+    fireEvent.click(screen.getByRole('button', { name: 'Add detachment' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tap to change/ }));
+    await heading('Army')();
+
+    await pressBack();
+
+    await heading('Add detachment')();
+    expect(location.hash).toBe('#/r/r');
+
+    await pressBack();
+
+    await noPopUp();
+    expect(location.hash).toBe('#/r/r');
+
+    await pressBack();
+
+    await heading('Games')();
+  });
 });
 
 describe('the toast', () => {
