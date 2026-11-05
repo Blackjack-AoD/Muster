@@ -28,7 +28,7 @@ depends = ["install"]
 run = "npm run test:coverage"
 
 [tasks.lint]
-description = "Lint src/ and the sweep"
+description = "Lint src/, the sweep and the journeys"
 depends = ["install"]
 run = "npm run lint"
 
@@ -51,6 +51,11 @@ run = "npm run build"
 description = "Serve the production build from dist/"
 depends = ["build"]
 run = "npm run preview"
+
+[tasks.e2e]
+description = "Build the site and run the Playwright journeys at phone size"
+depends = ["build"]
+run = ["npx playwright install chromium", "npm run e2e"]
 
 [tasks.sweep]
 description = "Look for unit test cases in real data: mise run sweep <data-dir> [army filter]"

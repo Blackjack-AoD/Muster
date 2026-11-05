@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p . && vite build",
-    "lint": "oxlint --type-aware src scripts",
+    "lint": "oxlint --type-aware src scripts e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:engine": "tsx scripts/test-engine.ts",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
     "sweep": "tsx scripts/sweep.ts"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "preact": "^11.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@preact/preset-vite": "^2.10.6",
     "@testing-library/preact": "^3.2.6",
     "@vitest/coverage-v8": "^5.1.0",

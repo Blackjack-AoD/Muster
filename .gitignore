@@ -1,6 +1,6 @@
 node_modules
 dist
-shots
+test-results
 coverage
 .claude/worktrees
 .claude/settings.local.json
