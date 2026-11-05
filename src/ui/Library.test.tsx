@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { unit } from '../test/fixture';
-import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const STATS =
   '<profiles><profile id="p" name="Tactical Marine" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">7</characteristic><characteristic name="Sv" typeId="s">3+</characteristic></characteristics></profile></profiles>';
@@ -24,6 +24,13 @@ beforeEach(async () => {
   await stubBrowserGaps();
   openHash('#/lib');
 });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const expectError = (text: string) =>
+  waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe(text));
 
 describe('Library', () => {
   it('opening a unit from Armies shows its profile, and its rules on the Rules tab', async () => {
@@ -88,5 +95,23 @@ describe('Library', () => {
     within(copies[0]).getByText('· 2 versions');
     expect(screen.getByText('Never runs.').nextElementSibling?.textContent).toBe('Eldar Host, Test Army');
     expect(screen.getByText('Runs only from bigger Orks.').nextElementSibling?.textContent).toBe('Ork Horde');
+  });
+
+  it('gives the reason on an army when it fails to load with a reason that is no Error', async () => {
+    await renderScreen(<App />, { files: worldFiles(unit('tac', 'Tactical Squad', 100)) });
+    failReads('Storage is gone');
+
+    fireEvent.click(screen.getByRole('link', { name: 'Test Army' }));
+
+    await expectError('Storage is gone');
+  });
+
+  it('gives the reason on Rules when they fail to load with a reason that is no Error', async () => {
+    await renderScreen(<App />, { files: worldFiles(unit('scout', 'Scout Squad', 70)) });
+    failReads('Storage is gone');
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Rules' }));
+
+    await expectError('Storage is gone');
   });
 });

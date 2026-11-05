@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../data/db';
 import { removeRepo } from '../store';
 import { unit, world } from '../test/fixture';
-import { openCreateList, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { App } from '../app';
+import { failReads, openCreateList, openHash, press, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { Lists } from './Lists';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
@@ -12,6 +13,10 @@ const UNITS = unit('tac', 'Tactical Squad', 100);
 beforeEach(async () => {
   await stubBrowserGaps();
   openHash('#/');
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('Lists', () => {
@@ -42,6 +47,15 @@ describe('Lists', () => {
 
     await waitFor(() => expect(screen.queryByText("This army's data isn't on the phone.")).not.toBeNull());
     expect(screen.queryByRole('button', { name: 'Create list' })).toBeNull();
+  });
+
+  it('gives the reason on the new list sheet when the army fails to load with a reason that is no Error', async () => {
+    await renderScreen(<App />, { files: worldFiles(UNITS) });
+    failReads('Storage is gone');
+    await press('New list');
+    await press('Test Army');
+
+    await waitFor(() => expect(document.querySelector('.error-text')?.textContent).toBe('Storage is gone'));
   });
 
   it("shows each saved list's name and points limit on a card that opens it", async () => {

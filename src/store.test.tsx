@@ -17,7 +17,7 @@ import {
   useRosterCtl,
 } from './store';
 import { unit, world } from './test/fixture';
-import { expectToast, press, refuse, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
+import { expectToast, failReads, press, refuse, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
 
 const FILES = worldFiles(unit('tac', 'Tactical Squad', 100));
 const SAVE_FAILED = "Couldn't save this list";
@@ -93,6 +93,13 @@ describe('useRosterCtl', () => {
   it("reports a list that isn't there", async () => {
     await renderScreen(<ListEditor />, { files: FILES });
     expect(document.body.textContent).toBe('List not found');
+  });
+
+  it('gives the reason when the data fails to load with a reason that is no Error', async () => {
+    const w = world(unit('tac', 'Tactical Squad', 100));
+    failReads('Storage is gone');
+    await renderScreen(<ListEditor source={w.roster} />, { files: FILES, rosters: [w.roster] });
+    await waitFor(() => expect(document.body.textContent).toBe('Storage is gone'));
   });
 
   it('saves an edit to memory and storage with no toast', async () => {

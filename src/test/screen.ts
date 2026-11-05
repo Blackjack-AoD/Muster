@@ -38,6 +38,12 @@ export const refuse = (method: 'put' | 'delete') =>
     throw new DOMException('Storage is full', 'QuotaExceededError');
   });
 
+/** Storage fails every read of a data file with a bare reason, which is no `Error`, until restored. */
+export const failReads = (reason: string) =>
+  vi.spyOn(IDBObjectStore.prototype, 'get').mockImplementation(() => {
+    throw reason;
+  });
+
 export const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
 export const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
