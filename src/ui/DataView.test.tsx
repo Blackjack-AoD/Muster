@@ -6,7 +6,7 @@ import { db } from '../data/db';
 import { getState, toast } from '../store';
 import { catalogueXml, gameSystemXml, world } from '../test/fixture';
 import { github } from '../test/github';
-import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { expectToast, openHash, press, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const CAT = catalogueXml();
 const BODIES: Readonly<Record<string, string>> = { 'test.gst': gameSystemXml(), 'armies/test.cat': CAT };
@@ -144,6 +144,95 @@ describe('DataView', () => {
     fireEvent.click(screen.getByText('Reload a fresh copy'));
 
     await expectToast("Couldn't reload a fresh copy: caches is not defined");
+  });
+
+  describe('a reload the player starts', () => {
+    const UNSAVED_WARNING = "A list has an edit that isn't saved, and reloading loses it. Carry on?";
+    const FRESH_COPY_QUESTION = 'Reload a fresh copy of the app? Your lists and data are kept.';
+    const AUTO_CHECK_NOTE = /Checks automatically once a week/;
+    const NO_SERVICE_WORKER = /This browser can't check for updates/;
+
+    const answerConfirm = (answer: boolean) => {
+      const ask = vi.fn(() => answer);
+      vi.stubGlobal('confirm', ask);
+      return ask;
+    };
+    const pressReload = () => fireEvent.click(screen.getByText('Reload a fresh copy'));
+
+    async function openWithUnsavedEdit() {
+      vi.stubGlobal('confirm', () => true);
+      const { roster } = world('');
+      openHash(`#/r/${roster.uid}`);
+      await renderScreen(<App />, { files: REPO_FILES, rosters: [roster] });
+      await press('List options');
+      refuse('put');
+      await press('Duplicate list');
+      await expectToast("Couldn't save this list");
+      location.hash = '#/data';
+      await screen.findByRole('button', { name: 'Check for updates' });
+      expect(getState().unsaved.size).toBe(1);
+    }
+
+    it('Check for updates asks first with an unsaved edit, and No does nothing', async () => {
+      await openWithUnsavedEdit();
+      const ask = answerConfirm(false);
+
+      await press('Check for updates');
+
+      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+      await db.rosters();
+      screen.getByText(AUTO_CHECK_NOTE);
+    });
+
+    it('Check for updates carries on after Yes', async () => {
+      await openWithUnsavedEdit();
+      const ask = answerConfirm(true);
+
+      await press('Check for updates');
+
+      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+      await screen.findByText(NO_SERVICE_WORKER);
+    });
+
+    it('Check for updates asks nothing with every edit saved', async () => {
+      await renderScreen(<App />);
+      const ask = answerConfirm(false);
+
+      await press('Check for updates');
+
+      await screen.findByText(NO_SERVICE_WORKER);
+      expect(ask).not.toHaveBeenCalled();
+    });
+
+    it('Reload a fresh copy asks one question with an unsaved edit, and No does nothing', async () => {
+      await openWithUnsavedEdit();
+      const ask = answerConfirm(false);
+
+      pressReload();
+
+      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+      await db.rosters();
+      expect(getState().toast).toBe("Couldn't save this list");
+    });
+
+    it('Reload a fresh copy carries on after Yes', async () => {
+      await openWithUnsavedEdit();
+      const ask = answerConfirm(true);
+
+      pressReload();
+
+      await expectToast("Couldn't reload a fresh copy: caches is not defined");
+      expect(ask.mock.calls).toEqual([[UNSAVED_WARNING]]);
+    });
+
+    it('Reload a fresh copy asks its usual question with every edit saved', async () => {
+      await renderScreen(<App />);
+      const ask = answerConfirm(false);
+
+      pressReload();
+
+      expect(ask.mock.calls).toEqual([[FRESH_COPY_QUESTION]]);
+    });
   });
 
   describe('Restore', () => {
