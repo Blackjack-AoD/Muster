@@ -258,6 +258,9 @@ export function DataView() {
   );
 }
 
+const UNSAVED_WARNING = "A list has an edit that isn't saved, and reloading loses it. Carry on?";
+const hasUnsavedEdit = () => getState().unsaved.size > 0;
+
 function AppUpdate({ online }: { online: boolean }) {
   const [status, setStatus] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -265,6 +268,7 @@ function AppUpdate({ online }: { online: boolean }) {
     ? new Date(BUILD_TIME).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '';
   const check = async () => {
+    if (hasUnsavedEdit() && !confirm(UNSAVED_WARNING)) return;
     setBusy(true);
     setStatus('Checking…');
     const r = await checkForUpdate();
@@ -304,7 +308,10 @@ function AppUpdate({ online }: { online: boolean }) {
             class="btn wide danger"
             disabled={!online}
             onClick={() => {
-              if (confirm('Reload a fresh copy of the app? Your lists and data are kept.'))
+              const question = hasUnsavedEdit()
+                ? UNSAVED_WARNING
+                : 'Reload a fresh copy of the app? Your lists and data are kept.';
+              if (confirm(question))
                 resetAppCache().catch((e: unknown) => toast(failureMessage('reload a fresh copy', e)));
             }}
           >
