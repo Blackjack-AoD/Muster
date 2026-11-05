@@ -210,7 +210,6 @@ describe('the back button', () => {
 });
 
 describe('a pop-up opened from a pop-up', () => {
-
   it('leaves no step behind when Back closes the inner one and the X closes the outer one', async () => {
     await openArmyPicker();
     await pressBack();
