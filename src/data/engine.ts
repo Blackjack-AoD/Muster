@@ -465,7 +465,7 @@ export class Evaluator {
           );
           this.report(this.pct(c, containers), n, `${eff.name}`, rf.force.uid, have[0]?.sel.uid);
         }
-        if (eff.hidden && have.length)
+        if (eff.hidden && have.length && this.hiddenByOthers(o.node, w))
           for (const h of have)
             issues.push({
               level: 'warn',
@@ -503,6 +503,18 @@ export class Evaluator {
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
       this.issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
     }
+  }
+
+  /** Data hides an entry once one is taken, to stop a second. That doesn't make the first unavailable. */
+  private hiddenByOthers(node: RNode, w: Where): boolean {
+    const onItself = (g: ConditionGroup): boolean =>
+      g.conditions.some((c) => c.childId === node.id || c.childId === node.linkId) || g.groups.some(onItself);
+    let hidden = node.hidden;
+    for (const m of node.modifiers) {
+      if (m.field !== 'hidden' || m.type !== 'set' || m.guards.some(onItself)) continue;
+      if (this.modTimes(m, w)) hidden = m.value === 'true';
+    }
+    return hidden;
   }
 
   /** force-org limits for a category in a force, after modifiers */
