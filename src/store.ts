@@ -104,6 +104,7 @@ export async function saveRoster(r: Roster) {
   rosters.push(structuredClone(r));
   set({ rosters });
   await db.putRoster(r);
+  dismissToast();
 }
 
 export async function deleteRoster(u: string) {
