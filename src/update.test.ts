@@ -298,7 +298,10 @@ describe('resetAppCache', () => {
     const { roster } = world(unit('tac', 'Tactical Squad', 100));
     await db.putRoster(roster);
     await db.putFile('test/repo', 'test.cat', '<catalogue/>');
+    // the open connection makes a delete wait, so reading back alone can't see one
+    const deleted = vi.spyOn(indexedDB, 'deleteDatabase');
     await update.resetAppCache();
+    expect(deleted).not.toHaveBeenCalled();
     expect((await db.rosters()).map((r) => r.uid)).toEqual([roster.uid]);
     expect(await db.getFile('test/repo', 'test.cat')).toBe('<catalogue/>');
   });
