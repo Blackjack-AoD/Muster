@@ -8,10 +8,13 @@ export const DEFAULT_REPOS = ['Blackjack-AoD/NRData', 'Blackjack-AoD/M40GA'];
 export function normaliseRepo(input: string): string | null {
   const s = input
     .trim()
-    .replace(/\.git$/, '')
-    .replace(/\/+$/, '');
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '');
   // Past the host, the repo comes first, so anything after it is a page inside the repo.
-  const m = s.match(/github\.com\/([\w.-]+)\/([\w.-]+)(?:[/?#]|$)/i) ?? s.match(/([\w.-]+)\/([\w.-]+)$/);
+  // A GitHub link with no repo must not reach the other pattern, which reads the host as the owner.
+  const m = /github\.com\//i.test(s)
+    ? s.match(/github\.com\/([\w.-]+)\/([\w.-]+)(?:[/?#]|$)/i)
+    : s.match(/([\w.-]+)\/([\w.-]+)$/);
   return m ? `${m[1]}/${m[2]}` : null;
 }
 
