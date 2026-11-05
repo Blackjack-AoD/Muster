@@ -1,12 +1,13 @@
 // Renders a screen on the real store, with data and lists seeded into fake-indexeddb.
 import 'fake-indexeddb/auto';
-import { cleanup, render } from '@testing-library/preact';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/preact';
 import type { ComponentChild } from 'preact';
-import { afterEach, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
 import { dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
+import { encodeSnapshot, viewUrl, type Snapshot } from '../ui/snapshot';
 import { FORCE, catalogueXml, gameSystemXml, type WorldOptions } from './fixture';
 
 export interface ScreenSeed {
@@ -23,6 +24,40 @@ export function worldFiles(units: string, o: Pick<WorldOptions, 'gst' | 'cat'> =
     'test.gst': gameSystemXml(o.gst ?? FORCE),
     'test.cat': catalogueXml(`<selectionEntries>${units}</selectionEntries>${o.cat ?? ''}`),
   };
+}
+
+export const openHash = (hash: string) => history.replaceState(null, '', hash);
+
+/** The address part of a share link to `snap`. */
+export const linkHash = async (snap: Snapshot) => new URL(viewUrl((await encodeSnapshot(snap)).data)).hash;
+
+/** Storage refuses every write of this kind until restored, as a full phone would. */
+export const refuse = (method: 'put' | 'delete') =>
+  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
+    throw new DOMException('Storage is full', 'QuotaExceededError');
+  });
+
+export const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
+
+export type Point = readonly [x: number, y: number];
+
+/** A finger going down at the origin, through each point, then lifting. */
+export function drag(row: HTMLElement, path: readonly Point[]): void {
+  const pointer = { pointerId: 1, pointerType: 'touch' };
+  row.setPointerCapture = vi.fn(); // jsdom has none
+  fireEvent.pointerDown(row, { ...pointer, clientX: 0, clientY: 0 });
+  for (const [clientX, clientY] of path) fireEvent.pointerMove(row, { ...pointer, clientX, clientY });
+  fireEvent.pointerUp(row, pointer);
+}
+
+/** Fills in what jsdom lacks and the app calls, and clears the history steps the app counted in the last test. */
+export async function stubBrowserGaps(): Promise<void> {
+  vi.stubGlobal('scrollTo', () => {});
+  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  // share links pack through Blob.stream(), which jsdom's Blob lacks; Response still makes Node's
+  vi.stubGlobal('Blob', (await new Response().blob()).constructor);
+  // the app's count outlives the store reset, and each step it counts is one entry at most
+  for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
 }
 
 export async function renderScreen(

@@ -6,16 +6,16 @@ import { db } from '../data/db';
 import { clearCaches } from '../data/library';
 import { getState } from '../store';
 import { unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
 
 afterEach(() => vi.unstubAllGlobals());
 
 it('shows the reason in a toast when an army fails to load', async () => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
+  await stubBrowserGaps();
   const { roster } = world(UNITS);
-  history.replaceState(null, '', `#/r/${roster.uid}`);
+  openHash(`#/r/${roster.uid}`);
   const files = {
     ...worldFiles(UNITS),
     'other.cat': '<catalogue id="other" name="Other Army" revision="1" gameSystemId="gst"/>',
@@ -33,9 +33,9 @@ it('shows the reason in a toast when an army fails to load', async () => {
 });
 
 it('shows the reason in a toast when the picked detachment fails to load, and adds nothing', async () => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
+  await stubBrowserGaps();
   const { roster } = world(UNITS);
-  history.replaceState(null, '', `#/r/${roster.uid}`);
+  openHash(`#/r/${roster.uid}`);
   await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [roster] });
 
   fireEvent.click(await screen.findByRole('button', { name: 'Add detachment' }));

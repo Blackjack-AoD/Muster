@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import { children, entry, unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const FIST = entry(
   'fist',
@@ -58,8 +58,6 @@ const SWORD = entry(
 );
 const ASSAULT = unit('assault', 'Assault Squad', 80);
 
-const openHash = (hash: string) => history.replaceState(null, '', hash);
-
 const topPoints = () => document.querySelector('.topbar .pts')?.textContent;
 
 const inlineIssues = () => [...document.querySelectorAll('.issues.inline li')].map((li) => li.textContent);
@@ -83,11 +81,7 @@ async function openPage(w: ReturnType<typeof world>, sel: string, units: string)
   await screen.findByRole('heading', { name: 'Tactical Squad' });
 }
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  // the app's count of history steps outlives the store reset: each step it counts is one entry at most
-  for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
-});
+beforeEach(stubBrowserGaps);
 
 describe('UnitEditor', () => {
   it('ticking a wargear option adds its points and unticking takes them off', async () => {

@@ -5,39 +5,34 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
 const FILES = worldFiles(UNITS);
 const { roster } = world(UNITS);
 
-const refuse = (method: 'put' | 'delete') =>
-  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
-    throw new DOMException('Storage is full', 'QuotaExceededError');
-  });
 // oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
 const realPut = IDBObjectStore.prototype.put;
-const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
 const storedUids = async () => (await db.rosters()).map((r) => r.uid);
 const uidsInMemory = () => getState().rosters.map((r) => r.uid);
 
 async function openListMenu() {
-  history.replaceState(null, '', `#/r/${roster.uid}`);
+  openHash(`#/r/${roster.uid}`);
   await renderScreen(<App />, { files: FILES, rosters: [roster] });
   await press('List options');
 }
 
 async function openCreateList() {
-  history.replaceState(null, '', '#/');
+  openHash('#/');
   await renderScreen(<App />, { files: FILES });
   await press('New list');
   await press('Test Army');
   await screen.findByRole('button', { name: 'Create list' });
 }
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
+beforeEach(async () => {
+  await stubBrowserGaps();
   vi.stubGlobal('confirm', () => true);
 });
 

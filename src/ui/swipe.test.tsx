@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/preact';
+import { describe, expect, it, vi } from 'vitest';
+import { drag } from '../test/screen';
 import { SWIPE, useSwipe } from './swipe';
-
-type Point = readonly [x: number, y: number];
 
 function Row({ onLeft, onRight }: { onLeft: () => void; onRight: () => void }) {
   const { handlers } = useSwipe({ onLeft, onRight });
@@ -15,19 +14,8 @@ function renderRow() {
   const onRight = vi.fn();
   render(<Row onLeft={onLeft} onRight={onRight} />);
   const row = screen.getByTestId('row');
-  row.setPointerCapture = vi.fn(); // jsdom has none
   return { row, onLeft, onRight };
 }
-
-/** A finger going down at the origin, through each point, then lifting. */
-function drag(row: HTMLElement, path: readonly Point[]): void {
-  const pointer = { pointerId: 1, pointerType: 'touch' };
-  fireEvent.pointerDown(row, { ...pointer, clientX: 0, clientY: 0 });
-  for (const [clientX, clientY] of path) fireEvent.pointerMove(row, { ...pointer, clientX, clientY });
-  fireEvent.pointerUp(row, pointer);
-}
-
-afterEach(cleanup);
 
 describe('useSwipe', () => {
   it('runs the left action, and only that, on a swipe left past the threshold', () => {

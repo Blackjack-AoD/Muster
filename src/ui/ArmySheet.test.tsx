@@ -5,8 +5,8 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { children, entry, unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
-import { encodeSnapshot, viewUrl, type Snapshot } from './snapshot';
+import { linkHash, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import type { Snapshot } from './snapshot';
 
 const UNITS =
   unit('tac', 'Tactical Squad', 100, children(entry('melta', 'Melta Gun', 15))) + unit('assault', 'Assault Squad', 80);
@@ -32,11 +32,8 @@ const SHARED: Snapshot = {
   at: 0,
 };
 
-const linkHash = async (snap: Snapshot) => new URL(viewUrl((await encodeSnapshot(snap)).data)).hash;
 /** Packs a value no Snapshot type allows, as a damaged or hand-made link would hold. */
 const linkHashOf = (value: unknown) => linkHash(value as Snapshot);
-const openHash = (hash: string) => history.replaceState(null, '', hash);
-
 /** Each unit on the sheet as its name and the points it shows. */
 const sheetUnits = () =>
   [...document.querySelectorAll('.as-unit')].map((card) => [
@@ -44,11 +41,7 @@ const sheetUnits = () =>
     card.querySelector('.as-unit-pts')?.textContent,
   ]);
 
-beforeEach(async () => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  // share links pack through Blob.stream(), which jsdom's Blob lacks; Response still makes Node's
-  vi.stubGlobal('Blob', (await new Response().blob()).constructor);
-});
+beforeEach(stubBrowserGaps);
 
 afterEach(() => {
   vi.unstubAllGlobals();

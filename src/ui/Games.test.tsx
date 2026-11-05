@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, screen } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import type { Roster } from '../data/engine';
 import { COST_TYPES, FORCE } from '../test/fixture';
-import { renderScreen } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps } from '../test/screen';
 
 const FILES = {
   'first.gst': `<gameSystem id="first" name="First Game" revision="1">${COST_TYPES}${FORCE}</gameSystem>`,
@@ -26,9 +26,9 @@ const list = (uid: string, name: string, gameSystemId: string): Roster => ({
 
 const ROSTERS = [list('a', 'First list', 'first'), list('b', 'Second list', 'second')];
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  history.replaceState(null, '', '#/games');
+beforeEach(async () => {
+  await stubBrowserGaps();
+  openHash('#/games');
 });
 
 describe('Games', () => {

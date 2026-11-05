@@ -5,13 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { App, go } from './app';
 import { toast } from './store';
 import { unit, world } from './test/fixture';
-import { renderScreen, worldFiles } from './test/screen';
+import { linkHash, openHash, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
 import { Sheet } from './ui/common';
-import { encodeSnapshot, viewUrl, type Snapshot } from './ui/snapshot';
+import type { Snapshot } from './ui/snapshot';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
-
-const openHash = (hash: string) => history.replaceState(null, '', hash);
 
 /** A list holding a Tactical Squad, with the parts an address needs to reach that squad. */
 function seededWorld() {
@@ -55,11 +53,9 @@ const noPopUp = () => waitFor(() => expect(screen.queryByRole('dialog')).toBeNul
 let scrollTo: Mock;
 
 beforeEach(async () => {
+  await stubBrowserGaps();
   scrollTo = vi.fn();
-  vi.stubGlobal('scrollTo', scrollTo); // jsdom has none, and App calls it on each address
-  vi.stubGlobal('matchMedia', () => ({ matches: false })); // jsdom has none, and DataView asks if it's installed
-  // share links pack through Blob.stream(), which jsdom's Blob lacks; Response still makes Node's
-  vi.stubGlobal('Blob', (await new Response().blob()).constructor);
+  vi.stubGlobal('scrollTo', scrollTo);
   // the app's count of history steps outlives the store reset: each step it counts is one entry at most
   for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
   openHash('#/');
@@ -113,7 +109,7 @@ describe('routes', () => {
       issues: 0,
       at: 0,
     };
-    openHash(new URL(viewUrl((await encodeSnapshot(snapshot)).data)).hash);
+    openHash(await linkHash(snapshot));
     await renderScreen(<App />);
     await screen.findByRole('heading', { name: 'Friendly Fire' });
     expect(hasTabBar()).toBe(false);

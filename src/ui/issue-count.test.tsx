@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { waitFor } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { children, entry, unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { buildSnapshot } from './snapshot';
 
 const UNITS = unit(
@@ -45,13 +45,11 @@ function listWithFiveIssues() {
   return w;
 }
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-});
+beforeEach(stubBrowserGaps);
 
 describe('the error count', () => {
   it('counts each issue on the list', async () => {
-    history.replaceState(null, '', '#/r/r');
+    openHash('#/r/r');
     await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [listWithFiveIssues().roster] });
     await waitFor(() => expect(document.querySelector('.sum-bar .chip')?.textContent).toBe('5 issues'));
   });

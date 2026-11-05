@@ -5,7 +5,7 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const GST = '<gameSystem id="gst" name="Test Game" revision="1"/>';
 const CAT = '<catalogue id="cat" name="Test Army" revision="1" gameSystemId="gst"/>';
@@ -37,10 +37,9 @@ const addRepo = (text: string) => {
   fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 };
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  vi.stubGlobal('matchMedia', () => ({ matches: false })); // jsdom has none, and DataView asks if it's installed
-  history.replaceState(null, '', '#/data');
+beforeEach(async () => {
+  await stubBrowserGaps();
+  openHash('#/data');
 });
 
 afterEach(() => {
@@ -49,12 +48,6 @@ afterEach(() => {
 });
 
 const REPO_FILES = worldFiles('');
-const STORAGE_FULL = new DOMException('Storage is full', 'QuotaExceededError');
-const refuse = (method: 'put' | 'delete') =>
-  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
-    throw STORAGE_FULL;
-  });
-const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
 describe('DataView', () => {
   it.each(['owner/data', 'https://github.com/owner/data/tree/main'])(

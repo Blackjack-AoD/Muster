@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import { addMandatoryRoots } from '../data/setup';
 import { children, entry, unit, world, type WorldOptions } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { drag, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { SWIPE } from './swipe';
 
 const SERGEANT = entry(
@@ -19,8 +19,6 @@ const SERGEANT = entry(
 );
 const ASSAULT = unit('assault', 'Assault Squad', 80);
 const UNITS = unit('tac', 'Tactical Squad', 100, children(SERGEANT)) + ASSAULT;
-
-const openHash = (hash: string) => history.replaceState(null, '', hash);
 
 /** Waits for the list itself, as its heading also shows while the data loads. */
 async function openList(w: ReturnType<typeof world>, units = UNITS, data: Pick<WorldOptions, 'gst'> = {}) {
@@ -67,19 +65,7 @@ async function openAddSheet(name: string, nth = 0) {
 
 const offered = (sheet: HTMLElement) => [...sheet.querySelectorAll('.pick b')].map((name) => name.textContent);
 
-function swipeRight(row: HTMLElement) {
-  const pointer = { pointerId: 1, pointerType: 'touch' };
-  row.setPointerCapture = vi.fn(); // jsdom has none
-  fireEvent.pointerDown(row, { ...pointer, clientX: 0, clientY: 0 });
-  fireEvent.pointerMove(row, { ...pointer, clientX: SWIPE, clientY: 0 });
-  fireEvent.pointerUp(row, pointer);
-}
-
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  // the app's count of history steps outlives the store reset: each step it counts is one entry at most
-  for (let i = 0; i < history.length; i++) dispatchEvent(new PopStateEvent('popstate'));
-});
+beforeEach(stubBrowserGaps);
 
 describe('RosterView', () => {
   it('adding a unit shows it with its points and adds them to the total', async () => {
@@ -394,7 +380,7 @@ describe('RosterView', () => {
       expect(offered(sheet)).toEqual(['Relic', 'Assault Squad']);
 
       const relic = within(sheet).getByRole('button', { name: /Relic/ });
-      swipeRight(relic);
+      drag(relic, [[SWIPE, 0]]);
 
       await waitFor(() => expect(offered(sheet)).toEqual(['Assault Squad']));
       const [saved] = await db.rosters();

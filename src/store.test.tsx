@@ -17,7 +17,7 @@ import {
   useRosterCtl,
 } from './store';
 import { unit, world } from './test/fixture';
-import { renderScreen, worldFiles } from './test/screen';
+import { refuse, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
 
 const FILES = worldFiles(unit('tac', 'Tactical Squad', 100));
 const SAVE_FAILED = "Couldn't save this list";
@@ -48,12 +48,6 @@ const unitsInMemory = () => unitsIn(getState().rosters[0]);
 const addUnit = async () => fireEvent.click(await screen.findByRole('button', { name: 'Add a unit' }));
 const pressRetry = async () => fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
 
-/** Storage refuses every write until restored, as a full phone would. */
-const failSaves = () =>
-  vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
-    throw new DOMException('Storage is full', 'QuotaExceededError');
-  });
-
 /** The App shell draws the toast and its button. */
 async function renderWithToast(source: Roster) {
   await renderScreen(
@@ -72,7 +66,7 @@ async function fakeClock() {
 }
 
 async function failASave() {
-  const put = failSaves();
+  const put = refuse('put');
   await addUnit();
   await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
   return put;
@@ -80,9 +74,7 @@ async function failASave() {
 
 const showUndo = () => toast('Removed Tactical Squad', { label: 'Undo', run: () => {} });
 
-beforeEach(() => {
-  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-});
+beforeEach(stubBrowserGaps);
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -146,7 +138,7 @@ describe('a failed save', () => {
   it('shows a toast with Retry when a save fails, and keeps the edit on screen', async () => {
     const list = newList();
     await renderWithToast(list);
-    failSaves();
+    refuse('put');
     await addUnit();
     await waitFor(() => expect(screen.queryByRole('status')?.textContent).toBe(`${SAVE_FAILED}Retry`));
     expect(screen.queryByText('Points: 100')).not.toBeNull();
@@ -156,7 +148,7 @@ describe('a failed save', () => {
 
   it('Retry saves the list as it is at that moment, and a success clears the toast', async () => {
     await renderWithToast(newList());
-    const put = failSaves();
+    const put = refuse('put');
     await addUnit();
     await addUnit();
     await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
@@ -173,7 +165,7 @@ describe('a failed save', () => {
 
   it('shows the toast again when a Retry fails', async () => {
     await renderWithToast(newList());
-    const put = failSaves();
+    const put = refuse('put');
     await addUnit();
     await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
 
@@ -190,7 +182,7 @@ describe('a failed save', () => {
   it("Retry doesn't bring back a list deleted after the failed save", async () => {
     const list = newList();
     await renderWithToast(list);
-    const put = failSaves();
+    const put = refuse('put');
     await addUnit();
     await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
 
@@ -338,7 +330,7 @@ describe('starting up', () => {
   function failFirstDownload() {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
-    failSaves();
+    refuse('put');
   }
 
   afterEach(async () => {

@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import { removeRepo } from '../store';
 import { unit, world } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { Lists } from './Lists';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  history.replaceState(null, '', '#/');
+beforeEach(async () => {
+  await stubBrowserGaps();
+  openHash('#/');
 });
 
 describe('Lists', () => {

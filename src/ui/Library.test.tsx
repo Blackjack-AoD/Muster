@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, within } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { unit } from '../test/fixture';
-import { renderScreen, worldFiles } from '../test/screen';
+import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const STATS =
   '<profiles><profile id="p" name="Tactical Marine" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">7</characteristic><characteristic name="Sv" typeId="s">3+</characteristic></characteristics></profile></profiles>';
@@ -20,9 +20,9 @@ async function openRules(files: Record<string, string>, total: number) {
   return screen.findByPlaceholderText(`Search ${total} rules`);
 }
 
-beforeEach(() => {
-  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
-  history.replaceState(null, '', '#/lib');
+beforeEach(async () => {
+  await stubBrowserGaps();
+  openHash('#/lib');
 });
 
 describe('Library', () => {
