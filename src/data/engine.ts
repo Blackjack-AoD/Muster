@@ -986,7 +986,11 @@ function fillDefaults(roster: Roster, contexts: Map<string, Context>, selUid: st
       if (d > 6) return undefined;
       const visible = visibleOf(g);
       const cheapest = [...visible].sort((x, y) => baseMin(x) - baseMin(y) || cost(x) - cost(y));
-      const def = defaultMember(g, visible, true, ev.optionEff(g, rs, rs.force).defaultId);
+      // in a capped group, a nested group that holds a pick has had its default, so the next group's comes first
+      const capped = ev.limits(g, rs, rs.force).max >= 0;
+      const held = (m: Opt) => m.kind === 'group' && countKey((k) => k.startsWith(m.key + '/')) > 0;
+      const offered = capped ? visible.filter((m) => !held(m)) : visible;
+      const def = defaultMember(g, offered, true, ev.optionEff(g, rs, rs.force).defaultId);
       const ordered = [...(def ? [def] : []), ...cheapest];
       // prefer nested groups that carry their own default
       ordered.sort((x, y) => Number(y === def) - Number(x === def));
