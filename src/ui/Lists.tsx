@@ -170,7 +170,7 @@ function NewListDetails({
   onBack: () => void;
 }) {
   const repos = useStore((s) => s.repos);
-  const repo = repos.find((r) => r.repo === sys.repo)!;
+  const repo = repos.find((r) => r.repo === sys.repo);
   const { id: catId, name: catName } = cat.header;
   const [state, setState] = useState<
     { forces: { id: string; name: string }[]; limit: number; ctx: Context } | { error: string }
@@ -180,6 +180,7 @@ function NewListDetails({
   const [limit, setLimit] = useState('');
 
   useEffect(() => {
+    if (!repo) return;
     setTimeout(() => {
       getContext(repo, catId)
         .then((ctx) => {
@@ -196,6 +197,13 @@ function NewListDetails({
         .catch((e) => setState({ error: (e as Error).message }));
     }, 30);
   }, [catId]);
+
+  if (!repo)
+    return (
+      <Sheet title={catName} onClose={onClose}>
+        <p class="error-text">This army's data isn't on the phone.</p>
+      </Sheet>
+    );
 
   const create = async () => {
     if (!forceId || !state || 'error' in state) return;
