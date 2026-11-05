@@ -361,7 +361,10 @@ describe('app state', () => {
 });
 
 describe('saved units', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
   const SQUAD = unit(
     'tac',
     'Tactical Squad',
@@ -534,6 +537,17 @@ describe('saved units', () => {
       await vi.waitFor(async () => expect(await inStorage(list)).toEqual(expected[list]));
       expect(inMemory(list)).toEqual(expected[list]);
     }
+  });
+
+  it('stamps when a saved unit was made, and when it was last renamed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1000);
+    const { id } = await savedSquad('ts1', 'Squad Thrax');
+    expect(savedUnit(id)).toMatchObject({ created: 1000, updated: 1000 });
+    vi.setSystemTime(2000);
+    await renameSavedUnit(id, 'Squad Iron');
+    expect(savedUnit(id)).toMatchObject({ created: 1000, updated: 2000 });
+    expect(await storedSavedUnit(id)).toMatchObject({ created: 1000, updated: 2000 });
   });
 
   it('loads saved units from storage at start', async () => {
