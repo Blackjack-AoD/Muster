@@ -1,5 +1,5 @@
 // Tiny IndexedDB wrapper: data files, repo sync state, and saved rosters live on the phone.
-import type { Roster } from './engine';
+import type { Roster, Sel } from './engine';
 
 export interface FileHeader {
   kind: 'gameSystem' | 'catalogue';
@@ -22,6 +22,20 @@ export interface RepoState {
   syncedAt?: number;
   files: FileMeta[];
   error?: string;
+}
+
+/** A named unit build kept for one army file, so any list for that army can add it. */
+export interface SavedUnit {
+  id: string;
+  name: string;
+  repo: string;
+  gameSystemId: string;
+  catalogueId: string;
+  key: string;
+  categoryId: string;
+  build: Sel;
+  created: number;
+  updated: number;
 }
 
 const DB_NAME = 'muster';
@@ -95,6 +109,9 @@ export const db = {
     tx('rosters', 'readwrite', (s) => {
       s.delete(uid);
     }),
+  savedUnits: async (): Promise<SavedUnit[]> => [],
+  putSavedUnit: async (_u: SavedUnit) => {},
+  delSavedUnit: async (_id: string) => {},
 };
 
 /** Ask the browser not to clear our storage when space runs low. */
