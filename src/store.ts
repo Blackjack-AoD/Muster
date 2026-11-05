@@ -86,14 +86,18 @@ export function setGame(game: string | undefined) {
 /** A repo's download failure lands on its card through `sync`, so only a failure in storage rejects here. */
 export async function syncAll(list?: string[]) {
   const targets = list ?? state.repos.map((r) => r.repo);
-  try {
-    for (const repo of targets) {
-      await syncRepo(repo, (p) => set({ sync: { ...state.sync, [repo]: p } }));
+  const show = (p: SyncProgress) => set({ sync: { ...state.sync, [p.repo]: p } });
+  for (const repo of targets) {
+    try {
+      await syncRepo(repo, show);
       clearCaches(repo);
       set({ repos: await db.repos() });
+    } catch (e) {
+      const message = failureMessage('sync', e);
+      show({ repo, stage: 'error', done: 0, total: 0, message });
+      toast(message);
+      return;
     }
-  } catch (e) {
-    toast(failureMessage('sync', e));
   }
 }
 
