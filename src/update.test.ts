@@ -1,16 +1,22 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
+import { renderHook } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
+import { importLocalFiles } from './data/sync';
 import { unit, world } from './test/fixture';
+import { refuse, worldFiles } from './test/screen';
 
 const NOW = Date.UTC(2026, 10, 5);
 const WEEK = 7 * 24 * 60 * 60_000;
 const LAST_CHECK = 'muster.lastUpdateCheck';
 const LOAD_DELAY = 5000;
+const UNITS = unit('tac', 'Tactical Squad', 100);
 
 type Update = typeof import('./update');
+type Store = typeof import('./store');
 let update: Update;
+let store: Store;
 let reload: ReturnType<typeof vi.fn>;
 
 const lastCheckedAt = (time: number) => localStorage.setItem(LAST_CHECK, String(time));
@@ -51,6 +57,32 @@ async function comeBack() {
   await flush();
 }
 
+/** A list open for editing, as an edit is the only way to leave one unsaved. */
+async function openList(uid: string) {
+  await importLocalFiles(
+    'test/repo',
+    Object.entries(worldFiles(UNITS)).map(([path, xml]) => new File([xml], path)),
+  );
+  await store.refreshRepos();
+  const { result } = renderHook(() => store.useRosterCtl({ ...world(UNITS).roster, uid }));
+  await vi.waitFor(() => expect(result.current.ctl).toBeDefined());
+  return async () => {
+    result.current.ctl?.mutate((r) => {
+      r.name += ' edited';
+    });
+    // a trip to storage lets the save report
+    await db.rosters();
+  };
+}
+
+/** Each edit made inside `during` fails to save, as on a full phone. */
+async function withStorageFull(during: () => Promise<void>) {
+  const put = refuse('put');
+  await during();
+  await vi.waitFor(() => expect(store.getState().toast).toBe("Couldn't save this list"));
+  put.mockRestore();
+}
+
 const docListeners = vi.spyOn(document, 'addEventListener');
 const windowListeners = vi.spyOn(globalThis, 'addEventListener');
 
@@ -63,6 +95,7 @@ beforeEach(async () => {
   // the module remembers a reload is under way, so each test needs its own copy
   vi.resetModules();
   update = await import('./update');
+  store = await import('./store');
 });
 
 afterEach(() => {
@@ -163,6 +196,24 @@ describe('the weekly update check', () => {
     expect(registration.update).toHaveBeenCalledTimes(2);
   });
 
+  it('waits while an edit is unsaved, records no check, and runs on the next trigger after it saves', async () => {
+    const registration = fakeRegistration();
+    stubBrowser(registration);
+    const edit = await openList('held');
+    await withStorageFull(edit);
+    update.registerServiceWorker();
+
+    await comeBack();
+
+    expect(registration.update).not.toHaveBeenCalled();
+    expect(update.lastUpdateCheck()).toBe(0);
+
+    await edit();
+    expect(store.getState().unsaved.size).toBe(0);
+    await comeBack();
+    expect(registration.update).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing in a dev build', async () => {
     vi.stubEnv('DEV', true);
     const registration = fakeRegistration();
@@ -190,6 +241,39 @@ describe('registerServiceWorker', () => {
     update.registerServiceWorker();
     serviceWorker.dispatchEvent(new Event('controllerchange'));
     serviceWorker.dispatchEvent(new Event('controllerchange'));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the reload while an edit is unsaved, then reloads once when it saves', async () => {
+    const serviceWorker = stubBrowser(fakeRegistration(), {});
+    const edit = await openList('held');
+    await withStorageFull(edit);
+    update.registerServiceWorker();
+
+    serviceWorker.dispatchEvent(new Event('controllerchange'));
+    serviceWorker.dispatchEvent(new Event('controllerchange'));
+    store.toast('Something else changed');
+    expect(reload).not.toHaveBeenCalled();
+
+    await edit();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the reload until every list has saved', async () => {
+    const serviceWorker = stubBrowser(fakeRegistration(), {});
+    const [editFirst, editSecond] = [await openList('first'), await openList('second')];
+    await withStorageFull(async () => {
+      await editFirst();
+      await editSecond();
+    });
+    update.registerServiceWorker();
+
+    serviceWorker.dispatchEvent(new Event('controllerchange'));
+    await editFirst();
+    expect(store.getState().unsaved.size).toBe(1);
+    expect(reload).not.toHaveBeenCalled();
+
+    await editSecond();
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
@@ -256,6 +340,22 @@ describe('checkForUpdate', () => {
     await update.checkForUpdate();
     expect(reload).not.toHaveBeenCalled();
     changeState(installing, 'activated');
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a new version that activates without a controller change', () => {
+  it('holds the reload while an edit is unsaved, then reloads once when it saves', async () => {
+    const installing = fakeWorker('installing');
+    stubBrowser(fakeRegistration({ installing }));
+    const edit = await openList('held');
+    await withStorageFull(edit);
+    await update.checkForUpdate();
+
+    changeState(installing, 'activated');
+    expect(reload).not.toHaveBeenCalled();
+
+    await edit();
     expect(reload).toHaveBeenCalledTimes(1);
   });
 });
