@@ -616,9 +616,9 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
           <Icon name="book" /> Army sheet: print, PDF or share link
         </button>
         <button
-          onClick={() => {
+          onClick={async () => {
             save();
-            shareText(rosterText(ctl, repos), ctl.roster.name);
+            await shareText(rosterText(ctl, repos), ctl.roster.name);
           }}
         >
           <Icon name="share" /> Share as text

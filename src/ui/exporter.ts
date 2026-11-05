@@ -2,7 +2,7 @@ import type { RepoState } from '../data/db';
 import type { RSel } from '../data/engine';
 import type { Roster } from '../data/engine';
 import type { RosterCtl } from '../store';
-import { toast } from '../store';
+import { failureMessage, toast } from '../store';
 import { catalogueName } from './Lists';
 
 const clean = (s: string) => s.replace(/[:\s]+$/, '');
@@ -55,6 +55,8 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
   return lines.join('\n');
 }
 
+const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+
 export async function shareText(text: string, title: string) {
   try {
     if (navigator.share) {
@@ -62,7 +64,7 @@ export async function shareText(text: string, title: string) {
       return;
     }
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return;
+    if (isCancelled(e)) return;
   }
   try {
     await navigator.clipboard.writeText(text);
@@ -96,7 +98,8 @@ export async function shareBackup(rosters: Roster[]) {
       return;
     }
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return;
+    if (isCancelled(e)) return;
+    toast(failureMessage('share', e));
   }
   downloadJson(name, { app: 'muster', version: 1, rosters });
 }
