@@ -296,6 +296,10 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   saveEdit(r);
 }
 
+export async function renameSavedUnit(_id: string, _name: string): Promise<void> {}
+
+export async function deleteSavedUnit(_id: string): Promise<void> {}
+
 // ---------- roster controller ----------
 export interface RosterCtl {
   roster: Roster;

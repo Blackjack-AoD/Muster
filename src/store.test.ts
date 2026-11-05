@@ -5,6 +5,7 @@ import { Evaluator, addSel, displayName, uid as newUid, type Roster, type Sel } 
 import { setUpForce } from './data/setup';
 import {
   deleteRoster,
+  deleteSavedUnit,
   dismissToast,
   failureMessage,
   getState,
@@ -12,6 +13,7 @@ import {
   init,
   refreshRepos,
   removeRepo,
+  renameSavedUnit,
   saveRoster,
   saveUnit,
   setGame,
@@ -402,6 +404,14 @@ describe('saved units', () => {
     });
   };
 
+  /** A copy of saved unit `id` in a new list, as adding it to a detachment would leave it. */
+  const listWithCopy = async (listUid: string, id: string, name: string) => {
+    const { w, squad } = listWithSquad(listUid);
+    Object.assign(savedIn(w.roster, squad), { saved: id, name });
+    await saveRoster(w.roster);
+    return { roster: w.roster, squad };
+  };
+
   /** Runs `save` and returns the one saved unit it added. */
   const addedBy = async (save: () => Promise<void>) => {
     const before = new Set(getState().savedUnits.map((u) => u.id));
@@ -409,6 +419,14 @@ describe('saved units', () => {
     const added = getState().savedUnits.filter((u) => !before.has(u.id));
     expect(added).toHaveLength(1);
     return present(added[0], 'the saved unit');
+  };
+
+  /** Saves the Tactical Squad of a new stored list, and returns the saved unit's id. */
+  const savedSquad = async (listUid: string, name: string) => {
+    const { w, squad, rs } = listWithSquad(listUid);
+    await saveRoster(w.roster);
+    const { id } = await addedBy(() => saveUnit(w.roster, rs, name));
+    return { roster: w.roster, squad, id };
   };
 
   it('saves a unit with its army file, key, category and build', async () => {
@@ -470,6 +488,49 @@ describe('saved units', () => {
     expect(inMemory('su4')[0]?.saved).toBeUndefined();
   });
 
+  it('renames a saved unit and its copies in every list, and no other unit', async () => {
+    const { id } = await savedSquad('rn1', 'Squad Thrax');
+    await listWithCopy('rn2', id, 'Squad Thrax');
+    const { w: other, squad: unlinked } = listWithSquad('rn3');
+    savedIn(other.roster, unlinked).name = 'Squad Vorr';
+    await saveRoster(other.roster);
+
+    await renameSavedUnit(id, 'Squad Iron');
+
+    expect(savedUnit(id)?.name).toBe('Squad Iron');
+    expect((await storedSavedUnit(id))?.name).toBe('Squad Iron');
+    for (const list of ['rn1', 'rn2']) {
+      await vi.waitFor(async () => expect((await inStorage(list)).map((s) => s.name)).toEqual(['Squad Iron']));
+      expect(inMemory(list).map((s) => s.name)).toEqual(['Squad Iron']);
+    }
+    expect((await inStorage('rn3')).map((s) => s.name)).toEqual(['Squad Vorr']);
+  });
+
+  it('deletes a saved unit, leaving its copies with their build and no link or name', async () => {
+    const { roster: first, squad: firstSquad, id } = await savedSquad('dl1', 'Squad Thrax');
+    const { roster: second, squad: secondSquad } = await listWithCopy('dl2', id, 'Squad Thrax');
+    const unlinked = (s: Sel): Sel => ({
+      uid: s.uid,
+      key: s.key,
+      number: s.number,
+      categoryId: 'hq',
+      children: s.children,
+    });
+    const expected = {
+      dl1: [unlinked(savedIn(first, firstSquad))],
+      dl2: [unlinked(savedIn(second, secondSquad))],
+    };
+
+    await deleteSavedUnit(id);
+
+    expect(savedUnit(id)).toBeUndefined();
+    expect(await storedSavedUnit(id)).toBeUndefined();
+    for (const list of ['dl1', 'dl2'] as const) {
+      await vi.waitFor(async () => expect(await inStorage(list)).toEqual(expected[list]));
+      expect(inMemory(list)).toEqual(expected[list]);
+    }
+  });
+
   it('loads saved units from storage at start', async () => {
     const { w, squad } = listWithSquad('ld1');
     const record = {
@@ -502,6 +563,24 @@ describe('saved units', () => {
           return { list: 'rt1', expected: { saved: expect.any(String), name: 'Squad Thrax' } };
         },
       ],
+      [
+        'renaming a saved unit',
+        async () => {
+          const { id } = await savedSquad('rt2', 'Squad Thrax');
+          refuseLists();
+          await renameSavedUnit(id, 'Squad Iron');
+          return { list: 'rt2', expected: { saved: id, name: 'Squad Iron' } };
+        },
+      ],
+      [
+        'deleting a saved unit',
+        async () => {
+          const { id } = await savedSquad('rt3', 'Squad Thrax');
+          refuseLists();
+          await deleteSavedUnit(id);
+          return { list: 'rt3', expected: { name: undefined, saved: undefined } };
+        },
+      ],
     ])('offers Retry after %s, and Retry stores it', async (_what, change) => {
       const { list, expected } = await change();
       await vi.waitFor(() => expect(getState().toastAction?.failedSave).toBe(list));
@@ -511,7 +590,8 @@ describe('saved units', () => {
       vi.restoreAllMocks();
       getState().toastAction?.run();
       await vi.waitFor(() => expect(getState().unsaved.has(list)).toBe(false));
-      expect((await inStorage(list))[0]).toMatchObject(expected);
+      const [copy] = await inStorage(list);
+      expect({ saved: copy?.saved, name: copy?.name }).toEqual(expected);
     });
   });
 });
