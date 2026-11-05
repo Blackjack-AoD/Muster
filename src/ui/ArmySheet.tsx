@@ -2,8 +2,9 @@
 // Shown from a list (with Print / Share), and from a shared link (no game data needed).
 import { useEffect, useErrorBoundary, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
-import { toast, useRosterCtl, useStore } from '../store';
+import { failureMessage, toast, useRosterCtl, useStore } from '../store';
 import { Loading, TopBar, fmtN } from './common';
+import { isCancelled } from './exporter';
 import { Icon } from './Icon';
 import { StatBlock } from './StatBlock';
 import {
@@ -112,23 +113,18 @@ function UnitCard({ u }: { u: SnapUnit }) {
 }
 
 async function shareLink(snap: Snapshot) {
-  const { data, withRules } = await encodeSnapshot(snap);
-  const url = viewUrl(data);
-  const text = `${snap.name} · ${fmtN(snap.pts)} pts`;
   try {
+    const { data, withRules } = await encodeSnapshot(snap);
+    const url = viewUrl(data);
     if (navigator.share) {
-      await navigator.share({ title: snap.name, text, url });
+      await navigator.share({ title: snap.name, text: `${snap.name} · ${fmtN(snap.pts)} pts`, url });
       if (!withRules) toast('Link shared. Rule text was left out to keep it short');
-      return;
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast(withRules ? 'Link copied' : 'Link copied (rule text left out to keep it short)');
     }
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return;
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    toast(withRules ? 'Link copied' : 'Link copied (rule text left out to keep it short)');
-  } catch {
-    toast("Couldn't share or copy on this device");
+    if (!isCancelled(e)) toast(failureMessage('share', e));
   }
 }
 

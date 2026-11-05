@@ -55,22 +55,18 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
   return lines.join('\n');
 }
 
-const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+export const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
 
 export async function shareText(text: string, title: string) {
   try {
     if (navigator.share) {
       await navigator.share({ title, text });
-      return;
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast('Copied to clipboard');
     }
   } catch (e) {
-    if (isCancelled(e)) return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    toast('Copied to clipboard');
-  } catch {
-    toast("Couldn't share or copy on this device");
+    if (!isCancelled(e)) toast(failureMessage('share', e));
   }
 }
 
