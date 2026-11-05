@@ -250,7 +250,9 @@ function saveEdit(r: Roster) {
   const started = savesStarted.get(r.uid);
   saving.catch(() => {
     if (savesStarted.get(r.uid) !== started) return;
-    if (state.rosters.some((x) => x.uid === r.uid)) set({ unsaved: new Set([...state.unsaved, r.uid]) });
+    // a deleted list has nothing left to save
+    if (!state.rosters.some((x) => x.uid === r.uid)) return;
+    set({ unsaved: new Set([...state.unsaved, r.uid]) });
     toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid });
   });
 }
