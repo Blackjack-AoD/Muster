@@ -206,7 +206,7 @@ describe('RosterView', () => {
 
   it('opens a restored list that had deep junk in its unknown fields', async () => {
     const w = world(UNITS);
-    const tac = w.add('Tactical Squad');
+    w.add('Tactical Squad');
     let junk: unknown = 'junk';
     for (let level = 0; level < 3_000; level++) junk = { junk };
     const junkSel = (s: Sel): unknown => ({ ...s, junk, children: s.children.map(junkSel) });
@@ -216,7 +216,7 @@ describe('RosterView', () => {
     openHash('#/r/r');
     await renderScreen(<App />, { files: worldFiles(UNITS) });
 
-    await waitFor(() => expect(sumPoints()).toBe(`${w.pts(tac)}pts`));
+    await waitFor(() => expect(sumPoints()).toBe('120pts'));
   });
 
   describe('a list that cannot open', () => {
