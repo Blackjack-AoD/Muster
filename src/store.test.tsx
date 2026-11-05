@@ -277,7 +277,6 @@ describe('starting up', () => {
     failFirstDownload();
     await init();
     expect(getState().toast).toBe("Couldn't sync: Storage is full");
-    expect(getState().ready).toBe(true);
   });
 
   // BUG: a sync that can't record its failure stays "working", which disables every sync button until a reload

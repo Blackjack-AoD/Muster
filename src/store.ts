@@ -58,11 +58,18 @@ export function dismissToast() {
   set({ toast: undefined, toastAction: undefined });
 }
 
+/** What to tell the player when something failed: "Couldn't <action>: <the reason given>". */
+export function failureMessage(action: string, e: unknown): string {
+  return `Couldn't ${action}: ${e instanceof Error || e instanceof DOMException ? e.message : String(e)}`;
+}
+
 export async function init() {
   const [repos, rosters] = await Promise.all([db.repos(), db.rosters()]);
   set({ ready: true, repos, rosters });
-  persistStorage();
-  if (!repos.length && navigator.onLine) syncAll(DEFAULT_REPOS);
+  persistStorage().catch(() => {
+    /* nothing depends on it: the browser just keeps its right to clear storage */
+  });
+  if (!repos.length && navigator.onLine) await syncAll(DEFAULT_REPOS);
 }
 
 /** Pick the game that Lists and Library show (undefined = all games). */
@@ -76,12 +83,17 @@ export function setGame(game: string | undefined) {
   set({ game });
 }
 
+/** A repo's download failure lands on its card through `sync`, so only a failure in storage rejects here. */
 export async function syncAll(list?: string[]) {
   const targets = list ?? state.repos.map((r) => r.repo);
-  for (const repo of targets) {
-    await syncRepo(repo, (p) => set({ sync: { ...state.sync, [repo]: p } }));
-    clearCaches(repo);
-    set({ repos: await db.repos() });
+  try {
+    for (const repo of targets) {
+      await syncRepo(repo, (p) => set({ sync: { ...state.sync, [repo]: p } }));
+      clearCaches(repo);
+      set({ repos: await db.repos() });
+    }
+  } catch (e) {
+    toast(failureMessage('sync', e));
   }
 }
 

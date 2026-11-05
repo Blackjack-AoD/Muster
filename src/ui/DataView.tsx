@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { storageUse } from '../data/db';
 import { DEFAULT_REPOS, importLocalFiles, normaliseRepo } from '../data/sync';
 import { clearCaches } from '../data/library';
-import { importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
+import { failureMessage, importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
 import { shareBackup } from './exporter';
@@ -26,7 +26,11 @@ export function DataView() {
   const busy = Object.values(sync).some((p) => p.stage === 'checking' || p.stage === 'downloading');
 
   useEffect(() => {
-    storageUse().then(setUsage);
+    storageUse()
+      .then(setUsage)
+      .catch(() => {
+        /* nothing depends on it: the storage line stays hidden */
+      });
     const on = () => setOnline(navigator.onLine);
     addEventListener('online', on);
     addEventListener('offline', on);
@@ -40,7 +44,7 @@ export function DataView() {
     const r = normaliseRepo(input);
     if (!r) return toast('Use the form owner/repo, e.g. BSData/horus-heresy');
     setInput('');
-    syncAll([r]);
+    return syncAll([r]);
   };
 
   const standalone = matchMedia('(display-mode: standalone)').matches;
@@ -115,7 +119,7 @@ export function DataView() {
                   aria-label={'Remove ' + name}
                   onClick={() => {
                     if (confirm(`Remove ${name} data from this phone? Lists using it will need it re-downloaded.`))
-                      removeRepo(name);
+                      removeRepo(name).catch((e) => toast(failureMessage('remove', e)));
                   }}
                 >
                   <Icon name="trash" />
@@ -176,7 +180,7 @@ export function DataView() {
                 await refreshRepos();
                 toast(n ? `Imported ${n} data file${n === 1 ? '' : 's'}` : 'No .gst / .cat files found in that');
               } catch (err) {
-                toast(`Couldn't import: ${(err as Error).message}`);
+                toast(failureMessage('import', err));
               }
             }}
           />
@@ -279,7 +283,8 @@ function AppUpdate({ online }: { online: boolean }) {
             class="btn wide danger"
             disabled={!online}
             onClick={() => {
-              if (confirm('Reload a fresh copy of the app? Your lists and data are kept.')) resetAppCache();
+              if (confirm('Reload a fresh copy of the app? Your lists and data are kept.'))
+                resetAppCache().catch((e) => toast(failureMessage('reload a fresh copy', e)));
             }}
           >
             Reload a fresh copy
