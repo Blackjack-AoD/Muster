@@ -651,6 +651,14 @@ export class Evaluator {
             const total = containers.reduce((t, items) => t + this.countIn(items, o.node.id, true, null), 0);
             if (c.type === 'max' && c.value >= 0 && total > c.value && n)
               this.report(c, total, eff.name, wideReach(c), rs.force.force.uid, rs.sel.uid);
+          } else if (rs.force.ctx.get(c.scope)) {
+            // scope is an id, not a word: the limit covers what sits inside the nearest selection of that entry
+            const [items = []] = this.scopeContainers(c.scope, { self: rs, parent: rs.parent, force: rs.force });
+            const total = this.countIn(items, o.node.id, c.includeChildSelections, null);
+            let unit = rs;
+            while (unit.parent) unit = unit.parent;
+            if (c.type === 'max' && c.value >= 0 && total > c.value && n)
+              this.report(c, total, eff.name, 'unit', rs.force.force.uid, unit.sel.uid);
           }
         }
         if (o.kind === 'group') walk(o.members);
