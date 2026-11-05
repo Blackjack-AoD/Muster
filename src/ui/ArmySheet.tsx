@@ -100,6 +100,11 @@ function UnitCard({ u }: { u: SnapUnit }) {
         <div>
           <b>{u.name}</b>
           {u.cat && <small> · {u.cat}</small>}
+          {u.dataName && (
+            <div>
+              <small class="as-unit-data">{u.dataName}</small>
+            </div>
+          )}
         </div>
         {u.pts ? <span class="as-unit-pts">{fmtN(u.pts)}</span> : null}
       </div>

@@ -1,7 +1,7 @@
 // A self-contained picture of a list (units, stats, wargear, rules) that needs no game data to show.
 // Used for the printable army sheet (PDF) and for share links that friends can open without Muster's data.
 import type { RepoState } from '../data/db';
-import { isRecord, type RSel } from '../data/engine';
+import { displayName, isRecord, type RSel } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { catalogueName, systemName } from './Lists';
 
@@ -52,7 +52,7 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
     const walk = (r: RSel, d: number, mult: number) => {
       for (const c of r.children) {
         const k = c.sel.number * mult;
-        gear.push({ d, t: `${k > 1 ? k + '× ' : ''}${c.eff.name}${c.total ? ` (${fmt(c.total * mult)})` : ''}` });
+        gear.push({ d, t: `${k > 1 ? k + '× ' : ''}${displayName(c)}${c.total ? ` (${fmt(c.total * mult)})` : ''}` });
         walk(c, d + 1, k);
       }
     };
@@ -60,7 +60,8 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
     const rules = ev.rulesFor(u);
     for (const r of rules) if (!ruleText.has(r.name)) ruleText.set(r.name, r.description);
     return {
-      name: `${u.sel.number > 1 ? u.sel.number + '× ' : ''}${u.eff.name}`,
+      name: `${u.sel.number > 1 ? u.sel.number + '× ' : ''}${displayName(u)}`,
+      ...(u.sel.name !== undefined && { dataName: u.eff.name }),
       cat: u.eff.primary ? clean(u.force.ctx.categoryName(u.eff.primary)) : '',
       pts: u.total,
       gear,
@@ -162,6 +163,7 @@ const isSnapProfile = (p: unknown) => isRecord(p) && isText(p.name) && isText(p.
 const isSnapUnit = (u: unknown) =>
   isRecord(u) &&
   isText(u.name) &&
+  (u.dataName === undefined || isText(u.dataName)) &&
   isText(u.cat) &&
   typeof u.pts === 'number' &&
   isListOf(u.gear, isGearLine) &&
@@ -175,7 +177,7 @@ const isSnapForce = (f: unknown): f is SnapForce =>
   isListOf(f.units, isSnapUnit) &&
   (f.setup === undefined || isListOf(f.setup, isText));
 
-/** Every field the sheet draws. Only `rules` and `setup` may be absent from a link. */
+/** Every field the sheet draws. Only `rules`, `setup` and a unit's `dataName` may be absent from a link. */
 function isSnapshot(s: unknown): s is Snapshot {
   return (
     isRecord(s) &&

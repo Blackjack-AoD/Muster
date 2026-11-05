@@ -1,5 +1,5 @@
 import type { RepoState } from '../data/db';
-import type { RSel } from '../data/engine';
+import { displayName, type RSel } from '../data/engine';
 import type { Roster } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { failureMessage, toast } from '../store';
@@ -21,7 +21,8 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
     const cats = rf.entry.categoryLinks.map((c) => c.targetId);
     const done = new Set<RSel>();
     const unitLines = (u: RSel) => {
-      lines.push(`${u.sel.number > 1 ? u.sel.number + '× ' : ''}${u.eff.name} [${n(u.total)}]`);
+      const dataName = u.sel.name === undefined ? '' : ` (${u.eff.name})`;
+      lines.push(`${u.sel.number > 1 ? u.sel.number + '× ' : ''}${displayName(u)}${dataName} [${n(u.total)}]`);
       // counts are totals: 5 models each with a bolter print as 5× Bolter
       const walk = (r: RSel, depth: number, mult: number) => {
         for (const c of r.children) {
