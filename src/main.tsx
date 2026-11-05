@@ -7,9 +7,10 @@ import '@fontsource/cinzel/latin-600.css';
 import '@fontsource/cinzel/latin-700.css';
 import './styles.css';
 import { App } from './app';
-import { init } from './store';
+import { failureMessage, init } from './store';
 import { registerServiceWorker } from './update';
 
-render(<App />, document.getElementById('app')!);
-init();
+const root = document.getElementById('app')!;
+render(<App />, root);
+init().catch((e) => render(<p class="error-text pad">{failureMessage('open Muster', e)}</p>, root));
 registerServiceWorker();
