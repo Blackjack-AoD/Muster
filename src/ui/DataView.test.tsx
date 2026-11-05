@@ -108,6 +108,18 @@ describe('DataView', () => {
     await expectToast("Couldn't sync: Storage is full");
   });
 
+  it('shows a repo that storage refused as failed, and gives back the sync buttons', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    await renderScreen(<App />, { files: REPO_FILES });
+    refuse('put');
+
+    addRepo('owner/data');
+
+    await screen.findByText("Couldn't sync: Storage is full", { selector: '.card .error-text' });
+    expect(screen.getByRole('button', { name: 'Sync test/repo' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Sync owner/data' })).toHaveProperty('disabled', false);
+  });
+
   it('shows the reason in a toast when removing a repo fails, and keeps the repo', async () => {
     vi.stubGlobal('confirm', () => true);
     await renderScreen(<App />, { files: REPO_FILES });

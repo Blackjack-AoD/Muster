@@ -279,11 +279,24 @@ describe('starting up', () => {
     expect(getState().toast).toBe("Couldn't sync: Storage is full");
   });
 
-  // BUG: a sync that can't record its failure stays "working", which disables every sync button until a reload
-  it.fails('stops showing a repo as working when storage refuses its failure', async () => {
+  it('stops showing a repo as working when storage refuses its failure', async () => {
     failFirstDownload();
     await init();
     expect(getState().sync[DEFAULT_REPOS[0]]?.stage).toBe('error');
+  });
+
+  it('gives the reason on the repo that failed and leaves the next repo unstarted', async () => {
+    failFirstDownload();
+    await init();
+    expect(getState().sync).toEqual({
+      [DEFAULT_REPOS[0]]: {
+        repo: DEFAULT_REPOS[0],
+        stage: 'error',
+        done: 0,
+        total: 0,
+        message: "Couldn't sync: Storage is full",
+      },
+    });
   });
 
   it('opens with no toast when the browser refuses persistent storage', async () => {
