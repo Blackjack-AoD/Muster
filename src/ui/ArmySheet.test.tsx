@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { screen } from '@testing-library/preact';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
+import { getState } from '../store';
 import { children, entry, unit, world } from '../test/fixture';
 import { renderScreen, worldFiles } from '../test/screen';
 import { encodeSnapshot, viewUrl, type Snapshot } from './snapshot';
@@ -47,6 +48,10 @@ beforeEach(async () => {
   vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
   // share links pack through Blob.stream(), which jsdom's Blob lacks; Response still makes Node's
   vi.stubGlobal('Blob', (await new Response().blob()).constructor);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('SheetPage', () => {
@@ -98,5 +103,115 @@ describe('SharedView', () => {
 
     await screen.findByText("This link doesn't contain a readable list. It may have been cut short when it was sent.");
     expect(sheetUnits()).toEqual([]);
+  });
+});
+
+describe('Share link', () => {
+  const WITH_RULES: Snapshot = { ...SHARED, rules: [['Bolter Drill', 'Fires twice.']] };
+  const CANCELLED = new DOMException('Share canceled', 'AbortError');
+  const REFUSED = new DOMException('Permission denied', 'NotAllowedError');
+
+  /** Stands in for a phone's share sheet and clipboard, which jsdom lacks. */
+  function stubSharing({ share, copy }: { share?: () => Promise<void>; copy?: () => Promise<void> }) {
+    const shared = vi.fn(share);
+    const copied = vi.fn(copy ?? (async () => {}));
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share && shared });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copied } });
+    return { shared, copied };
+  }
+
+  async function pressShareLink(snap: Snapshot) {
+    openHash(await linkHash(snap));
+    await renderScreen(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share link' }));
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'share');
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
+  it('shares a link to the list with no toast when the rule text fits', async () => {
+    const { shared, copied } = stubSharing({ share: async () => {} });
+    await pressShareLink(WITH_RULES);
+    await waitFor(() => expect(shared).toHaveBeenCalled());
+    const [data] = shared.mock.calls[0] as unknown as [ShareData];
+    expect(data.title).toBe('Friendly Fire');
+    expect(data.text).toBe('Friendly Fire · 1,275 pts');
+    expect(new URL(data.url ?? '').hash).toBe(await linkHash(WITH_RULES));
+    expect(copied).not.toHaveBeenCalled();
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('says when the shared link leaves out the rule text', async () => {
+    stubSharing({ share: async () => {} });
+    await pressShareLink(SHARED);
+    await waitFor(() => expect(getState().toast).toBe('Link shared. Rule text was left out to keep it short'));
+  });
+
+  it('shows nothing and copies nothing when the player cancels the share sheet', async () => {
+    const { shared, copied } = stubSharing({
+      share: async () => {
+        throw CANCELLED;
+      },
+    });
+    await pressShareLink(SHARED);
+    await waitFor(() => expect(shared).toHaveBeenCalled());
+    await shared.mock.results[0].value.catch(() => {});
+    expect(copied).not.toHaveBeenCalled();
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('shows the reason when the share sheet fails, and copies nothing', async () => {
+    const { copied } = stubSharing({
+      share: async () => {
+        throw REFUSED;
+      },
+    });
+    await pressShareLink(SHARED);
+    await waitFor(() => expect(getState().toast).toBe("Couldn't share: Permission denied"));
+    expect(copied).not.toHaveBeenCalled();
+  });
+
+  it('copies the link where there is no share sheet', async () => {
+    const { copied } = stubSharing({});
+    await pressShareLink(WITH_RULES);
+    await waitFor(() => expect(getState().toast).toBe('Link copied'));
+    const [url] = copied.mock.calls[0] as unknown as [string];
+    expect(new URL(url).hash).toBe(await linkHash(WITH_RULES));
+  });
+
+  it('says when the copied link leaves out the rule text', async () => {
+    stubSharing({});
+    await pressShareLink(SHARED);
+    await waitFor(() => expect(getState().toast).toBe('Link copied (rule text left out to keep it short)'));
+  });
+
+  it('shows the reason when the clipboard refuses', async () => {
+    stubSharing({
+      copy: async () => {
+        throw REFUSED;
+      },
+    });
+    await pressShareLink(SHARED);
+    await waitFor(() => expect(getState().toast).toBe("Couldn't share: Permission denied"));
+  });
+
+  it('shows the reason when the link cannot be packed', async () => {
+    const { copied } = stubSharing({});
+    openHash(await linkHash(SHARED));
+    await renderScreen(<App />);
+    const button = await screen.findByRole('button', { name: 'Share link' });
+    vi.stubGlobal(
+      'CompressionStream',
+      class {
+        constructor() {
+          throw new Error('No compression on this phone');
+        }
+      },
+    );
+    fireEvent.click(button);
+    await waitFor(() => expect(getState().toast).toBe("Couldn't share: No compression on this phone"));
+    expect(copied).not.toHaveBeenCalled();
   });
 });

@@ -55,10 +55,10 @@ describe('shareText', () => {
     expect(getState().toast).toBe('Copied to clipboard');
   });
 
-  it('says so when the clipboard refuses as well', async () => {
+  it('shows the reason when the clipboard refuses', async () => {
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
     await shareText(TEXT, TITLE);
-    expect(getState().toast).toBe("Couldn't share or copy on this device");
+    expect(getState().toast).toBe("Couldn't share: denied");
   });
 
   it('does nothing when the player cancels the share sheet', async () => {
@@ -69,19 +69,12 @@ describe('shareText', () => {
     expect(getState().toast).toBeUndefined();
   });
 
-  it('copies to the clipboard when the share sheet fails, and says so', async () => {
+  it('shows the reason when the share sheet fails, and leaves the clipboard alone', async () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
     await shareText(TEXT, TITLE);
-    expect(writeText).toHaveBeenCalledWith(TEXT);
-    expect(getState().toast).toBe('Copied to clipboard');
-  });
-
-  it('says so when the share sheet and the clipboard both fail', async () => {
-    const share = vi.fn().mockRejectedValue(REFUSED);
-    vi.stubGlobal('navigator', { share, clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
-    await shareText(TEXT, TITLE);
-    expect(getState().toast).toBe("Couldn't share or copy on this device");
+    expect(writeText).not.toHaveBeenCalled();
+    expect(getState().toast).toBe("Couldn't share: Permission denied");
   });
 });
 
