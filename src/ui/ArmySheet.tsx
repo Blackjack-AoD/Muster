@@ -120,7 +120,7 @@ async function shareLink(snap: Snapshot) {
       try {
         await navigator.share({ title: snap.name, text: `${snap.name} · ${fmtN(snap.pts)} pts`, url });
       } catch (e) {
-        await copyAfterFailedShare(url, e);
+        await copyAfterFailedShare(url, e, withRules);
         return;
       }
       if (!withRules) toast('Link shared. Rule text was left out to keep it short');

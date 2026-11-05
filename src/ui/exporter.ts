@@ -58,11 +58,12 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
 const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
 
 /** Copies `text` after the share sheet rejected with `e`, unless the player cancelled it. */
-export async function copyAfterFailedShare(text: string, e: unknown): Promise<void> {
+export async function copyAfterFailedShare(text: string, e: unknown, withRules = true): Promise<void> {
   if (isCancelled(e)) return;
   try {
     await navigator.clipboard.writeText(text);
-    toast(`${failureMessage('share', e)}. Copied it instead`);
+    const reason = failureMessage('share', e).replace(/\.$/, '');
+    toast(`${reason}. Copied it instead${withRules ? '' : ' (rule text left out to keep it short)'}`);
   } catch {
     toast(failureMessage('share', e));
   }
