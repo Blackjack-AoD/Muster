@@ -100,8 +100,7 @@ export class Evaluator {
       const ctx = this.contexts.get(f.catalogueId);
       if (!ctx) continue;
       this.pointsTypeId = ctx.pointsType()?.id ?? '';
-      const entry =
-        ctx.get(f.forceEntryId) ?? ({ id: f.forceEntryId, name: 'Force', children: [] } as unknown as EntryNode);
+      const entry = ctx.get(f.forceEntryId) ?? standInForceEntry(f.forceEntryId);
       const rf: RForce = { force: f, ctx, entry, roots: [], broken: [], total: 0 };
       const roots = rootOptionsCached(ctx);
       for (const s of f.selections) {
@@ -713,6 +712,27 @@ export function unavailableHere(eff: Eff) {
   return eff.constraints.some(
     (c) => c.type === 'max' && c.value === 0 && c.field === 'selections' && c.scope === 'parent',
   );
+}
+
+/** Takes the place of a force entry the data no longer has: it sets no limits on the force. */
+function standInForceEntry(id: string): EntryNode {
+  return {
+    id,
+    tag: 'forceEntry',
+    name: 'Force',
+    type: '',
+    hidden: false,
+    collective: false,
+    importable: true,
+    constraints: [],
+    costs: [],
+    modifiers: [],
+    categoryLinks: [],
+    profiles: [],
+    rules: [],
+    infoLinks: [],
+    children: [],
+  };
 }
 
 const forceRootCache = new WeakMap<EntryNode, Map<Context, Opt[]>>();
