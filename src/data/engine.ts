@@ -457,6 +457,14 @@ export class Evaluator {
       seenMsg.add(k);
       return true;
     });
+    // added after the filter: forces that lost their entry share this message, and each one needs its warning
+    for (const rf of this.forces)
+      if (!rf.ctx.get(rf.force.forceEntryId))
+        this.issues.push({
+          level: 'warn',
+          forceUid: rf.force.uid,
+          message: "This detachment's type is no longer in the data",
+        });
     if (this.roster.costLimit > 0 && this.total > this.roster.costLimit) {
       this.issues.push({ level: 'error', message: `Over points limit by ${fmt(this.total - this.roster.costLimit)}` });
     }
