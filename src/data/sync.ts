@@ -26,6 +26,11 @@ export interface SyncProgress {
   message?: string;
 }
 
+/** The reason a failure gives, which can be any value. */
+export function failureReason(e: unknown): string {
+  return e instanceof Error || e instanceof DOMException ? e.message : String(e);
+}
+
 async function gh(path: string) {
   const r = await fetch(`https://api.github.com${path}`, { headers: { Accept: 'application/vnd.github+json' } });
   if (r.status === 403 || r.status === 429) throw new Error('GitHub rate limit reached, try again in an hour');
@@ -74,7 +79,7 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
             text = await dataFileText(f.path, await r.arrayBuffer());
             break;
           } catch (e) {
-            if (attempt === 2) throw new Error(`Failed to download ${f.path}: ${(e as Error).message}`);
+            if (attempt === 2) throw new Error(`Failed to download ${f.path}: ${failureReason(e)}`);
           }
         }
         await db.putFile(repo, f.path, text);
@@ -101,7 +106,7 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
     });
     return state;
   } catch (e) {
-    const msg = (e as Error).message || 'Sync failed';
+    const msg = failureReason(e) || 'Sync failed';
     const state = { ...existing, error: msg };
     await db.putRepo(state);
     onProgress({ repo, stage: 'error', done: 0, total: 0, message: navigator.onLine ? msg : 'You are offline' });

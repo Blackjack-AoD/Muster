@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState } from './data/db';
 import { Evaluator, isRecord, uid, type Force, type Roster, type Sel } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
-import { DEFAULT_REPOS, syncRepo, type SyncProgress } from './data/sync';
+import { DEFAULT_REPOS, failureReason, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
 
 interface State {
@@ -64,11 +64,6 @@ export function toast(msg: string, action?: State['toastAction']) {
 export function dismissToast() {
   clearTimeout(toastTimer);
   set({ toast: undefined, toastAction: undefined });
-}
-
-/** The reason a failure gives, which can be any value. */
-export function failureReason(e: unknown): string {
-  return e instanceof Error || e instanceof DOMException ? e.message : String(e);
 }
 
 /** What to tell the player when something failed: "Couldn't <action>: <the reason given>". */
