@@ -5,7 +5,17 @@ import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
 import { DEFAULT_REPOS } from './data/sync';
-import { addRoster, deleteRoster, getState, init, removeRepo, saveRoster, toast, useRosterCtl } from './store';
+import {
+  addRoster,
+  deleteRoster,
+  getState,
+  importRosters,
+  init,
+  removeRepo,
+  saveRoster,
+  toast,
+  useRosterCtl,
+} from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
@@ -190,6 +200,52 @@ describe('a failed save', () => {
 
     expect(await db.rosters()).toEqual([]);
     expect(getState().rosters).toEqual([]);
+  });
+});
+
+describe('a Restore while a save has failed', () => {
+  it('keeps the unsaved edit in memory, beside the restored list', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    const put = await failASave();
+
+    put.mockRestore();
+    await importRosters([{ ...newList(), uid: 'restored' }]);
+
+    expect(getState().rosters.map((r) => [r.uid, unitsIn(r)])).toEqual([
+      ['restored', 0],
+      [list.uid, 1],
+    ]);
+    expect(getState().toast).toBe(SAVE_FAILED);
+  });
+
+  it('lets Retry save the edit that storage refused', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    const put = await failASave();
+
+    put.mockRestore();
+    await importRosters([{ ...newList(), uid: 'restored' }]);
+    await pressRetry();
+
+    const stored = await db.rosters();
+    expect(stored.map((r) => [r.uid, unitsIn(r)])).toEqual([
+      [list.uid, 1],
+      ['restored', 0],
+    ]);
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('reloads every list from storage when no save has failed', async () => {
+    const list = newList();
+    await renderWithToast(list);
+    await addUnit();
+    await waitFor(async () => expect(await storedUnits()).toBe(1));
+    getState().rosters[0].name = 'Changed only in memory';
+
+    await importRosters([]);
+
+    expect(getState().rosters.map((r) => r.name)).toEqual([list.name]);
   });
 });
 
