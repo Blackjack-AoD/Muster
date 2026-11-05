@@ -7,7 +7,7 @@ import { contextsFor } from '../data/library';
 import { getState, saveRoster, setGame, syncAll, toast } from '../store';
 import { Lists } from '../ui/Lists';
 import { unit, world } from './fixture';
-import { renderScreen, resetStore, worldFiles } from './screen';
+import { refuse, renderScreen, resetStore, worldFiles } from './screen';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
 
@@ -103,9 +103,7 @@ describe('between tests', () => {
   it('resetStore clears the sync status of a repo that storage refused', async () => {
     await renderScreen(<Lists />);
     vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
-    const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
-      throw new DOMException('Storage is full', 'QuotaExceededError');
-    });
+    const put = refuse('put');
     await syncAll(['no/repo']);
     put.mockRestore();
 

@@ -5,7 +5,7 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { children, entry, unit, world } from '../test/fixture';
-import { linkHash, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { expectToast, linkHash, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import type { Snapshot } from './snapshot';
 
 const UNITS =
@@ -106,8 +106,8 @@ describe('Share link', () => {
 
   /** Stands in for a phone's share sheet and clipboard, which jsdom lacks. */
   function stubSharing({ share, copy }: { share?: () => Promise<void>; copy?: () => Promise<void> }) {
-    const shared = vi.fn(share);
-    const copied = vi.fn(copy ?? (async () => {}));
+    const shared = vi.fn<(data: ShareData) => Promise<void>>(share);
+    const copied = vi.fn<(url: string) => Promise<void>>(copy ?? (async () => {}));
     Object.defineProperty(navigator, 'share', { configurable: true, value: share && shared });
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copied } });
     return { shared, copied };
@@ -128,7 +128,7 @@ describe('Share link', () => {
     const { shared, copied } = stubSharing({ share: async () => {} });
     await pressShareLink(WITH_RULES);
     await waitFor(() => expect(shared).toHaveBeenCalled());
-    const [data] = shared.mock.calls[0] as unknown as [ShareData];
+    const [data] = shared.mock.calls[0];
     expect(data.title).toBe('Friendly Fire');
     expect(data.text).toBe('Friendly Fire · 1,275 pts');
     expect(new URL(data.url ?? '').hash).toBe(await linkHash(WITH_RULES));
@@ -139,7 +139,7 @@ describe('Share link', () => {
   it('says when the shared link leaves out the rule text', async () => {
     stubSharing({ share: async () => {} });
     await pressShareLink(SHARED);
-    await waitFor(() => expect(getState().toast).toBe('Link shared. Rule text was left out to keep it short'));
+    await expectToast('Link shared. Rule text was left out to keep it short');
   });
 
   it('shows nothing and copies nothing when the player cancels the share sheet', async () => {
@@ -162,22 +162,22 @@ describe('Share link', () => {
       },
     });
     await pressShareLink(SHARED);
-    await waitFor(() => expect(getState().toast).toBe("Couldn't share: Permission denied"));
+    await expectToast("Couldn't share: Permission denied");
     expect(copied).not.toHaveBeenCalled();
   });
 
   it('copies the link where there is no share sheet', async () => {
     const { copied } = stubSharing({});
     await pressShareLink(WITH_RULES);
-    await waitFor(() => expect(getState().toast).toBe('Link copied'));
-    const [url] = copied.mock.calls[0] as unknown as [string];
+    await expectToast('Link copied');
+    const [url] = copied.mock.calls[0];
     expect(new URL(url).hash).toBe(await linkHash(WITH_RULES));
   });
 
   it('says when the copied link leaves out the rule text', async () => {
     stubSharing({});
     await pressShareLink(SHARED);
-    await waitFor(() => expect(getState().toast).toBe('Link copied (rule text left out to keep it short)'));
+    await expectToast('Link copied (rule text left out to keep it short)');
   });
 
   it('shows the reason when the clipboard refuses', async () => {
@@ -187,7 +187,7 @@ describe('Share link', () => {
       },
     });
     await pressShareLink(SHARED);
-    await waitFor(() => expect(getState().toast).toBe("Couldn't share: Permission denied"));
+    await expectToast("Couldn't share: Permission denied");
   });
 
   it('shows the reason when packing the link fails', async () => {
@@ -204,7 +204,7 @@ describe('Share link', () => {
       },
     );
     fireEvent.click(button);
-    await waitFor(() => expect(getState().toast).toBe("Couldn't share: No compression on this phone"));
+    await expectToast("Couldn't share: No compression on this phone");
     expect(copied).not.toHaveBeenCalled();
   });
 });
