@@ -684,7 +684,7 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
 
 function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
   const repos = useStore((s) => s.repos);
-  const sys = systemsOf(repos).find((s) => s.repo === ctl.roster.repo && s.gst.header!.id === ctl.roster.gameSystemId);
+  const sys = systemsOf(repos).find((s) => s.repo === ctl.roster.repo && s.gst.header.id === ctl.roster.gameSystemId);
   const [catId, setCatId] = useState(ctl.roster.forces[0]?.catalogueId);
   const [forces, setForces] = useState<{ id: string; name: string }[]>();
   const [q, setQ] = useState('');
@@ -721,17 +721,17 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
         </div>
         <div class="pick-list">
           {sys.catalogues
-            .filter((c) => c.header!.name.toLowerCase().includes(q.toLowerCase()))
+            .filter((c) => c.header.name.toLowerCase().includes(q.toLowerCase()))
             .map((c) => (
               <button
                 class="pick"
                 onClick={() => {
-                  setCatId(c.header!.id);
+                  setCatId(c.header.id);
                   setPicking(false);
                 }}
               >
                 <span>
-                  <b>{c.header!.name}</b>
+                  <b>{c.header.name}</b>
                 </span>
               </button>
             ))}

@@ -70,7 +70,7 @@ function Armies() {
     <div class="page">
       <TopBar
         title="Library"
-        sub={active ? active.gst.header!.name : 'All games'}
+        sub={active ? active.gst.header.name : 'All games'}
         right={
           <Link class="icon-btn sm" to="/games">
             <Icon name="dice" />
@@ -83,20 +83,20 @@ function Armies() {
         <input placeholder="Search armies" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
       {systems.map((s) => {
-        const cats = s.catalogues.filter((c) => c.header!.name.toLowerCase().includes(q.toLowerCase()));
+        const cats = s.catalogues.filter((c) => c.header.name.toLowerCase().includes(q.toLowerCase()));
         if (!cats.length) return null;
         return (
           <div key={s.repo + s.gst.path}>
             {!active && (
               <div class="list-label">
-                {s.gst.header!.name} <small class="muted">· {s.repo}</small>
+                {s.gst.header.name} <small class="muted">· {s.repo}</small>
               </div>
             )}
             <div class={'pick-list' + (active ? ' first' : '')}>
               {cats.map((c) => (
-                <Link class="pick" to={`/lib/${enc(s.repo)}/${encodeURIComponent(c.header!.id)}`}>
+                <Link class="pick" to={`/lib/${enc(s.repo)}/${encodeURIComponent(c.header.id)}`}>
                   <span>
-                    <b>{c.header!.name.replace(/^\d{4}\s*-\s*/, '')}</b>
+                    <b>{c.header.name.replace(/^\d{4}\s*-\s*/, '')}</b>
                   </span>
                   <Icon name="chev" />
                 </Link>
@@ -138,7 +138,7 @@ export function Compendium() {
     <>
       <TopBar
         title="Library"
-        sub={active ? active.gst.header!.name : 'All games'}
+        sub={active ? active.gst.header.name : 'All games'}
         right={
           <Link class="icon-btn sm" to="/games">
             <Icon name="dice" />

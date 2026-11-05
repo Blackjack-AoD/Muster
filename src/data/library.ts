@@ -5,17 +5,18 @@ import type { Roster } from './engine';
 import type { DataFile } from './model';
 import { parseDataFile } from './parse';
 
-export interface SystemInfo {
-  repo: string;
-  gst: FileMeta;
-  catalogues: FileMeta[]; // playable (non-library)
-  libraries: FileMeta[];
-}
-
 /** A file whose header could be read. Any other file belongs to no game. */
 interface ReadableFile extends FileMeta {
   header: FileHeader;
 }
+
+export interface SystemInfo {
+  repo: string;
+  gst: ReadableFile;
+  catalogues: ReadableFile[]; // playable (non-library)
+  libraries: ReadableFile[];
+}
+
 const isReadable = (f: FileMeta): f is ReadableFile => f.header != null;
 
 const parsed = new Map<string, DataFile>();
@@ -26,7 +27,7 @@ export function clearCaches(repo?: string) {
   for (const k of [...contexts.keys()]) if (!repo || k.startsWith(repo + '|')) contexts.delete(k);
 }
 
-export const gameKey = (s: SystemInfo) => `${s.repo}|${s.gst.header!.id}`;
+export const gameKey = (s: SystemInfo) => `${s.repo}|${s.gst.header.id}`;
 export const rosterGameKey = (r: Roster) => `${r.repo}|${r.gameSystemId}`;
 
 /** The systems to show for the chosen game: just that one, or all when none is chosen (or it's gone). */

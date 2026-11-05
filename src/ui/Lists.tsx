@@ -36,7 +36,7 @@ export function Lists() {
     <div class="page">
       <TopBar
         title="Muster"
-        sub={active ? active.gst.header!.name : 'Army lists · all games'}
+        sub={active ? active.gst.header.name : 'Army lists · all games'}
         right={
           hasData ? (
             <Link class="icon-btn sm" to="/games">
@@ -112,7 +112,7 @@ function NewList({ onClose }: { onClose: () => void }) {
   const game = useStore((s) => s.game);
   const systems = systemsOf(repos);
   const [sys, setSys] = useState<SystemInfo | undefined>(activeSystems(repos, game).active);
-  const [catId, setCatId] = useState<string>();
+  const [cat, setCat] = useState<SystemInfo['catalogues'][number]>();
   const [q, setQ] = useState('');
 
   if (!sys) {
@@ -122,7 +122,7 @@ function NewList({ onClose }: { onClose: () => void }) {
           {systems.map((s) => (
             <button class="pick" onClick={() => setSys(s)}>
               <span>
-                <b>{s.gst.header!.name}</b>
+                <b>{s.gst.header.name}</b>
                 <small>
                   {s.repo} · {s.catalogues.length} armies
                 </small>
@@ -134,8 +134,8 @@ function NewList({ onClose }: { onClose: () => void }) {
       </Sheet>
     );
   }
-  if (!catId) {
-    const list = sys.catalogues.filter((c) => c.header!.name.toLowerCase().includes(q.toLowerCase()));
+  if (!cat) {
+    const list = sys.catalogues.filter((c) => c.header.name.toLowerCase().includes(q.toLowerCase()));
     return (
       <Sheet title="Pick an army" onClose={onClose} full>
         <div class="search">
@@ -144,9 +144,9 @@ function NewList({ onClose }: { onClose: () => void }) {
         </div>
         <div class="pick-list">
           {list.map((c) => (
-            <button class="pick" onClick={() => setCatId(c.header!.id)}>
+            <button class="pick" onClick={() => setCat(c)}>
               <span>
-                <b>{c.header!.name}</b>
+                <b>{c.header.name}</b>
               </span>
               <Icon name="chev" />
             </button>
@@ -155,23 +155,23 @@ function NewList({ onClose }: { onClose: () => void }) {
       </Sheet>
     );
   }
-  return <NewListDetails sys={sys} catId={catId} onClose={onClose} onBack={() => setCatId(undefined)} />;
+  return <NewListDetails sys={sys} cat={cat} onClose={onClose} onBack={() => setCat(undefined)} />;
 }
 
 function NewListDetails({
   sys,
-  catId,
+  cat,
   onClose,
   onBack,
 }: {
   sys: SystemInfo;
-  catId: string;
+  cat: SystemInfo['catalogues'][number];
   onClose: () => void;
   onBack: () => void;
 }) {
   const repos = useStore((s) => s.repos);
   const repo = repos.find((r) => r.repo === sys.repo)!;
-  const catName = sys.catalogues.find((c) => c.header!.id === catId)!.header!.name;
+  const { id: catId, name: catName } = cat.header;
   const [state, setState] = useState<
     { forces: { id: string; name: string }[]; limit: number; ctx: Context } | { error: string }
   >();
@@ -203,7 +203,7 @@ function NewListDetails({
       uid: uid(),
       name: name.trim() || catName,
       repo: sys.repo,
-      gameSystemId: sys.gst.header!.id,
+      gameSystemId: sys.gst.header.id,
       costLimit: Number(limit) || 0,
       forces: [{ uid: uid(), forceEntryId: forceId, catalogueId: catId, selections: [] }],
       created: Date.now(),

@@ -47,14 +47,14 @@ const tidy = (name: string) => name.replace(/^\d{4}\s*-\s*/, '');
 
 export async function compendium(repo: string, sys: SystemInfo): Promise<CompRule[]> {
   const files = [sys.gst, ...sys.libraries, ...sys.catalogues];
-  const key = `${repo}|${sys.gst.header!.id}|${files.map((f) => f.sha).join(',')}`;
+  const key = `${repo}|${sys.gst.header.id}|${files.map((f) => f.sha).join(',')}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const byName = new Map<string, { name: string; versions: Map<string, RuleVersion> }>();
   for (const f of files) {
     const xml = await db.getFile(repo, f.path);
     if (!xml) continue;
-    const source = tidy(f.header!.name);
+    const source = tidy(f.header.name);
     for (const r of extractRules(xml)) {
       // the same rule is often copied into many files: one entry per name, one version per wording
       const nk = r.name.toLowerCase();

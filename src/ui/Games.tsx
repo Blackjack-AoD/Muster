@@ -49,7 +49,7 @@ export function Games() {
         {systems.map((s) => {
           const key = gameKey(s);
           const lists = rosters.filter((r) => rosterGameKey(r) === key).length;
-          const name = s.gst.header!.name;
+          const name = s.gst.header.name;
           return (
             <button class={'pick radio' + (current === s ? ' on' : '')} onClick={() => pick(key, name)}>
               <span class="dot" />
