@@ -351,7 +351,10 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
 function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
   const [name, setName] = useState(unit.name);
   const close = () => {
-    renameSavedUnit(unit.id, name.trim()).catch((e: unknown) => toast(failureMessage('rename this saved unit', e)));
+    // a saved unit always has a name, so an empty one keeps the old
+    const named = name.trim();
+    if (named)
+      renameSavedUnit(unit.id, named).catch((e: unknown) => toast(failureMessage('rename this saved unit', e)));
     onClose();
   };
   return (
