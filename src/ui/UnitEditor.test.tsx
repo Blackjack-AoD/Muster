@@ -169,6 +169,27 @@ describe('UnitEditor', () => {
     expect(copy?.children.map((c) => c.key)).toEqual(original?.children.map((c) => c.key));
     expect(copy?.uid).not.toBe(tac);
     expect(copy?.children.map((c) => c.uid)).not.toContain(fist);
+    expect(location.hash).toBe('#/r/r');
+  });
+
+  it('Split 1 parts one model from a group, with its own uid', async () => {
+    const model = entry('marine', 'Marine', 10, children(GRENADE));
+    const units = unit('tac', 'Tactical Squad', 100, children(model));
+    const w = world(units, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    const group = w.pick(tac, 'Marine', 3);
+    await openPage(w, tac, units);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split 1' }));
+
+    await waitFor(async () => {
+      const [saved] = await db.rosters();
+      expect(saved?.forces[0]?.selections[0]?.children.map((c) => c.number)).toEqual([2, 1]);
+    });
+    const [saved] = await db.rosters();
+    const [rest, split] = saved?.forces[0]?.selections[0]?.children ?? [];
+    expect(rest?.uid).toBe(group);
+    expect(split?.uid).not.toBe(group);
   });
 
   it("a wargear choice reaches the list's row and total, and is saved", async () => {

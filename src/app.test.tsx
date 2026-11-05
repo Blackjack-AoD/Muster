@@ -284,6 +284,23 @@ describe('two pop-ups', () => {
     await noPopUp();
     await waitFor(() => expect(history.state).toBeNull());
   });
+
+  it('gives the next pop-up its own step after Back closed one that took over', async () => {
+    await openListFromGames();
+    go('/');
+    fireEvent.click(await button('New list')());
+    fireEvent.click(await button('Test Army')());
+    await button('Create list')();
+    await pressBack();
+    await noPopUp();
+
+    fireEvent.click(await button('New list')());
+    await button('Test Army')();
+    await pressBack();
+
+    await noPopUp();
+    expect(location.hash).toBe('#/');
+  });
 });
 
 describe('the toast', () => {

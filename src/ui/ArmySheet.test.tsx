@@ -161,6 +161,17 @@ describe('Share link', () => {
     expect(getState().toast).toBeUndefined();
   });
 
+  it('counts a plain error named AbortError as a failure, not a cancel', async () => {
+    const { copied } = stubSharing({
+      share: async () => {
+        throw Object.assign(new Error('Stopped'), { name: 'AbortError' });
+      },
+    });
+    await pressShareLink(SHARED);
+    await expectToast("Couldn't share: Stopped. Copied it instead (rule text left out to keep it short)");
+    expect(copied).toHaveBeenCalledTimes(1);
+  });
+
   it('copies the link when the share sheet fails, and gives the reason', async () => {
     const { copied } = stubSharing({
       share: async () => {

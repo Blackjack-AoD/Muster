@@ -275,7 +275,11 @@ describe('resetAppCache', () => {
     const stored = new Set(['app-v1', 'app-v2']);
     const cacheStorage = {
       keys: vi.fn(async () => [...stored]),
-      delete: vi.fn(async (key: string) => stored.delete(key)),
+      delete: vi.fn(async (key: string) => {
+        await Promise.resolve(); // storage answers later: nothing must reload before it has
+        await Promise.resolve();
+        return stored.delete(key);
+      }),
     };
     const worker = { unregister: vi.fn(async () => true) };
     vi.stubGlobal('caches', cacheStorage);

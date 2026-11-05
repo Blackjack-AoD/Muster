@@ -67,6 +67,28 @@ describe('list actions', () => {
     expect(await storedUids()).toEqual([roster.uid]);
   });
 
+  it('Duplicate list saves a copy and opens it', async () => {
+    await openListMenu();
+
+    await press('Duplicate list');
+
+    await expectToast('List duplicated');
+    const copy = getState().rosters.find((r) => r.uid !== roster.uid);
+    expect(copy?.name).toBe('Test list (copy)');
+    expect(location.hash).toBe(`#/r/${copy?.uid}`);
+    expect((await storedUids()).sort()).toEqual([roster.uid, copy?.uid].sort());
+  });
+
+  it('Delete list removes the list and returns to Lists', async () => {
+    await openListMenu();
+
+    await press('Delete list');
+
+    await waitFor(() => expect(location.hash).toBe('#/'));
+    expect(uidsInMemory()).toEqual([]);
+    expect(await storedUids()).toEqual([]);
+  });
+
   it('shows the reason in a toast when a delete fails, and keeps the list open', async () => {
     await openListMenu();
     refuse('delete');

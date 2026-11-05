@@ -364,6 +364,77 @@ describe('RosterView', () => {
       expect(offered(await openAddSheet(button))).toEqual(['Captain']);
     });
 
+    it.each([
+      ['Add unit', ['Captain', 'Transport']],
+      ['Add HQ', ['Captain']],
+    ])('offers from the %s button only what it covers', async (button, names) => {
+      const units =
+        unit(
+          'captain',
+          'Captain',
+          100,
+          '<categoryLinks><categoryLink id="capt-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>',
+        ) +
+        unit(
+          'rhino',
+          'Transport',
+          50,
+          '<categoryLinks><categoryLink id="rhino-tr" name="Transport" targetId="tr" primary="true"/></categoryLinks>',
+        );
+      const data = {
+        gst: `<categoryEntries>
+            <categoryEntry id="hq" name="HQ"/>
+            <categoryEntry id="tr" name="Transport"/>
+          </categoryEntries>
+          <forceEntries>
+            <forceEntry id="det" name="Detachment">
+              <categoryLinks>
+                <categoryLink id="det-hq" name="HQ" targetId="hq" primary="false"/>
+                <categoryLink id="det-tr" name="Transport" targetId="tr" primary="false"/>
+              </categoryLinks>
+            </forceEntry>
+          </forceEntries>`,
+      };
+      await openList(world(units, data), units, data);
+
+      expect(offered(await openAddSheet(button))).toEqual(names);
+    });
+
+    it('counts the number on a selection against a parent limit, not its rows', async () => {
+      const units =
+        unit(
+          'term',
+          'Terminators',
+          100,
+          `<constraints>
+            <constraint id="term-max" type="max" field="selections" scope="parent" value="2"/>
+          </constraints>`,
+        ) + ASSAULT;
+      const w = world(units);
+      w.add('Terminators', 2);
+      await openList(w, units);
+
+      expect(offered(await openAddSheet('Add unit'))).toEqual(['Assault Squad']);
+    });
+
+    it('swiping a unit right puts a copy straight after it', async () => {
+      const w = world(UNITS);
+      const tac = w.add('Tactical Squad');
+      w.add('Assault Squad');
+      await openList(w);
+
+      const [row] = document.querySelectorAll<HTMLElement>('.unit-row');
+      drag(row, [[SWIPE, 0]]);
+
+      await waitFor(async () => {
+        const [saved] = await db.rosters();
+        expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['tac', 'tac', 'assault']);
+      });
+      const [saved] = await db.rosters();
+      expect(saved?.forces[0]?.selections[0]?.uid).toBe(tac);
+      expect(saved?.forces[0]?.selections[1]?.uid).not.toBe(tac);
+    });
+
     it('drops an entry from the open sheet when a swipe takes the last one', async () => {
       const units =
         entry(

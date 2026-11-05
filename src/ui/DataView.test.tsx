@@ -55,6 +55,7 @@ describe('DataView', () => {
       const [saved] = await db.repos();
       expect(saved?.files.map((f) => f.path)).toEqual(['armies/test.cat', 'test.gst']);
       expect(await db.getFile('owner/data', 'armies/test.cat')).toBe(CAT);
+      expect(getState().toast).toBeUndefined();
     },
   );
 
@@ -229,7 +230,7 @@ describe('DataView', () => {
 
     fireEvent.change(screen.getByLabelText('Import data files or a repo .zip'), { target: { files: [damaged] } });
 
-    await waitFor(() => expect(getState().toast).toMatch(/^Couldn't import: /));
+    await expectToast("Couldn't import: Not a zip file");
     expect(await db.repos()).toEqual([]);
   });
 

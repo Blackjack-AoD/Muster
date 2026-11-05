@@ -8,6 +8,7 @@ const TEXT = 'Strike Force, 1000 pts';
 const TITLE = 'Strike Force';
 const CANCELLED = new DOMException('Share canceled', 'AbortError');
 const REFUSED = new DOMException('Permission denied', 'NotAllowedError');
+const NAMED_ABORT = Object.assign(new Error('Stopped'), { name: 'AbortError' });
 
 function stubDownloads() {
   const madeFrom: Blob[] = [];
@@ -69,6 +70,14 @@ describe('shareText', () => {
     expect(getState().toast).toBeUndefined();
   });
 
+  it('counts a plain error named AbortError as a failure, not a cancel', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(NAMED_ABORT), clipboard: { writeText } });
+    await shareText(TEXT, TITLE);
+    expect(writeText).toHaveBeenCalledWith(TEXT);
+    expect(getState().toast).toBe("Couldn't share: Stopped. Copied it instead");
+  });
+
   it('copies the text when the share sheet fails, and gives the reason', async () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
@@ -120,7 +129,8 @@ describe('shareBackup', () => {
   const BACKUP_NAME = 'muster-lists-2026-11-05.json';
   const backup = { app: 'muster', version: 1, rosters: [roster] };
 
-  it('shares a dated backup file where the device can share files', async () => {
+  it('shares a dated backup file where the device can share files, and downloads nothing', async () => {
+    const { downloads } = stubDownloads();
     const share = vi.fn<(data: { files: File[]; title: string }) => Promise<void>>(async () => {});
     vi.stubGlobal('navigator', { canShare: () => true, share });
     await shareBackup([roster]);
@@ -128,6 +138,7 @@ describe('shareBackup', () => {
     expect(title).toBe('Muster lists backup');
     expect(files.map((f) => f.name)).toEqual([BACKUP_NAME]);
     expect(JSON.parse(await files[0].text())).toEqual(backup);
+    expect(downloads).toEqual([]);
   });
 
   it('downloads the same backup where the device cannot share files', async () => {
@@ -146,6 +157,14 @@ describe('shareBackup', () => {
     await shareBackup([roster]);
     expect(downloads).toEqual([]);
     expect(getState().toast).toBeUndefined();
+  });
+
+  it('counts a plain error named AbortError as a failure, and downloads the backup', async () => {
+    const { downloads } = stubDownloads();
+    vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(NAMED_ABORT) });
+    await shareBackup([roster]);
+    expect(getState().toast).toBe("Couldn't share: Stopped");
+    expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
   });
 
   it('shows the reason in a toast when the share sheet fails, and downloads the backup instead', async () => {

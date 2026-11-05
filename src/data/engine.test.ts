@@ -6,6 +6,7 @@ import {
   duplicateSel,
   fmt,
   forceRootOptions,
+  isRecord,
   issuesOn,
   locate,
   removeSel,
@@ -1087,6 +1088,24 @@ describe('validation', () => {
           'Squad',
           0,
           mods(`<modifier type="set" field="hidden" value="false">${OTHER_TAKEN}</modifier>`, SELF_HIDE),
+        ) + unit('x', 'Other', 0),
+      );
+      w.add('Squad');
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it('applies a guarded hide and a guarded show in their order', () => {
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          mods(
+            `<modifier type="set" field="hidden" value="true">${OTHER_TAKEN}</modifier>`,
+            `<modifier type="set" field="hidden" value="false">${OTHER_TAKEN}</modifier>`,
+            SELF_HIDE,
+          ),
         ) + unit('x', 'Other', 0),
       );
       w.add('Squad');
@@ -2206,6 +2225,15 @@ describe('fmt', () => {
   });
 });
 
+describe('isRecord', () => {
+  it.each([['text'], [1], [null], [undefined]])('says %s is not an object', (value) => {
+    expect(isRecord(value)).toBe(false);
+  });
+  it('says a parsed object is one', () => {
+    expect(isRecord(JSON.parse('{}'))).toBe(true);
+  });
+});
+
 describe('duplicateSel', () => {
   const squad = () => {
     const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 5))) + unit('x', 'Other'));
@@ -2229,6 +2257,15 @@ describe('duplicateSel', () => {
     expect(copy?.children.map((c) => [c.key, c.number])).toEqual([[w.beneath(u, 'Gun').key, 1]]);
   });
 
+  it('gives new uids all the way down', () => {
+    const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, children(entry('g', 'Gun'))))));
+    const u = w.add('Squad');
+    const gun = w.pick(w.pick(u, 'Model'), 'Gun');
+    const copy = duplicateSel(w.roster, u);
+    expect(copy?.children[0].children).toHaveLength(1);
+    expect(copy?.children[0].children.map((c) => c.uid)).not.toContain(gun);
+  });
+
   it('adds nothing for a selection that is not there', () => {
     const { w } = squad();
     expect(duplicateSel(w.roster, 'gone')).toBeNull();
@@ -2249,6 +2286,15 @@ describe('issuesOn', () => {
     const ev = w.ev();
     return issuesOn(ev, present(ev.find(uid), 'the selection')).map((i) => i.message);
   };
+
+  it('finds an issue two levels beneath the unit', () => {
+    const gun = entry('g', 'Gun', 0, cons(max(1)));
+    const model = entry('m', 'Model', 0, children(entry('h', 'Hand', 0, children(gun))));
+    const w = world(unit('u', 'Squad', 0, children(model)));
+    const u = w.add('Squad');
+    w.pick(w.pick(w.pick(u, 'Model'), 'Hand'), 'Gun', 2);
+    expect(messages(w, u)).toEqual(['Hand › Gun: at most 1 allowed (has 2)']);
+  });
 
   it('gives the issues on a selection and on anything beneath it', () => {
     const { w, u, m } = unitWithLimit();

@@ -52,6 +52,15 @@ describe('conditions counting inside the selection itself', () => {
     expect(w.sel(s).eff.name).toBe(name);
   });
 
+  it('reads no entry from primary-category, which also is a word', () => {
+    const inCategory = cons(
+      '<constraint id="c" type="max" value="1" field="selections" scope="primary-category" includeChildSelections="true"/>',
+    );
+    const w = world(unit('squad', 'Squad', 0, children(entry('g', 'Gun', 0, inCategory))));
+    w.pick(w.add('Squad'), 'Gun', 2);
+    expect(w.errors()).toEqual([]);
+  });
+
   it('multiplies by the number of the selections in between', () => {
     const w = ranked();
     const s = w.add('Squad');

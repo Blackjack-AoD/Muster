@@ -137,8 +137,8 @@ describe('adding a list', () => {
     await renderScreen(<p>Lists</p>);
     const list = newList();
     await addRoster(list);
-    list.name = 'Edited later';
-    expect(getState().rosters.map((r) => r.name)).toEqual(['Test list']);
+    list.forces[0].uid = 'edited later';
+    expect(getState().rosters.map((r) => r.forces[0].uid)).toEqual(['f1']);
   });
 });
 
