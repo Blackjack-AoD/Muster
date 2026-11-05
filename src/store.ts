@@ -129,9 +129,9 @@ export async function saveRoster(r: Roster) {
 
 /** Storage first, unlike `saveRoster`: a list that storage refuses has no Retry, so it can't wait in memory. */
 export async function addRoster(r: Roster) {
-  r.updated = Date.now();
-  await db.putRoster(r);
-  set({ rosters: [...state.rosters, structuredClone(r)] });
+  const saved = { ...structuredClone(r), updated: Date.now() };
+  await db.putRoster(saved);
+  set({ rosters: [...state.rosters, saved] });
 }
 
 export async function deleteRoster(u: string) {
