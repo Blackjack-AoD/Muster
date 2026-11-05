@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { screen } from '@testing-library/preact';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { options } from 'preact';
+import { useEffect } from 'preact/hooks';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { db } from '../data/db';
 import { Evaluator, type Roster } from '../data/engine';
 import { contextsFor } from '../data/library';
@@ -13,7 +15,23 @@ const UNITS = unit('tac', 'Tactical Squad', 100);
 
 afterEach(() => vi.unstubAllGlobals());
 
+function WithCleanUp({ cleanUp }: { cleanUp: () => void }) {
+  useEffect(() => cleanUp, [cleanUp]);
+  return null;
+}
+
 describe('renderScreen', () => {
+  it("has run a screen's effect clean-ups by the time the test ends", async () => {
+    // Preact runs them after the next paint, which can be after the file's window is gone
+    options.requestAnimationFrame = () => {};
+    const cleanUp = vi.fn();
+    onTestFinished(() => {
+      Reflect.deleteProperty(options, 'requestAnimationFrame');
+      expect(cleanUp).toHaveBeenCalledOnce();
+    });
+    await renderScreen(<WithCleanUp cleanUp={cleanUp} />);
+  });
+
   it('renders a Preact component in a file that opts in to jsdom', async () => {
     await renderScreen(<p>Muster on a test page</p>, { files: worldFiles(UNITS) });
     expect(screen.queryByText('Muster on a test page')?.tagName).toBe('P');

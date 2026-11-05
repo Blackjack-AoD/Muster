@@ -1,6 +1,6 @@
 // Renders a screen on the real store, with data and lists seeded into fake-indexeddb.
 import 'fake-indexeddb/auto';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { h, type ComponentChild } from 'preact';
 import { afterEach, expect, vi } from 'vitest';
 import { App } from '../app';
@@ -105,6 +105,7 @@ export async function resetStore(): Promise<void> {
 }
 
 afterEach(async () => {
-  cleanup();
+  // Preact leaves effect clean-ups for after the next paint, which can be after the file's window has gone
+  await act(cleanup);
   await resetStore();
 });
