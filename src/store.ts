@@ -296,9 +296,36 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   saveEdit(r);
 }
 
-export async function renameSavedUnit(_id: string, _name: string): Promise<void> {}
+/** Changes every copy of saved unit `id` in every list, and saves each list that holds one as an edit. */
+function changeCopies(id: string, change: (copy: Sel) => void) {
+  const holds = (r: Roster) => r.forces.some((f) => f.selections.some((s) => s.saved === id));
+  for (const held of state.rosters.filter(holds)) {
+    const r = structuredClone(held);
+    for (const f of r.forces) for (const s of f.selections) if (s.saved === id) change(s);
+    saveEdit(r);
+  }
+}
 
-export async function deleteSavedUnit(_id: string): Promise<void> {}
+export async function renameSavedUnit(id: string, name: string): Promise<void> {
+  const saved = state.savedUnits.find((u) => u.id === id);
+  if (!saved) return;
+  const renamed = { ...saved, name, updated: Date.now() };
+  await db.putSavedUnit(renamed);
+  set({ savedUnits: state.savedUnits.map((u) => (u.id === id ? renamed : u)) });
+  changeCopies(id, (copy) => {
+    copy.name = name;
+  });
+}
+
+/** Its copies become normal units: each list keeps the build and loses the link and the name. */
+export async function deleteSavedUnit(id: string): Promise<void> {
+  await db.delSavedUnit(id);
+  set({ savedUnits: state.savedUnits.filter((u) => u.id !== id) });
+  changeCopies(id, (copy) => {
+    delete copy.saved;
+    delete copy.name;
+  });
+}
 
 // ---------- roster controller ----------
 export interface RosterCtl {
