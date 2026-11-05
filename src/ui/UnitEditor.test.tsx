@@ -361,6 +361,74 @@ describe('UnitEditor', () => {
     expect(rows()).toEqual(['1× Brother Kael', '1× Marine']);
   });
 
+  it('More adds a model to an unnamed row, never to a named one', async () => {
+    await openSquad([1, 1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [1, 'Brother Kael'],
+        [2, undefined],
+      ]),
+    );
+  });
+
+  it('More adds a new unnamed row when every row of that model is named', async () => {
+    await openSquad([1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [1, 'Brother Kael'],
+        [1, undefined],
+      ]),
+    );
+  });
+
+  it('More in a full group swaps a model in without adding to a named row', async () => {
+    const scout = entry('scout', 'Scout', 5, children(GRENADE), 'type="model"');
+    const units = unit(
+      'tac',
+      'Tactical Squad',
+      100,
+      `<selectionEntryGroups>
+        <selectionEntryGroup id="squad" name="Squad">
+          <constraints>
+            <constraint id="squad-max" type="max" field="selections" scope="parent" value="3"/>
+          </constraints>
+          ${children(MARINE, scout)}
+        </selectionEntryGroup>
+      </selectionEntryGroups>`,
+    );
+    const w = world(units, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Scout', 2);
+    w.pick(tac, 'Marine');
+    const kael = w.roster.forces[0]?.selections[0]?.children[1];
+    if (kael) kael.name = 'Brother Kael';
+    await openPage(w, tac, units);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [1, undefined],
+        [1, 'Brother Kael'],
+        [1, undefined],
+      ]),
+    );
+  });
+
+  it('Fewer takes a model from the latest row first, named or not', async () => {
+    await openSquad([3, 1], { 1: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fewer Marine' }));
+
+    await waitFor(async () => expect(await savedModels()).toEqual([[3, undefined]]));
+  });
+
   it('offers renaming in a list, and none in a read-only preview', () => {
     const w = world(SQUAD);
     const tac = w.add('Tactical Squad');
