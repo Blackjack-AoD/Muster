@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { go } from '../app';
 import {
+  addSavedUnit,
   addSel,
+  displayName,
   duplicateSel,
+  Evaluator,
   forceRootOptions,
   issuesOn,
   locate,
   removeSel,
   uid,
   unavailable,
-  type Evaluator,
+  type AddSavedResult,
   type Issue,
   type RForce,
   type RSel,
   type Roster,
 } from '../data/engine';
 import type { Context, Opt } from '../data/catalog';
+import type { SavedUnit } from '../data/db';
 import { getContext, systemsOf } from '../data/library';
 import {
   addRoster,
@@ -437,8 +441,9 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
         <div class="ur-main">
           <div class="ur-name">
             {u.sel.number > 1 ? `${u.sel.number}× ` : ''}
-            {u.eff.name}
+            {displayName(u)}
           </div>
+          {u.sel.name !== undefined && <div class="ur-sub ur-data">{u.eff.name}</div>}
           {summary && <div class="ur-sub">{summary}</div>}
         </div>
         {noted && (
@@ -459,15 +464,42 @@ function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: s
   return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
 }
 
+/**
+ * What adding a saved unit to this detachment would do, tried on a copy of the list:
+ * its price, why its row can't add it, or null when it isn't offered here at all.
+ */
+function trySaved(ctl: RosterCtl, rf: RForce, unit: SavedUnit): { pts: number } | { refused: string } | null {
+  const copy = structuredClone(ctl.roster);
+  const res = addSavedUnit(copy, ctl.contexts, rf.force.uid, unit);
+  if (res.added) return { pts: new Evaluator(copy, ctl.contexts).find(res.uid)?.total ?? 0 };
+  switch (res.reason) {
+    case 'already-in-list':
+      return { refused: 'Added' };
+    case 'unit-gone':
+      return { refused: 'No longer in the data' };
+    case 'no-detachment':
+    case 'other-army-file':
+      return null;
+    default:
+      return res.reason satisfies never;
+  }
+}
+
+const droppedMessage = (n: number) =>
+  n === 1 ? '1 option is no longer in the data' : `${n} options are no longer in the data`;
+
 function PickRow({
   name,
   pts,
+  refused,
   added,
   onTap,
   onSwipe,
 }: {
   name: string;
   pts: number;
+  /** why it can't be added, shown in place of the price */
+  refused?: string;
   added: number;
   onTap: () => void;
   onSwipe: () => void;
@@ -488,7 +520,7 @@ function PickRow({
           <b>{name}</b>
         </span>
         <span class="pick-pts">
-          {fmtN(pts)}
+          {refused ?? fmtN(pts)}
           {added > 0 && (
             <small class="pick-added" aria-label={`${added} added`}>
               {' '}
@@ -512,6 +544,18 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
   }, [rf, cat, ctl.ev]);
   const pt = ctl.ev.pointsTypeId;
   const shown = options.filter((x) => x.eff.name.toLowerCase().includes(q.toLowerCase()));
+  const savedUnits = useStore((s) => s.savedUnits);
+  const saved = useMemo(
+    () =>
+      savedUnits
+        .filter((u) => !cat || u.categoryId === cat)
+        .flatMap((unit) => {
+          const tried = trySaved(ctl, rf, unit);
+          return tried ? [{ unit, tried }] : [];
+        }),
+    [savedUnits, rf, cat, ctl.ev],
+  );
+  const savedShown = saved.filter(({ unit }) => unit.name.toLowerCase().includes(q.toLowerCase()));
   const groups = new Map<string, typeof shown>();
   for (const x of shown) groups.set(x.cat ?? '', [...(groups.get(x.cat ?? '') ?? []), x]);
 
@@ -522,6 +566,22 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
     });
     onClose();
     if (newUid) go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
+  };
+  /** Returns the new copy's uid, or null when the list refused it. */
+  const addSaved = (unit: SavedUnit): string | null => {
+    const out: { res?: AddSavedResult } = {};
+    ctl.mutate((r) => {
+      out.res = addSavedUnit(r, ctl.contexts, rf.force.uid, unit);
+    });
+    if (!out.res?.added) return null;
+    if (out.res.dropped > 0) toast(droppedMessage(out.res.dropped));
+    return out.res.uid;
+  };
+  const openSaved = (unit: SavedUnit) => {
+    const newUid = addSaved(unit);
+    if (!newUid) return;
+    onClose();
+    go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
   };
   // swipe right: add with standard options and stay here; counts shown only while this list is open
   const [quick, setQuick] = useState<Record<string, number>>({});
@@ -538,9 +598,37 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
         <Icon name="search" size={18} />
         <input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      <div class="pick-list" role="group" aria-label="Saved units" />
-      {!shown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
-      {shown.length > 0 && (
+      {savedShown.length > 0 && (
+        <>
+          <div class="list-label">Saved</div>
+          <div class="pick-list" role="group" aria-label="Saved units">
+            {savedShown.map(({ unit, tried }) =>
+              'pts' in tried ? (
+                <PickRow
+                  key={unit.id}
+                  name={unit.name}
+                  pts={tried.pts}
+                  added={0}
+                  onTap={() => openSaved(unit)}
+                  onSwipe={() => addSaved(unit)}
+                />
+              ) : (
+                <PickRow
+                  key={unit.id}
+                  name={unit.name}
+                  pts={0}
+                  refused={tried.refused}
+                  added={0}
+                  onTap={() => {}}
+                  onSwipe={() => {}}
+                />
+              ),
+            )}
+          </div>
+        </>
+      )}
+      {!shown.length && !savedShown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
+      {shown.length + savedShown.length > 0 && (
         <p class="muted small pad-x pick-hint">
           Tap to add and open a unit. Swipe right to add it with its standard options.
         </p>
