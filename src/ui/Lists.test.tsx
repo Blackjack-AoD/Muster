@@ -1,0 +1,55 @@
+// @vitest-environment jsdom
+import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { App } from '../app';
+import { db } from '../data/db';
+import { unit, world } from '../test/fixture';
+import { renderScreen, worldFiles } from '../test/screen';
+import { Lists } from './Lists';
+
+const UNITS = unit('tac', 'Tactical Squad', 100);
+
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
+  history.replaceState(null, '', '#/');
+});
+
+describe('Lists', () => {
+  it('creating a list saves it and opens it', async () => {
+    await renderScreen(<App />, { files: worldFiles(UNITS) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New list' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Army' }));
+    const create = await screen.findByRole('button', { name: 'Create list' });
+    fireEvent.input(screen.getByLabelText('List name'), { target: { value: 'Strike Force' } });
+    fireEvent.input(screen.getByLabelText('Points limit'), { target: { value: '1500' } });
+    fireEvent.click(create);
+
+    await waitFor(() => expect(location.hash).toMatch(/^#\/r\/./));
+    const [saved] = await db.rosters();
+    expect(saved).toMatchObject({
+      name: 'Strike Force',
+      repo: 'test/repo',
+      gameSystemId: 'gst',
+      costLimit: 1500,
+      forces: [{ forceEntryId: 'det', catalogueId: 'cat', selections: [] }],
+    });
+    expect(location.hash).toBe(`#/r/${saved?.uid}`);
+    await screen.findByRole('heading', { name: 'Strike Force' });
+    await waitFor(() => expect(document.querySelector('.pts')?.textContent).toBe('0/1,500pts'));
+  });
+
+  it("shows each saved list's name on a card that opens it", async () => {
+    const { roster } = world(UNITS);
+    await renderScreen(<Lists />, {
+      files: worldFiles(UNITS),
+      rosters: [
+        { ...roster, uid: 'one', name: 'Strike Force' },
+        { ...roster, uid: 'two', name: 'Patrol' },
+      ],
+    });
+
+    expect(screen.getByRole('link', { name: /Strike Force/ }).getAttribute('href')).toBe('#/r/one');
+    expect(screen.getByRole('link', { name: /Patrol/ }).getAttribute('href')).toBe('#/r/two');
+  });
+});
