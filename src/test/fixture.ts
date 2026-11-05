@@ -34,6 +34,41 @@ export const conds = (...c: string[]) => `<conditions>${c.join('')}</conditions>
 export const group = (inner: string, attrs = '') =>
   `<selectionEntryGroups><selectionEntryGroup id="grp" name="Weapons" ${attrs}>${inner}</selectionEntryGroup></selectionEntryGroups>`;
 
+export const ASSAULT = unit('assault', 'Assault Squad', 80);
+export const SWORD = entry(
+  'sword',
+  'Sword',
+  5,
+  `<constraints>
+    <constraint id="sword-min" type="min" field="selections" scope="parent" value="1"/>
+    <constraint id="sword-max" type="max" field="selections" scope="parent" value="1"/>
+  </constraints>`,
+);
+/** A required Sergeant; `gear` holds what can sit beneath him. */
+export const sergeant = (gear = '') =>
+  entry(
+    'sgt',
+    'Sergeant',
+    20,
+    `<constraints>
+      <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
+      <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
+    </constraints>${gear}`,
+  );
+/** A Tactical Squad that the data hides once a list has an Assault Squad. */
+export const RULED_OUT_BY_ASSAULT = unit(
+  'tac',
+  'Tactical Squad',
+  100,
+  `<modifiers>
+    <modifier type="set" field="hidden" value="true">
+      <conditions>
+        <condition type="atLeast" value="1" field="selections" scope="force" childId="assault"/>
+      </conditions>
+    </modifier>
+  </modifiers>`,
+);
+
 export interface WorldOptions {
   /** extra XML inside the game system; defaults to a force entry with no category limits */
   gst?: string;

@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/preact';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
-import { children, entry, unit, world } from '../test/fixture';
+import { ASSAULT, RULED_OUT_BY_ASSAULT, SWORD, children, cons, entry, sergeant, unit, world } from '../test/fixture';
 import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const FIST = entry(
@@ -26,37 +26,11 @@ const SPECIAL = `<selectionEntryGroups>
 const UNITS = unit('tac', 'Tactical Squad', 100, children(FIST, GRENADE) + SPECIAL);
 
 const voxUnit = (constraints: string) =>
-  unit(
-    'tac',
-    'Tactical Squad',
-    100,
-    children(entry('vox', 'Vox Caster', 10, `<constraints>${constraints}</constraints>`)),
-  );
+  unit('tac', 'Tactical Squad', 100, children(entry('vox', 'Vox Caster', 10, cons(constraints))));
 const VOX_OPTIONAL = voxUnit('<constraint id="vox-max" type="max" field="selections" scope="parent" value="1"/>');
 const VOX_REQUIRED = voxUnit(`
   <constraint id="vox-min" type="min" field="selections" scope="parent" value="1"/>
   <constraint id="vox-max" type="max" field="selections" scope="parent" value="1"/>`);
-
-const sergeant = (gear = '') =>
-  entry(
-    'sgt',
-    'Sergeant',
-    20,
-    `<constraints>
-      <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
-      <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
-    </constraints>${gear}`,
-  );
-const SWORD = entry(
-  'sword',
-  'Sword',
-  5,
-  `<constraints>
-    <constraint id="sword-min" type="min" field="selections" scope="parent" value="1"/>
-    <constraint id="sword-max" type="max" field="selections" scope="parent" value="1"/>
-  </constraints>`,
-);
-const ASSAULT = unit('assault', 'Assault Squad', 80);
 
 const topPoints = () => document.querySelector('.topbar .pts')?.textContent;
 
@@ -233,19 +207,7 @@ describe('UnitEditor', () => {
   });
 
   it('shows a unit that the choices rule out as a warning', async () => {
-    const units =
-      unit(
-        'tac',
-        'Tactical Squad',
-        100,
-        `<modifiers>
-          <modifier type="set" field="hidden" value="true">
-            <conditions>
-              <condition type="atLeast" value="1" field="selections" scope="force" childId="assault"/>
-            </conditions>
-          </modifier>
-        </modifiers>`,
-      ) + ASSAULT;
+    const units = RULED_OUT_BY_ASSAULT + ASSAULT;
     const w = world(units);
     const sel = w.add('Tactical Squad');
     w.add('Assault Squad');

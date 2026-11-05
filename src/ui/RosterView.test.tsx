@@ -4,21 +4,21 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import { addMandatoryRoots } from '../data/setup';
-import { children, entry, unit, world, type WorldOptions } from '../test/fixture';
+import {
+  ASSAULT,
+  RULED_OUT_BY_ASSAULT,
+  SWORD,
+  children,
+  entry,
+  sergeant,
+  unit,
+  world,
+  type WorldOptions,
+} from '../test/fixture';
 import { drag, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { SWIPE } from './swipe';
 
-const SERGEANT = entry(
-  'sgt',
-  'Sergeant',
-  20,
-  `<constraints>
-    <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
-    <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
-  </constraints>`,
-);
-const ASSAULT = unit('assault', 'Assault Squad', 80);
-const UNITS = unit('tac', 'Tactical Squad', 100, children(SERGEANT)) + ASSAULT;
+const UNITS = unit('tac', 'Tactical Squad', 100, children(sergeant())) + ASSAULT;
 
 /** Waits for the list itself, as its heading also shows while the data loads. */
 async function openList(w: ReturnType<typeof world>, units = UNITS, data: Pick<WorldOptions, 'gst'> = {}) {
@@ -136,24 +136,6 @@ describe('RosterView', () => {
   });
 
   describe('warnings on a unit row', () => {
-    const SWORD = entry(
-      'sword',
-      'Sword',
-      5,
-      `<constraints>
-        <constraint id="sword-min" type="min" field="selections" scope="parent" value="1"/>
-        <constraint id="sword-max" type="max" field="selections" scope="parent" value="1"/>
-      </constraints>`,
-    );
-    const ARMED_SERGEANT = entry(
-      'sgt',
-      'Sergeant',
-      20,
-      `<constraints>
-        <constraint id="sgt-min" type="min" field="selections" scope="parent" value="1"/>
-        <constraint id="sgt-max" type="max" field="selections" scope="parent" value="1"/>
-      </constraints>${children(SWORD)}`,
-    );
     const BARE = unit('tac', 'Tactical Squad', 100);
 
     it('marks a unit that has lost wargear with a note', async () => {
@@ -165,7 +147,7 @@ describe('RosterView', () => {
     });
 
     it('marks a unit for a warning on a selection under it', async () => {
-      const w = world(unit('tac', 'Tactical Squad', 100, children(ARMED_SERGEANT)));
+      const w = world(unit('tac', 'Tactical Squad', 100, children(sergeant(children(SWORD)))));
       w.add('Tactical Squad');
       await openList(w, UNITS);
 
@@ -173,19 +155,7 @@ describe('RosterView', () => {
     });
 
     it('marks a unit that the choices rule out with a note', async () => {
-      const units =
-        unit(
-          'tac',
-          'Tactical Squad',
-          100,
-          `<modifiers>
-            <modifier type="set" field="hidden" value="true">
-              <conditions>
-                <condition type="atLeast" value="1" field="selections" scope="force" childId="assault"/>
-              </conditions>
-            </modifier>
-          </modifiers>`,
-        ) + ASSAULT;
+      const units = RULED_OUT_BY_ASSAULT + ASSAULT;
       const w = world(units);
       w.add('Tactical Squad');
       w.add('Assault Squad');
@@ -207,7 +177,7 @@ describe('RosterView', () => {
             <constraint id="vet-max" type="max" field="selections" scope="parent" value="1"/>
           </constraints>${inner}`,
         );
-      const w = world(UNITS + capped(children(SERGEANT)));
+      const w = world(UNITS + capped(children(sergeant())));
       w.add('Tactical Squad');
       w.add('Veteran Squad', 3);
       await openList(w, BARE + capped());
