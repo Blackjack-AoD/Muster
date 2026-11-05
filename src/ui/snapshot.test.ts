@@ -225,6 +225,39 @@ describe('share links', () => {
     ])('reject a list with %s', async (_what, broken) => {
       await expect(decodeSnapshot(await pack(broken))).rejects.toThrow('Not a Muster list');
     });
+
+    describe('that a link unpacks to', () => {
+      const MB5 = 5_000_000;
+      const ofSize = (bytes: number) => {
+        const padding = bytes - JSON.stringify({ ...FULL, name: '' }).length;
+        return { ...FULL, name: 'x'.repeat(padding) };
+      };
+      it('opens at exactly 5 MB', async () => {
+        const link = await pack(ofSize(MB5));
+        expect((await decodeSnapshot(link)).name).toHaveLength(ofSize(MB5).name.length);
+      });
+      it('stops one byte past 5 MB', async () => {
+        await expect(decodeSnapshot(await pack(ofSize(MB5 + 1)))).rejects.toThrow('too big');
+      });
+    });
+
+    describe('with many units', () => {
+      const units = (n: number) => Array.from({ length: n }, () => servitor);
+      it('opens at 2,000 units', async () => {
+        const link = await pack(withForce({ units: units(2000) }));
+        expect((await decodeSnapshot(link)).forces[0].units).toHaveLength(2000);
+      });
+      it('rejects 2,001 units, counted across every detachment', async () => {
+        const split = {
+          ...FULL,
+          forces: [
+            { ...force, units: units(1001) },
+            { ...force, units: units(1000) },
+          ],
+        };
+        await expect(decodeSnapshot(await pack(split))).rejects.toThrow('Not a Muster list');
+      });
+    });
   });
 
   it('reject garbage', async () => {

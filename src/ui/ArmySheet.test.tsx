@@ -34,6 +34,10 @@ const SHARED: Snapshot = {
 
 /** Packs a value no Snapshot type allows, as a damaged or hand-made link would hold. */
 const linkHashOf = (value: unknown) => linkHash(value as Snapshot);
+const tooManyUnits: Snapshot = {
+  ...SHARED,
+  forces: [{ ...SHARED.forces[0], units: Array.from({ length: 2001 }, () => SHARED.forces[0].units[0]) }],
+};
 /** Each unit on the sheet as its name and the points it shows. */
 const sheetUnits = () =>
   [...document.querySelectorAll('.as-unit')].map((card) => [
@@ -89,6 +93,8 @@ describe('SharedView', () => {
     { broken: 'a link with a stray percent sign', hash: async () => '#/view/abc%' },
     { broken: 'a list missing the fields the sheet reads', hash: () => linkHashOf({ ...SHARED, forces: [{}] }) },
     { broken: 'a list from a newer Muster', hash: () => linkHashOf({ ...SHARED, v: 2 }) },
+    { broken: 'a link that unpacks past 5 MB', hash: () => linkHashOf({ ...SHARED, name: 'x'.repeat(5_000_001) }) },
+    { broken: 'a link with too many units', hash: () => linkHash(tooManyUnits) },
   ])('shows the readable error for $broken', async ({ hash }) => {
     openHash(await hash());
 
