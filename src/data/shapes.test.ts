@@ -722,6 +722,32 @@ describe('selection limits scoped to an entry id', () => {
     expect(w.errors()).toEqual([]);
   });
 
+  it('gives each unit over the cap its own issue', () => {
+    const w = armoury(MAX_ONE);
+    const voxTwice = () => {
+      const s = w.add('Squad');
+      w.pick(w.pick(s, 'Model'), 'Vox');
+      w.pick(w.pick(s, 'Model'), 'Vox');
+      return s;
+    };
+    const [first, second] = [voxTwice(), voxTwice()];
+    expect(w.ev().issues.map((i) => i.selUid)).toEqual([first, second]);
+  });
+
+  it('sets no limit on an option outside the entry it names', () => {
+    const inOtherUnit = cons('<constraint id="c" type="max" value="1" field="selections" scope="other"/>');
+    const w = world(unit('squad', 'Squad', 0, children(entry('g', 'Gun', 0, inOtherUnit))) + unit('other', 'Other'));
+    w.pick(w.add('Squad'), 'Gun', 2);
+    expect(w.errors()).toEqual([]);
+  });
+
+  it('reads no entry from a scope that is a word, not an id', () => {
+    const inSelf = cons('<constraint id="c" type="max" value="1" field="selections" scope="self"/>');
+    const w = world(unit('squad', 'Squad', 0, children(entry('g', 'Gun', 0, inSelf))));
+    w.pick(w.add('Squad'), 'Gun', 2);
+    expect(w.errors()).toEqual([]);
+  });
+
   it('multiplies by the number of the selections in between', () => {
     const w = armoury(MAX_ONE);
     w.pick(w.pick(w.add('Squad'), 'Model', 2), 'Vox');
@@ -756,5 +782,19 @@ describe('selection limits scoped to an entry id', () => {
     );
     w.pick(w.add('Squad'), 'Gun', 2);
     expect(w.errors()).toEqual(['Gun: at most 1 allowed (has 2)']);
+  });
+
+  it('without child selections leaves out picks nested deeper', () => {
+    const gun = entry(
+      'g',
+      'Gun',
+      0,
+      cons('<constraint id="c" type="max" value="1" field="selections" scope="squad"/>'),
+    );
+    const w = world(unit('squad', 'Squad', 0, children(entry('m', 'Model', 0, children(gun)))));
+    const s = w.add('Squad');
+    w.pick(w.pick(s, 'Model'), 'Gun');
+    w.pick(w.pick(s, 'Model'), 'Gun');
+    expect(w.errors()).toEqual([]);
   });
 });
