@@ -134,6 +134,8 @@ for (const [id, m] of meta) {
         const before = new Evaluator(roster, contexts);
         const eff = before.optionEff(o, null, before.forces[0]);
         if (eff.hidden || unavailable(eff)) continue;
+        // a second copy of a set-up entry only reports that entry's own cap
+        if (before.forces[0].roots.some((r) => r.node.id === o.node.id)) continue;
         const su = addSel(
           roster,
           contexts,
