@@ -1,13 +1,24 @@
 // Finds cases worth a unit test. Exploration only: it never fails a build, and it isn't a substitute for the tests.
-//   1. Adds every unit of every army and groups what goes wrong, with the smallest unit showing each kind of problem.
+//   1. Adds every unit of every army to a 2,000-point list with its set-up in place, as a new list in the app has,
+//      and groups what goes wrong, with the smallest unit showing each kind of problem.
 //   2. Lists the shapes of condition, repeat, constraint and modifier in the data that no unit test mentions.
 import { DOMParser } from '@xmldom/xmldom';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Context } from '../src/data/catalog';
-import { Evaluator, addSel, forceRootOptions, uid, unavailable, type Roster, type Sel } from '../src/data/engine';
+import {
+  Evaluator,
+  addSel,
+  forceRootOptions,
+  uid,
+  unavailable,
+  type Issue,
+  type Roster,
+  type Sel,
+} from '../src/data/engine';
 import type { DataFile } from '../src/data/model';
 import { parseDataFile, readHeader } from '../src/data/parse';
+import { setUpForce } from '../src/data/setup';
 import { costIds, shapesOf } from './shapes';
 
 const [dir, only] = process.argv.slice(2);
@@ -73,6 +84,9 @@ const note = (kind: string, size: number, example: string) => {
   }
   problems.set(kind, p);
 };
+const kindOf = (i: Issue) => i.message.replace(/[\d.]+/g, 'N').replace(/^.*›/, '›');
+const issueKey = (i: Issue) => `${i.selUid}|${i.level}|${i.message}`;
+const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 let units = 0;
 for (const [id, m] of meta) {
@@ -81,22 +95,44 @@ for (const [id, m] of meta) {
   if (!cat.gameSystemId || !meta.has(cat.gameSystemId)) continue;
   const ctx = new Context(load(cat.gameSystemId), cat, linkedTo(cat));
   const contexts = new Map([[cat.id, ctx]]);
+  // A problem the set-up raises on its own belongs to the army, not to each unit added after it.
+  const armyWide = new Set<string>();
+  const noteOnce = (kind: string, size: number, example: string) => {
+    if (armyWide.has(kind)) return;
+    armyWide.add(kind);
+    note(kind, size, example);
+  };
   for (const fe of ctx.forceEntries()) {
+    const setUp: Roster = {
+      uid: uid(),
+      name: 't',
+      repo: 'x',
+      gameSystemId: ctx.gst.id,
+      costLimit: 2000,
+      forces: [{ uid: uid(), forceEntryId: fe.id, catalogueId: cat.id, selections: [] }],
+      created: 0,
+      updated: 0,
+    };
+    const list = `${m.h.name} / ${fe.name}`;
+    const fromSetUp = new Set<string>();
+    try {
+      setUpForce(setUp, contexts, setUp.forces[0].uid, m.h.name);
+      const size = nodes(setUp.forces[0].selections);
+      for (const i of new Evaluator(setUp, contexts).issues) {
+        if (!i.selUid || i.level !== 'error') continue;
+        fromSetUp.add(issueKey(i));
+        noteOnce(`SET-UP ${kindOf(i)}`, size, list);
+      }
+    } catch (e) {
+      // the app also carries on with whatever set-up it managed
+      noteOnce(`SET-UP CRASH ${reason(e)}`, 0, list);
+    }
     for (const o of forceRootOptions(ctx, fe)) {
-      const roster: Roster = {
-        uid: uid(),
-        name: 't',
-        repo: 'x',
-        gameSystemId: ctx.gst.id,
-        costLimit: 0,
-        forces: [{ uid: uid(), forceEntryId: fe.id, catalogueId: cat.id, selections: [] }],
-        created: 0,
-        updated: 0,
-      };
-      const where = `${m.h.name} / ${fe.name} / ${o.node.name}`;
+      const roster = structuredClone(setUp);
+      const where = `${list} / ${o.node.name}`;
       try {
-        const empty = new Evaluator(roster, contexts);
-        const eff = empty.optionEff(o, null, empty.forces[0]);
+        const before = new Evaluator(roster, contexts);
+        const eff = before.optionEff(o, null, before.forces[0]);
         if (eff.hidden || unavailable(eff)) continue;
         const su = addSel(
           roster,
@@ -111,10 +147,10 @@ for (const [id, m] of meta) {
         units++;
         const size = nodes(roster.forces[0].selections);
         for (const i of ev.issues)
-          if (i.selUid === su || (i.selUid && i.level === 'error'))
-            note(i.message.replace(/[\d.]+/g, 'N').replace(/^.*›/, '›'), size, where);
+          if ((i.selUid === su || (i.selUid && i.level === 'error')) && !fromSetUp.has(issueKey(i)))
+            note(kindOf(i), size, where);
       } catch (e) {
-        note(`CRASH ${(e as Error).message}`, 0, where);
+        note(`CRASH ${reason(e)}`, 0, where);
       }
     }
   }

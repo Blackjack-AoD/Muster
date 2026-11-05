@@ -36,7 +36,7 @@ A screen test is a `*.test.tsx` file that starts with `// @vitest-environment js
 
 `it.fails` marks a known bug: the test states the right behaviour and passes while the bug exists. Fixing the bug turns it red, and it then becomes a normal `it`.
 
-The sweep finds new cases and never fails a build. It adds every unit of every army in a data folder, then prints the problems it hit with the smallest example of each, and the shapes of condition, repeat, constraint and modifier in that data that no unit test mentions. Turn what it finds into small unit tests.
+The sweep finds new cases and never fails a build. It adds every unit of every army in a data folder to a 2,000-point list with its set-up in place, then prints the problems it hit with the smallest example of each, and the shapes of condition, repeat, constraint and modifier in that data that no unit test mentions. A problem marked `SET-UP` comes from the set-up alone and counts once per army. Turn what it finds into small unit tests.
 
 Deploys to GitHub Pages on every push to `main` (enable Pages → Source: GitHub Actions in repo settings).
 
