@@ -132,7 +132,9 @@ describe('DataView', () => {
   it('leaves out the storage line, with no toast, when the browser refuses a storage estimate', async () => {
     const estimate = vi.fn().mockRejectedValue(new Error('denied'));
     Object.defineProperty(navigator, 'storage', { configurable: true, value: { estimate } });
-    onTestFinished(() => Reflect.deleteProperty(navigator, 'storage'));
+    onTestFinished(() => {
+      Reflect.deleteProperty(navigator, 'storage');
+    });
     await renderScreen(<App />);
 
     await waitFor(() => expect(estimate).toHaveBeenCalled());
