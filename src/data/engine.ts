@@ -958,18 +958,25 @@ function giveNewUids(s: Sel): Sel {
   return s;
 }
 
-/** A copy of a selection, with new uids throughout, placed straight after it. */
+/**
+ * A copy of a selection, with new uids throughout, placed straight after it.
+ * A copy of a root unit drops its name and saved unit, as a list holds a saved unit at most once.
+ */
 export function duplicateSel(roster: Roster, selUid: string): Sel | null {
   const loc = locate(roster, selUid);
   if (!loc) return null;
   const copy = giveNewUids(structuredClone(loc.sel));
+  if (loc.list === loc.force.selections) {
+    delete copy.name;
+    delete copy.saved;
+  }
   loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
   return copy;
 }
 
-/** The name to show for a selection. */
-export function displayName(_rs: RSel): string {
-  return '';
+/** The name to show for a selection: the player's name for it, else the data's. */
+export function displayName(rs: RSel): string {
+  return rs.sel.name ?? rs.eff.name;
 }
 
 /**

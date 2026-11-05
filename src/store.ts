@@ -172,6 +172,8 @@ const isSel = (s: unknown, level: number): boolean =>
   typeof s.key === 'string' &&
   typeof s.number === 'number' &&
   (s.categoryId === undefined || typeof s.categoryId === 'string') &&
+  (s.name === undefined || typeof s.name === 'string') &&
+  (s.saved === undefined || typeof s.saved === 'string') &&
   Array.isArray(s.children) &&
   s.children.every((c) => isSel(c, level + 1));
 
@@ -203,6 +205,8 @@ function isRoster(r: unknown): r is Roster {
 function copySel(s: Sel): Sel {
   const copy: Sel = { uid: s.uid, key: s.key, number: s.number, children: s.children.map(copySel) };
   if (s.categoryId !== undefined) copy.categoryId = s.categoryId;
+  if (s.name !== undefined) copy.name = s.name;
+  if (s.saved !== undefined) copy.saved = s.saved;
   return copy;
 }
 
