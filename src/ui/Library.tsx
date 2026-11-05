@@ -297,6 +297,7 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
       </div>
     );
   const ql = q.toLowerCase();
+  const savedShown = saved.filter((u) => u.name.toLowerCase().includes(ql));
   return (
     <div class="page">
       <TopBar title={title} sub={ctx.gst.name} backTo="/lib" />
@@ -304,16 +305,20 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
         <Icon name="search" size={18} />
         <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      <div class="list-label">Saved units</div>
-      <div class="pick-list" role="group" aria-label="Saved units">
-        {saved.map((u) => (
-          <div class="pick" key={u.id}>
-            <span>
-              <b>{u.name}</b>
-            </span>
+      {savedShown.length > 0 && (
+        <>
+          <div class="list-label">Saved units</div>
+          <div class="pick-list" role="group" aria-label="Saved units">
+            {savedShown.map((u) => (
+              <div class="pick" key={u.id}>
+                <span>
+                  <b>{u.name}</b>
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
       {groups.map((g) => {
         const items = g.items.filter((x) => x.o.node.name.toLowerCase().includes(ql));
         if (!items.length) return null;
