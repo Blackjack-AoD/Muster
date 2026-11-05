@@ -204,6 +204,36 @@ describe('syncRepo', () => {
     expect(stages.at(-1)).toBe('error');
   });
 
+  /** Every download of a data file fails with `reason`, which is no `Error`. */
+  function failDownloads(reason: string) {
+    github({ tree: [{ path: 'a.cat', sha: '1' }], bodies: {} });
+    const real = present(vi.mocked(fetch).getMockImplementation(), 'the fetch stub');
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.includes('raw.githubusercontent')) throw reason;
+      return real(url);
+    });
+  }
+
+  it('names the file and the reason when a download fails with a reason that is no Error', async () => {
+    failDownloads('The connection dropped');
+    const state = await syncRepo(repoName(), noop);
+    expect(state.error).toBe('Failed to download a.cat: The connection dropped');
+  });
+
+  it('records the reason when a sync fails with a reason that is no Error', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw 'The connection dropped';
+    });
+    expect((await syncRepo(repoName(), noop)).error).toBe('The connection dropped');
+  });
+
+  it('records Sync failed when a sync fails with no reason', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('');
+    });
+    expect((await syncRepo(repoName(), noop)).error).toBe('Sync failed');
+  });
+
   it('clears an old error after a good sync', async () => {
     const repo = repoName();
     github({ tree: [], bodies: {} }, { 'api.github.com': 500 });
