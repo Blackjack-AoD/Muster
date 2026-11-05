@@ -17,7 +17,7 @@ import {
   useRosterCtl,
 } from './store';
 import { unit, world } from './test/fixture';
-import { refuse, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
+import { expectToast, press, refuse, renderScreen, stubBrowserGaps, worldFiles } from './test/screen';
 
 const FILES = worldFiles(unit('tac', 'Tactical Squad', 100));
 const SAVE_FAILED = "Couldn't save this list";
@@ -45,8 +45,8 @@ const newList = () => world(unit('tac', 'Tactical Squad', 100)).roster;
 const unitsIn = (r?: Roster) => r?.forces[0].selections.length;
 const storedUnits = async () => unitsIn((await db.rosters())[0]);
 const unitsInMemory = () => unitsIn(getState().rosters[0]);
-const addUnit = async () => fireEvent.click(await screen.findByRole('button', { name: 'Add a unit' }));
-const pressRetry = async () => fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+const addUnit = () => press('Add a unit');
+const pressRetry = () => press('Retry');
 
 /** The App shell draws the toast and its button. */
 async function renderWithToast(source: Roster) {
@@ -68,7 +68,7 @@ async function fakeClock() {
 async function failASave() {
   const put = refuse('put');
   await addUnit();
-  await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+  await expectToast(SAVE_FAILED);
   return put;
 }
 
@@ -160,7 +160,7 @@ describe('a failed save', () => {
     await addUnit();
     await addUnit();
     await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
     expect(await storedUnits()).toBe(0);
 
     put.mockRestore();
@@ -175,11 +175,11 @@ describe('a failed save', () => {
     await renderWithToast(newList());
     const put = refuse('put');
     await addUnit();
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
 
     await pressRetry();
     expect(getState().toast).toBeUndefined();
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
     expect(put).toHaveBeenCalledTimes(2);
 
     put.mockRestore();
@@ -192,7 +192,7 @@ describe('a failed save', () => {
     await renderWithToast(list);
     const put = refuse('put');
     await addUnit();
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
 
     put.mockRestore();
     await deleteRoster(list.uid);
@@ -271,7 +271,7 @@ describe('a Restore while a save has failed', () => {
     const [addToFirst, addToSecond] = await adds();
     const put = refuse('put');
     fireEvent.click(addToFirst);
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
     fireEvent.click(addToSecond);
     await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
 
@@ -326,7 +326,7 @@ describe('how long the failed save toast stays up', () => {
     showUndo();
 
     await addUnit();
-    await waitFor(() => expect(getState().toast).toBe(SAVE_FAILED));
+    await expectToast(SAVE_FAILED);
     vi.advanceTimersByTime(60_000);
     expect(getState().toast).toBe(SAVE_FAILED);
   });

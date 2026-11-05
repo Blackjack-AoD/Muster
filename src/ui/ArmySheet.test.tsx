@@ -5,7 +5,7 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { children, entry, unit, world } from '../test/fixture';
-import { expectToast, linkHash, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { expectToast, linkHash, openHash, press, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import type { Snapshot } from './snapshot';
 
 const UNITS =
@@ -122,7 +122,7 @@ describe('Share link', () => {
   async function pressShareLink(snap: Snapshot) {
     openHash(await linkHash(snap));
     await renderScreen(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Share link' }));
+    await press('Share link');
   }
 
   afterEach(() => {

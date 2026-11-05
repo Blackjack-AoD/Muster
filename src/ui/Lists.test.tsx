@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { App } from '../app';
 import { db } from '../data/db';
 import { removeRepo } from '../store';
 import { unit, world } from '../test/fixture';
-import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { openCreateList, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { Lists } from './Lists';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
@@ -17,11 +16,8 @@ beforeEach(async () => {
 
 describe('Lists', () => {
   it('creating a list saves it and opens it', async () => {
-    await renderScreen(<App />, { files: worldFiles(UNITS) });
-
-    fireEvent.click(screen.getByRole('button', { name: 'New list' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Test Army' }));
-    const create = await screen.findByRole('button', { name: 'Create list' });
+    await openCreateList(worldFiles(UNITS));
+    const create = screen.getByRole('button', { name: 'Create list' });
     fireEvent.input(screen.getByLabelText('List name'), { target: { value: 'Strike Force' } });
     fireEvent.input(screen.getByLabelText('Points limit'), { target: { value: '1500' } });
     fireEvent.click(create);
@@ -41,11 +37,7 @@ describe('Lists', () => {
   });
 
   it("says the army's data has gone when the player removes its repo under the new list sheet", async () => {
-    await renderScreen(<App />, { files: worldFiles(UNITS) });
-
-    fireEvent.click(screen.getByRole('button', { name: 'New list' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Test Army' }));
-    await screen.findByRole('button', { name: 'Create list' });
+    await openCreateList(worldFiles(UNITS));
     await removeRepo('test/repo');
 
     await waitFor(() => expect(screen.queryByText("This army's data isn't on the phone.")).not.toBeNull());

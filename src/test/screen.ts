@@ -1,8 +1,9 @@
 // Renders a screen on the real store, with data and lists seeded into fake-indexeddb.
 import 'fake-indexeddb/auto';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/preact';
-import type { ComponentChild } from 'preact';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { h, type ComponentChild } from 'preact';
 import { afterEach, expect, vi } from 'vitest';
+import { App } from '../app';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
@@ -39,6 +40,8 @@ export const refuse = (method: 'put' | 'delete') =>
 
 export const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
+export const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
+
 type Point = readonly [x: number, y: number];
 
 /** A finger going down at the origin, through each point, then lifting. */
@@ -72,6 +75,15 @@ export async function renderScreen(
   await init();
   online.mockRestore();
   render(screen);
+}
+
+/** Opens Lists on `files`, as far as the sheet that names the new list. */
+export async function openCreateList(files: ScreenSeed['files']): Promise<void> {
+  openHash('#/');
+  await renderScreen(h(App, null), { files });
+  await press('New list');
+  await press('Test Army');
+  await screen.findByRole('button', { name: 'Create list' });
 }
 
 export async function resetStore(): Promise<void> {

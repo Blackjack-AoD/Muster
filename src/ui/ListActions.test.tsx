@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { unit, world } from '../test/fixture';
-import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import {
+  expectToast,
+  openCreateList,
+  openHash,
+  press,
+  refuse,
+  renderScreen,
+  stubBrowserGaps,
+  worldFiles,
+} from '../test/screen';
 
 const UNITS = unit('tac', 'Tactical Squad', 100);
 const FILES = worldFiles(UNITS);
@@ -13,7 +22,6 @@ const { roster } = world(UNITS);
 
 // oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
 const realPut = IDBObjectStore.prototype.put;
-const press = async (name: string) => fireEvent.click(await screen.findByRole('button', { name }));
 const storedUids = async () => (await db.rosters()).map((r) => r.uid);
 const uidsInMemory = () => getState().rosters.map((r) => r.uid);
 
@@ -21,14 +29,6 @@ async function openListMenu() {
   openHash(`#/r/${roster.uid}`);
   await renderScreen(<App />, { files: FILES, rosters: [roster] });
   await press('List options');
-}
-
-async function openCreateList() {
-  openHash('#/');
-  await renderScreen(<App />, { files: FILES });
-  await press('New list');
-  await press('Test Army');
-  await screen.findByRole('button', { name: 'Create list' });
 }
 
 beforeEach(async () => {
@@ -76,7 +76,7 @@ describe('list actions', () => {
     const copy = getState().rosters.find((r) => r.uid !== roster.uid);
     expect(copy?.name).toBe('Test list (copy)');
     expect(location.hash).toBe(`#/r/${copy?.uid}`);
-    expect((await storedUids()).sort()).toEqual([roster.uid, copy?.uid].sort());
+    expect(new Set(await storedUids())).toEqual(new Set([roster.uid, copy?.uid]));
   });
 
   it('Delete list removes the list and returns to Lists', async () => {
@@ -102,7 +102,7 @@ describe('list actions', () => {
   });
 
   it('shows the reason in a toast when a new list fails to save, and stays where it was', async () => {
-    await openCreateList();
+    await openCreateList(FILES);
     refuse('put');
 
     await press('Create list');
@@ -126,7 +126,7 @@ describe('list actions', () => {
   });
 
   it('leaves a new list that fails to save off the Lists screen and out of memory', async () => {
-    await openCreateList();
+    await openCreateList(FILES);
     refuse('put');
 
     await press('Create list');
