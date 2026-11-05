@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { decodeXml, entry, readHeader } from './parse';
-import { catalogue, gameSystem, parseXml } from '../test/fixture';
+import { catalogue, gameSystem, parseXml, present } from '../test/fixture';
 
 const el = (xml: string) => new DOMParser().parseFromString(xml, 'text/xml').documentElement as unknown as Element;
 
@@ -59,7 +59,7 @@ describe('parseDataFile', () => {
     const g = gameSystem(
       '<forceEntries><forceEntry id="a" name="A"><forceEntries><forceEntry id="b" name="B"/></forceEntries></forceEntry></forceEntries>',
     );
-    expect(g.forceEntries[0].forces![0].name).toBe('B');
+    expect(present(g.forceEntries[0].forces, 'the nested forces')[0].name).toBe('B');
   });
 
   it('tolerates an empty file', () => {

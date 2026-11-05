@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Context } from './catalog';
-import { catalogue, children, entry, gameSystem, parseXml, unit } from '../test/fixture';
+import { catalogue, children, entry, gameSystem, parseXml, present, unit } from '../test/fixture';
 
 const ctxOf = (cat: string, gst = '', linked: ReturnType<typeof catalogue>[] = []) =>
   new Context(gameSystem(gst), catalogue(cat), linked);
@@ -11,7 +11,7 @@ const shared = (...e: string[]) => `<sharedSelectionEntries>${e.join('')}</share
 describe('resolving links', () => {
   const linked = (attrs: string, inner: string, target = entry('t', 'Target', 10)) => {
     const c = ctxOf(`<entryLinks>${link('l', 't', attrs, inner)}</entryLinks>${shared(target)}`);
-    return c.resolve(c.cat.rootEntries[0])!;
+    return present(c.resolve(c.cat.rootEntries[0]), 'the resolved entry');
   };
 
   it('returns a plain entry unchanged', () => {
@@ -71,7 +71,7 @@ describe('resolving links', () => {
       `<entryLinks>${link('l', 't', '', '<costs><cost typeId="pts" value="25"/></costs>')}</entryLinks>${shared(entry('t', 'Target', 10))}`,
     );
     c.resolve(c.cat.rootEntries[0]);
-    expect(c.get('t')!.costs[0].value).toBe(10);
+    expect(present(c.get('t'), 'entry t').costs[0].value).toBe(10);
   });
   it('follows a link to a link', () => {
     const c = ctxOf(
@@ -101,15 +101,15 @@ describe('the index across files', () => {
     const lib = catalogue(shared(entry('a', 'From library'), entry('b', 'From library')), 'lib');
     const cat = catalogue(shared(entry('a', 'From army')));
     const c = new Context(gst, cat, [lib]);
-    expect(c.get('a')!.name).toBe('From army');
-    expect(c.get('b')!.name).toBe('From library');
+    expect(present(c.get('a'), 'entry a').name).toBe('From army');
+    expect(present(c.get('b'), 'entry b').name).toBe('From library');
   });
   it('finds nested entries, profiles and rules', () => {
     const inner = `<profiles><profile id="p" name="P"/></profiles><rules><rule id="r" name="R"/></rules>`;
     const c = ctxOf(
       `<selectionEntries>${entry('a', 'A', 0, children(entry('b', 'B', 0, inner)))}</selectionEntries><sharedProfiles><profile id="sp" name="SP"/></sharedProfiles><sharedRules><rule id="sr" name="SR"/></sharedRules>`,
     );
-    expect(c.get('b')!.name).toBe('B');
+    expect(present(c.get('b'), 'entry b').name).toBe('B');
     expect([c.profile('p')?.name, c.profile('sp')?.name, c.rule('r')?.name, c.rule('sr')?.name]).toEqual([
       'P',
       'SP',
@@ -262,7 +262,7 @@ describe('root options', () => {
 describe('startCost', () => {
   const cost = (inner: string, rest = '') => {
     const c = ctxOf(`<selectionEntries>${unit('u', 'Unit', 10, inner)}</selectionEntries>${rest}`);
-    return c.startCost(c.get('u')!, 'pts');
+    return c.startCost(present(c.get('u'), 'entry u'), 'pts');
   };
   const min = (n: number) =>
     `<constraints><constraint id="m" type="min" value="${n}" field="selections" scope="parent"/></constraints>`;
@@ -291,7 +291,7 @@ describe('startCost', () => {
   });
   it('ignores an entry with no cost of that type', () => {
     const c = ctxOf(`<selectionEntries>${unit('u', 'Unit', 10)}</selectionEntries>`);
-    expect(c.startCost(c.get('u')!, 'pl')).toBe(0);
+    expect(c.startCost(present(c.get('u'), 'entry u'), 'pl')).toBe(0);
   });
   it('copes with a mandatory group that has nothing visible', () => {
     expect(cost(group(min(1)))).toBe(10);
@@ -300,6 +300,6 @@ describe('startCost', () => {
     const c = ctxOf(
       `<selectionEntries>${unit('u', 'Unit', 1, `<entryLinks>${link('l', 'u', '', min(1))}</entryLinks>`)}</selectionEntries>`,
     );
-    expect(c.startCost(c.get('u')!, 'pts')).toBeGreaterThan(0);
+    expect(c.startCost(present(c.get('u'), 'entry u'), 'pts')).toBeGreaterThan(0);
   });
 });
