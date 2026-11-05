@@ -154,6 +154,58 @@ describe('DataView', () => {
     expect(JSON.parse((await made[0]?.text()) ?? 'null')).toMatchObject({ version: 2, savedUnits: [SAVED_UNIT] });
   });
 
+  describe('Back up', () => {
+    const lists = (n: number) => Array.from({ length: n }, (_, i) => ({ ...world('').roster, uid: `r${i}` }));
+    async function storeSavedUnits(n: number) {
+      for (let i = 0; i < n; i++) await db.putSavedUnit({ ...SAVED_UNIT, id: `u${i}` });
+    }
+    const backUp = () => screen.getByRole('button', { name: /^Back up/ });
+
+    it.each([
+      [2, 3, 'Back up 2 lists, 3 saved units'],
+      [1, 1, 'Back up 1 list, 1 saved unit'],
+    ])('labels Back up with %i list(s) and %i saved unit(s)', async (listCount, unitCount, label) => {
+      await storeSavedUnits(unitCount);
+      await renderScreen(<App />, { files: REPO_FILES, rosters: lists(listCount) });
+
+      expect(backUp().textContent?.trim()).toBe(label);
+      expect(backUp()).toHaveProperty('disabled', false);
+    });
+
+    it('counts only the lists on Back up with no saved units', async () => {
+      await renderScreen(<App />, { files: REPO_FILES, rosters: lists(2) });
+
+      expect(backUp().textContent?.trim()).toBe('Back up 2 lists');
+      expect(backUp()).toHaveProperty('disabled', false);
+    });
+
+    it('backs up the saved units when the phone holds no lists', async () => {
+      await storeSavedUnits(3);
+      await renderScreen(<App />, { files: REPO_FILES });
+      const made: Blob[] = [];
+      vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+        if (blob instanceof Blob) made.push(blob);
+        return 'blob:muster/backup';
+      });
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      expect(backUp().textContent?.trim()).toBe('Back up 3 saved units');
+      expect(backUp()).toHaveProperty('disabled', false);
+      fireEvent.click(backUp());
+
+      await waitFor(() => expect(made).toHaveLength(1));
+      const backup: unknown = JSON.parse((await made[0]?.text()) ?? 'null');
+      expect(backup).toMatchObject({ rosters: [], savedUnits: [{ id: 'u0' }, { id: 'u1' }, { id: 'u2' }] });
+    });
+
+    it('disables Back up with neither lists nor saved units', async () => {
+      await renderScreen(<App />, { files: REPO_FILES });
+
+      expect(backUp().textContent?.trim()).toBe('Back up 0 lists');
+      expect(backUp()).toHaveProperty('disabled', true);
+    });
+  });
+
   it('shows the reason in a toast when a backup fails to download', async () => {
     await renderScreen(<App />, { files: REPO_FILES, rosters: [world('').roster] });
     vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
