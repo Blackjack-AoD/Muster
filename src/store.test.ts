@@ -459,6 +459,21 @@ describe('saved units', () => {
     expect(await inStorage('su2')).toEqual([expect.objectContaining(link)]);
   });
 
+  it("keeps no name or link on the root of a saved unit's build, and keeps model names", async () => {
+    const { w, squad, rs } = listWithSquad('su6');
+    const root = savedIn(w.roster, squad);
+    Object.assign(root, { name: 'Old Name', saved: 'old' });
+    const model = present(root.children[0], 'the sergeant');
+    model.name = 'Brother Thrax';
+    const { id } = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
+    for (const saved of [savedUnit(id), await storedSavedUnit(id)]) {
+      const build = present(saved, 'the saved unit').build;
+      expect(Object.keys(build)).not.toContain('name');
+      expect(Object.keys(build)).not.toContain('saved');
+      expect(build.children[0]?.name).toBe('Brother Thrax');
+    }
+  });
+
   it('takes the category the list shows for a unit added under none', async () => {
     const w = world(SQUAD);
     w.roster.uid = 'su3';
