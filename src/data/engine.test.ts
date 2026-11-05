@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { addSel, defaultMember, fmt, forceRootOptions, locate, removeSel, unavailable, type Eff } from './engine';
+import {
+  Evaluator,
+  addSel,
+  defaultMember,
+  fmt,
+  forceRootOptions,
+  locate,
+  removeSel,
+  unavailable,
+  type Eff,
+} from './engine';
 import type { Opt } from './catalog';
 import { children, entry, unit, world } from '../test/fixture';
 
@@ -849,13 +859,89 @@ describe('validation', () => {
     expect(w.roster.forces[0].selections).toHaveLength(1);
   });
 
-  // BUG: gone wargear is dropped with no warning, so the list just gets cheaper after a data update.
-  it.fails('warns about wargear that is gone from the data', () => {
-    const w = world(unit('u', 'Squad', 10, children(entry('g', 'Gun', 5))));
-    const u = w.add('Squad');
-    const g = w.pick(u, 'Gun');
-    locate(w.roster, g)!.sel.key = 'gone';
-    expect(w.warnings()).not.toEqual([]);
+  describe('wargear gone from the data', () => {
+    const SQUAD = unit('u', 'Squad', 10);
+    const SQUAD_WITH_GUN = unit('u', 'Squad', 10, children(entry('g', 'Gun', 5)));
+    const skipped = (name: string, n: number) => `${name}: ${n} item(s) no longer exist in the data and were skipped`;
+
+    it('warns about wargear that is gone from the data', () => {
+      const w = world(SQUAD_WITH_GUN);
+      const u = w.add('Squad');
+      w.pick(u, 'Gun');
+      const without = new Evaluator(w.roster, world(SQUAD).contexts);
+      expect(without.issues).toEqual([{ level: 'warn', forceUid: 'f1', selUid: u, message: skipped('Squad', 1) }]);
+    });
+
+    it('leaves gone wargear in the saved list and out of the points', () => {
+      const w = world(SQUAD_WITH_GUN);
+      const u = w.add('Squad');
+      const g = w.pick(u, 'Gun');
+      const saved = structuredClone(w.roster);
+      const rs = new Evaluator(w.roster, world(SQUAD).contexts).find(u);
+      expect(rs?.total).toBe(10);
+      expect(rs?.broken.map((s) => s.uid)).toEqual([g]);
+      expect(w.roster).toEqual(saved);
+    });
+
+    it('drops the warning and returns the points when the data has the item again', () => {
+      const w = world(SQUAD_WITH_GUN);
+      const u = w.add('Squad');
+      w.pick(u, 'Gun');
+      const without = new Evaluator(w.roster, world(SQUAD).contexts);
+      expect(without.issues.map((i) => i.message)).toEqual([skipped('Squad', 1)]);
+      expect(without.find(u)?.total).toBe(10);
+      const restored = new Evaluator(w.roster, w.contexts);
+      expect(restored.issues).toEqual([]);
+      expect(restored.find(u)?.total).toBe(15);
+    });
+
+    it('counts each gone selection once in the warning, whatever its number', () => {
+      const w = world(unit('u', 'Squad', 10, children(entry('g', 'Gun', 5), entry('k', 'Knife', 1))));
+      const u = w.add('Squad');
+      w.pick(u, 'Gun', 3);
+      w.pick(u, 'Knife');
+      const without = new Evaluator(w.roster, world(SQUAD).contexts);
+      expect(without.issues.map((i) => i.message)).toEqual([skipped('Squad', 2)]);
+    });
+
+    it('warns on the model that lost the wargear, not on its unit', () => {
+      const squad = (gear: string) => unit('u', 'Squad', 10, children(entry('m', 'Model', 20, gear)));
+      const w = world(squad(children(entry('g', 'Gun', 5))));
+      const u = w.add('Squad');
+      const m = w.pick(u, 'Model');
+      w.pick(m, 'Gun');
+      const without = new Evaluator(w.roster, world(squad('')).contexts);
+      expect(without.issues).toEqual([{ level: 'warn', forceUid: 'f1', selUid: m, message: skipped('Model', 1) }]);
+      expect(without.find(u)?.total).toBe(30);
+    });
+
+    it('gives each unit its own warning when two have the same name and count', () => {
+      const w = world(SQUAD_WITH_GUN);
+      const first = w.add('Squad');
+      const second = w.add('Squad');
+      w.pick(first, 'Gun');
+      w.pick(second, 'Gun');
+      const without = new Evaluator(w.roster, world(SQUAD).contexts);
+      expect(without.issues).toEqual([
+        { level: 'warn', forceUid: 'f1', selUid: first, message: skipped('Squad', 1) },
+        { level: 'warn', forceUid: 'f1', selUid: second, message: skipped('Squad', 1) },
+      ]);
+    });
+
+    it('skips wargear whose key now belongs to a group', () => {
+      const w = world(SQUAD_WITH_GUN);
+      const u = w.add('Squad');
+      w.pick(u, 'Gun');
+      const regrouped = unit(
+        'u',
+        'Squad',
+        10,
+        '<selectionEntryGroups><selectionEntryGroup id="g" name="Guns"/></selectionEntryGroups>',
+      );
+      const without = new Evaluator(w.roster, world(regrouped).contexts);
+      expect(without.issues.map((i) => i.message)).toEqual([skipped('Squad', 1)]);
+      expect(without.find(u)?.total).toBe(10);
+    });
   });
 
   it('survives a catalogue that is not loaded', () => {

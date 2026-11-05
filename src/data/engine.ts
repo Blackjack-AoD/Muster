@@ -34,6 +34,8 @@ export interface RSel {
   parent: RSel | null;
   force: RForce;
   children: RSel[];
+  /** saved children the data no longer has */
+  broken: Sel[];
   eff: Eff;
   total: number;
 }
@@ -130,6 +132,7 @@ export class Evaluator {
       parent,
       force,
       children: [],
+      broken: [],
       total: 0,
       eff: { name: opt.node.name, hidden: false, costs: new Map(), constraints: [], categories: new Set() },
     };
