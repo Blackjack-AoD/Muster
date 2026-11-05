@@ -52,15 +52,19 @@ export async function syncRepo(repo: string, onProgress: (p: SyncProgress) => vo
       .map((t: { path: string; sha: string; size: number }) => ({ path: t.path, sha: t.sha, size: t.size }));
 
     const have = new Map(existing.files.map((f) => [f.path, f]));
-    const todo = remote.filter((f) => have.get(f.path)?.sha !== f.sha);
-    const files: FileMeta[] = remote.filter((f) => !todo.includes(f)).map((f) => have.get(f.path)!);
+    const todo: typeof remote = [];
+    const files: FileMeta[] = [];
+    for (const f of remote) {
+      const had = have.get(f.path);
+      if (had?.sha === f.sha) files.push(had);
+      else todo.push(f);
+    }
     let done = 0;
     onProgress({ repo, stage: 'downloading', done, total: todo.length });
 
     const queue = [...todo];
     const worker = async () => {
-      while (queue.length) {
-        const f = queue.shift()!;
+      for (let f = queue.shift(); f; f = queue.shift()) {
         const url = `https://raw.githubusercontent.com/${repo}/${commit}/${f.path.split('/').map(encodeURIComponent).join('/')}`;
         let text = '';
         for (let attempt = 0; attempt < 3; attempt++) {
