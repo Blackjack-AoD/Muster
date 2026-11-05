@@ -1784,6 +1784,8 @@ describe('selected', () => {
 describe('adding a unit fills in what it must have', () => {
   const names = (w: ReturnType<typeof world>, uid: string) =>
     w.sel(uid).children.map((c) => `${c.sel.number}x ${c.eff.name}`);
+  const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15), entry('sword', 'Chainsword', 0))}</selectionEntryGroup>`;
+  const ranged = `<selectionEntryGroup id="ranged" name="Ranged" defaultSelectionEntryId="pistol">${cons(max(1))}${children(entry('pistol', 'Pistol', 0))}</selectionEntryGroup>`;
 
   it('takes the minimum of a mandatory child', () => {
     const w = world(unit('u', 'Squad', 0, children(entry('m', 'Model', 0, cons(min(5))))));
@@ -1902,15 +1904,11 @@ describe('adding a unit fills in what it must have', () => {
     expect(names(w, w.add('Squad'))).toEqual(['1x Dagger']);
   });
   it('takes the default of each nested group before paying for a second pick from one', () => {
-    const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15), entry('sword', 'Chainsword', 0))}</selectionEntryGroup>`;
-    const ranged = `<selectionEntryGroup id="ranged" name="Ranged" defaultSelectionEntryId="pistol">${cons(max(1))}${children(entry('pistol', 'Pistol', 0))}</selectionEntryGroup>`;
     const inner = cons(min(2), max(2)) + `<selectionEntryGroups>${melee}${ranged}</selectionEntryGroups>`;
     const w = world(unit('u', 'Squad', 0, group(inner)));
     expect(names(w, w.add('Squad')).sort()).toEqual(['1x Chainsword', '1x Pistol']);
   });
   it('stays with the first nested default when the group has no max', () => {
-    const melee = `<selectionEntryGroup id="melee" name="Melee" defaultSelectionEntryId="sword">${cons(min(1))}${children(entry('shield', 'Shield', 15), entry('sword', 'Chainsword', 0))}</selectionEntryGroup>`;
-    const ranged = `<selectionEntryGroup id="ranged" name="Ranged" defaultSelectionEntryId="pistol">${cons(max(1))}${children(entry('pistol', 'Pistol', 0))}</selectionEntryGroup>`;
     const inner = cons(min(2)) + `<selectionEntryGroups>${melee}${ranged}</selectionEntryGroups>`;
     const w = world(unit('u', 'Squad', 0, group(inner)));
     expect(names(w, w.add('Squad'))).toEqual(['2x Chainsword']);
