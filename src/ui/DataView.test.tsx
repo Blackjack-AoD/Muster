@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
+import { world } from '../test/fixture';
 import { renderScreen, worldFiles } from '../test/screen';
 
 const GST = '<gameSystem id="gst" name="Test Game" revision="1"/>';
@@ -129,6 +130,17 @@ describe('DataView', () => {
 
     await expectToast("Couldn't remove: Storage is full");
     expect(getState().repos.map((r) => r.repo)).toEqual(['test/repo']);
+  });
+
+  it('shows the reason in a toast when a backup fails to download', async () => {
+    await renderScreen(<App />, { files: REPO_FILES, rosters: [world('').roster] });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new Error('Out of memory');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back up 1 list' }));
+
+    await expectToast("Couldn't share: Out of memory");
   });
 
   it('shows the reason in a toast when reloading a fresh copy fails', async () => {
