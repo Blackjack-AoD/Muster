@@ -148,7 +148,7 @@ describe('DataView', () => {
     });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back up 1 list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back up 1 list, 1 saved unit' }));
 
     await waitFor(() => expect(made).toHaveLength(1));
     expect(JSON.parse((await made[0]?.text()) ?? 'null')).toMatchObject({ version: 2, savedUnits: [SAVED_UNIT] });

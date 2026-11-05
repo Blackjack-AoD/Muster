@@ -30,6 +30,14 @@ async function restoreBackup(file: File) {
   }
 }
 
+const counted = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+function backupContents(lists: number, savedUnits: number): string {
+  if (!savedUnits) return counted(lists, 'list');
+  if (!lists) return counted(savedUnits, 'saved unit');
+  return `${counted(lists, 'list')}, ${counted(savedUnits, 'saved unit')}`;
+}
+
 const mb = (b: number) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
 
 let installEvent: (Event & { prompt: () => Promise<void> }) | null = null;
@@ -222,12 +230,12 @@ export function DataView() {
       <div class="pad-x row gap">
         <button
           class="btn grow"
-          disabled={!rosters.length}
+          disabled={!rosters.length && !savedUnits.length}
           onClick={() => {
             shareBackup(rosters, savedUnits).catch((e: unknown) => toast(failureMessage('share', e)));
           }}
         >
-          <Icon name="share" /> Back up {rosters.length} list{rosters.length === 1 ? '' : 's'}
+          <Icon name="share" /> Back up {backupContents(rosters.length, savedUnits.length)}
         </button>
         <label class="btn grow file-btn">
           Restore
