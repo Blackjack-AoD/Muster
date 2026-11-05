@@ -100,6 +100,20 @@ describe('between tests', () => {
     expect(await db.getFile('test/repo', 'test.cat')).toBeUndefined();
   });
 
+  it('resetStore clears the sync status of a repo that storage refused', async () => {
+    await renderScreen(<Lists />);
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+    await syncAll(['no/repo']);
+    put.mockRestore();
+
+    await resetStore();
+
+    expect(getState().sync).toEqual({});
+  });
+
   it('resetStore forgets a list that only reached memory because its save failed', async () => {
     await renderScreen(<Lists />);
     const noKey = { ...world(UNITS).roster, uid: undefined } as unknown as Roster;
