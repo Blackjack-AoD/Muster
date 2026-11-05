@@ -6,6 +6,8 @@ import { downloadJson, shareBackup, shareText } from './exporter';
 
 const TEXT = 'Strike Force, 1000 pts';
 const TITLE = 'Strike Force';
+const CANCELLED = new DOMException('Share canceled', 'AbortError');
+const REFUSED = new DOMException('Permission denied', 'NotAllowedError');
 
 function stubDownloads() {
   const madeFrom: Blob[] = [];
@@ -58,6 +60,29 @@ describe('shareText', () => {
     await shareText(TEXT, TITLE);
     expect(getState().toast).toBe("Couldn't share or copy on this device");
   });
+
+  it('does nothing when the player cancels the share sheet', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(CANCELLED), clipboard: { writeText } });
+    await shareText(TEXT, TITLE);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('copies to the clipboard when the share sheet fails, and says so', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(REFUSED), clipboard: { writeText } });
+    await shareText(TEXT, TITLE);
+    expect(writeText).toHaveBeenCalledWith(TEXT);
+    expect(getState().toast).toBe('Copied to clipboard');
+  });
+
+  it('says so when the share sheet and the clipboard both fail', async () => {
+    const share = vi.fn().mockRejectedValue(REFUSED);
+    vi.stubGlobal('navigator', { share, clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    await shareText(TEXT, TITLE);
+    expect(getState().toast).toBe("Couldn't share or copy on this device");
+  });
 });
 
 describe('downloadJson', () => {
@@ -102,6 +127,23 @@ describe('shareBackup', () => {
     vi.stubGlobal('navigator', { canShare: () => false, share });
     await shareBackup([roster]);
     expect(share).not.toHaveBeenCalled();
+    expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
+    expect(JSON.parse(await madeFrom[0].text())).toEqual(backup);
+  });
+
+  it('does nothing when the player cancels the share sheet', async () => {
+    const { downloads } = stubDownloads();
+    vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(CANCELLED) });
+    await shareBackup([roster]);
+    expect(downloads).toEqual([]);
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('shows the reason in a toast when the share sheet fails, and downloads the backup instead', async () => {
+    const { madeFrom, downloads } = stubDownloads();
+    vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn().mockRejectedValue(REFUSED) });
+    await shareBackup([roster]);
+    expect(getState().toast).toBe("Couldn't share: Permission denied");
     expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
     expect(JSON.parse(await madeFrom[0].text())).toEqual(backup);
   });
