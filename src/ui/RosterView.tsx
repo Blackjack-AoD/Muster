@@ -16,7 +16,7 @@ import {
 } from '../data/engine';
 import type { Context, Opt } from '../data/catalog';
 import { getContext, systemsOf } from '../data/library';
-import { deleteRoster, failureMessage, saveRoster, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
+import { addRoster, deleteRoster, failureMessage, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
@@ -633,7 +633,7 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
               created: Date.now(),
             };
             try {
-              await saveRoster(copy);
+              await addRoster(copy);
             } catch (e) {
               toast(failureMessage('copy this list', e));
               return;

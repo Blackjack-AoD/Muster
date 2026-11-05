@@ -3,7 +3,7 @@ import { go } from '../app';
 import type { RepoState } from '../data/db';
 import { Evaluator, uid, type Roster } from '../data/engine';
 import { activeSystems, getContext, rosterGameKey, systemsOf, gameKey, type SystemInfo } from '../data/library';
-import { failureMessage, saveRoster, toast, useStore } from '../store';
+import { addRoster, failureMessage, toast, useStore } from '../store';
 import { setUpForce } from '../data/setup';
 import type { Context } from '../data/catalog';
 import { Empty, Link, Loading, Sheet, TopBar, ago, fmtN } from './common';
@@ -216,7 +216,7 @@ function NewListDetails({
       console.warn('set-up skipped', e);
     }
     try {
-      await saveRoster(r);
+      await addRoster(r);
     } catch (e) {
       toast(failureMessage('create this list', e));
       return;

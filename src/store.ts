@@ -123,7 +123,12 @@ export async function saveRoster(r: Roster) {
   if (state.toastAction?.failedSave === r.uid) dismissToast();
 }
 
-export async function addRoster(_r: Roster) {}
+/** Storage first, unlike `saveRoster`: a list that storage refuses has no Retry, so it can't wait in memory. */
+export async function addRoster(r: Roster) {
+  r.updated = Date.now();
+  await db.putRoster(r);
+  set({ rosters: [...state.rosters, structuredClone(r)] });
+}
 
 export async function deleteRoster(u: string) {
   await db.delRoster(u);
