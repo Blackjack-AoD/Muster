@@ -6,7 +6,7 @@ import type { SavedUnit } from '../data/db';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
 import { failureReason } from '../data/sync';
-import { useRosterCtl, useStore } from '../store';
+import { failureMessage, renameSavedUnit, toast, useRosterCtl, useStore } from '../store';
 import { Empty, Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
@@ -350,8 +350,12 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
 
 function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
   const [name, setName] = useState(unit.name);
+  const close = () => {
+    renameSavedUnit(unit.id, name.trim()).catch((e: unknown) => toast(failureMessage('rename this saved unit', e)));
+    onClose();
+  };
   return (
-    <Sheet title="Rename saved unit" onClose={onClose}>
+    <Sheet title="Rename saved unit" onClose={close}>
       <div class="form">
         <label>
           Name
