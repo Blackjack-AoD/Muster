@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
 import type { Sel } from '../data/engine';
 import { ASSAULT, RULED_OUT_BY_ASSAULT, SWORD, children, cons, entry, sergeant, unit, world } from '../test/fixture';
-import { openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
+import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { UnitEditor } from './UnitEditor';
 
 const FIST = entry(
@@ -465,3 +465,193 @@ describe('UnitEditor', () => {
     expect(renames()).toEqual([]);
   });
 });
+
+/** The text of the banner on the unit's page, if it shows one. */
+const banner = () => document.querySelector('.unit-page .banner')?.textContent;
+
+const saveButton = () => screen.queryByRole('button', { name: 'Save as saved unit' });
+
+/** Opens a squad holding Marine rows of these counts, as a copy of the saved unit Squad Thrax. */
+async function openLinked(counts: number[] = [], named: Record<number, string> = {}) {
+  const w = world(SQUAD, { costLimit: 2000 });
+  const tac = w.add('Tactical Squad');
+  for (const n of counts) w.pick(tac, 'Marine', n);
+  const [force] = w.roster.forces;
+  const root = force?.selections[0];
+  if (!force || !root) throw new Error('the list has no unit');
+  root.children.forEach((c, i) => {
+    if (named[i]) c.name = named[i];
+  });
+  await db.putSavedUnit({
+    id: 'thrax',
+    name: 'Squad Thrax',
+    repo: w.roster.repo,
+    gameSystemId: w.roster.gameSystemId,
+    catalogueId: force.catalogueId,
+    key: root.key,
+    categoryId: '',
+    build: structuredClone(root),
+    created: 0,
+    updated: 0,
+  });
+  root.saved = 'thrax';
+  root.name = 'Squad Thrax';
+  openHash(`#/r/r/u/${tac}`);
+  await renderScreen(<App />, { files: worldFiles(SQUAD), rosters: [w.roster] });
+  await screen.findByRole('heading', { name: 'Squad Thrax' });
+}
+
+describe('UnitEditor saved units', () => {
+  afterEach(async () => {
+    for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
+  });
+
+  it('Save as saved unit, with a name, adds a saved unit and links the unit', async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+    nameAndSave('Squad Thrax');
+
+    await waitFor(async () =>
+      expect((await db.savedUnits()).map((u) => [u.name, u.key])).toEqual([['Squad Thrax', 'tac']]),
+    );
+    const [saved] = await db.savedUnits();
+    await waitFor(async () => expect((await savedUnit())?.saved).toBe(saved?.id));
+    expect((await savedUnit())?.name).toBe('Squad Thrax');
+    await waitFor(() => expect(title()).toBe('Squad Thrax'));
+    expect(banner()).toBe('Changes here apply to every list that holds this saved unit.');
+    expect(saveButton()).toBeNull();
+  });
+
+  it("the save sheet's name starts with the data name of an unnamed unit", async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+
+    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Tactical Squad');
+  });
+
+  it("the save sheet's name starts with the custom name of a named unit", async () => {
+    const w = world(UNITS, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    const root = w.roster.forces[0]?.selections[0];
+    if (root) root.name = 'Squad Thrax';
+    openHash(`#/r/r/u/${tac}`);
+    await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [w.roster] });
+    await screen.findByRole('heading', { name: 'Squad Thrax' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+
+    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Squad Thrax');
+  });
+
+  it('saving with an empty name names the saved unit and the unit after the data', async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+    nameAndSave('  ');
+
+    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
+    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+  });
+
+  it('closing the save sheet saves nothing and leaves the unit unlinked', async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Squad Thrax' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await db.savedUnits()).toEqual([]);
+    expect(await savedUnit()).not.toHaveProperty('saved');
+    expect(banner()).toBeUndefined();
+    expect(saveButton()).not.toBeNull();
+  });
+
+  it('storage refusing the save tells the player and leaves the unit unlinked', async () => {
+    await openUnit();
+    const put = refuse('put');
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+      nameAndSave('Squad Thrax');
+
+      await expectToast("Couldn't save this unit: Storage is full");
+    } finally {
+      put.mockRestore();
+    }
+    expect(await db.savedUnits()).toEqual([]);
+    expect(await savedUnit()).not.toHaveProperty('saved');
+    expect(title()).toBe('Tactical Squad');
+    expect(banner()).toBeUndefined();
+  });
+
+  it('a linked copy shows the banner and no Save as saved unit', async () => {
+    await openLinked();
+
+    expect(banner()).toBe('Changes here apply to every list that holds this saved unit.');
+    expect(saveButton()).toBeNull();
+  });
+
+  it('a unit with no link shows no banner, and offers Save as saved unit', async () => {
+    await openUnit();
+
+    expect(banner()).toBeUndefined();
+    expect(saveButton()).not.toBeNull();
+  });
+
+  it('offers Save as saved unit in a list, and none in a read-only preview', () => {
+    const w = world(UNITS);
+    const tac = w.add('Tactical Squad');
+    const page = (scratch: boolean) =>
+      render(
+        <UnitEditor
+          ctl={{ roster: w.roster, contexts: w.contexts, ev: w.ev(), mutate: () => {}, scratch }}
+          selUid={tac}
+          backTo="/"
+        />,
+      );
+
+    const list = page(false);
+    expect(saveButton()).not.toBeNull();
+    list.unmount();
+
+    page(true);
+    expect(saveButton()).toBeNull();
+  });
+
+  it('Clear on a linked copy names it and its saved unit after the data', async () => {
+    await openLinked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
+    expect(title()).toBe('Tactical Squad');
+  });
+
+  it('emptying the name of a linked copy names it and its saved unit after the data', async () => {
+    await openLinked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('');
+
+    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
+  });
+
+  it('Clear on a model of a linked copy takes its name off', async () => {
+    await openLinked([1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    await waitFor(async () => expect(await savedModels()).toEqual([[1, undefined]]));
+  });
+});
+
+/** Types a name into the open save sheet and presses Save. */
+function nameAndSave(name: string) {
+  fireEvent.input(screen.getByLabelText('Name'), { target: { value: name } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+}

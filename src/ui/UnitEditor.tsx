@@ -25,6 +25,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
   const rs = ctl.ev.find(selUid);
   const [tab, setTab] = useState<'options' | 'stats' | 'rules'>('options');
   const [naming, setNaming] = useState(false);
+  const [saving, setSaving] = useState(false);
   if (!rs) {
     return (
       <div class="page">
@@ -63,6 +64,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         }
       />
       {naming && <NameSheet title="Unit" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
+      {saving && <SaveSheet onClose={() => setSaving(false)} />}
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -100,6 +102,9 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
               a Rite of War needs a Primarch, or a character with Master of the Legion).
             </p>
           )}
+          <button class="btn" onClick={() => setSaving(true)}>
+            Save as saved unit
+          </button>
           {!ctl.scratch && isRoot && unitLike && (
             <div class="unit-actions">
               <button
@@ -554,6 +559,20 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
         >
           <Icon name="x" /> Clear
         </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function SaveSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Sheet title="Save as saved unit" onClose={onClose}>
+      <div class="form">
+        <label>
+          Name
+          <input value="" />
+        </label>
+        <button class="btn primary">Save</button>
       </div>
     </Sheet>
   );
