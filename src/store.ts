@@ -119,6 +119,10 @@ export async function refreshRepos() {
   set({ repos: await db.repos() });
 }
 
+function forgetUnsaved(u: string) {
+  set({ unsaved: new Set([...state.unsaved].filter((x) => x !== u)) });
+}
+
 export async function saveRoster(r: Roster) {
   r.updated = Date.now();
   // update memory first so screens opened straight after an edit see it
@@ -126,6 +130,7 @@ export async function saveRoster(r: Roster) {
   rosters.push(structuredClone(r));
   set({ rosters });
   await db.putRoster(r);
+  forgetUnsaved(r.uid);
   if (state.toastAction?.failedSave === r.uid) dismissToast();
 }
 
@@ -139,6 +144,7 @@ export async function addRoster(r: Roster) {
 export async function deleteRoster(u: string) {
   await db.delRoster(u);
   set({ rosters: state.rosters.filter((x) => x.uid !== u) });
+  forgetUnsaved(u);
 }
 
 const isForce = (f: unknown) =>
@@ -162,11 +168,9 @@ export async function importRosters(list: readonly unknown[]) {
     if (state.rosters.some((x) => x.uid === r.uid)) r.uid = uid();
     await db.putRoster(r);
   }
-  const stored = await db.rosters();
-  // storage still holds the old copy of a list whose save failed, and Retry reads memory
-  const failed = state.toastAction?.failedSave;
-  const unsaved = failed ? state.rosters.find((r) => r.uid === failed) : undefined;
-  set({ rosters: unsaved ? [...stored.filter((r) => r.uid !== failed), unsaved] : stored });
+  // storage still holds the old copy of a list whose save failed, and only memory has the edit
+  const stored = (await db.rosters()).filter((r) => !state.unsaved.has(r.uid));
+  set({ rosters: [...stored, ...state.rosters.filter((r) => state.unsaved.has(r.uid))] });
 }
 
 /** Retry reads memory, which holds every edit, as `r` may be stale or deleted by then. */
@@ -175,7 +179,10 @@ function saveEdit(r: Roster) {
     const latest = state.rosters.find((x) => x.uid === r.uid);
     if (latest) saveEdit(latest);
   };
-  saveRoster(r).catch(() => toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid }));
+  saveRoster(r).catch(() => {
+    set({ unsaved: new Set([...state.unsaved, r.uid]) });
+    toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid });
+  });
 }
 
 // ---------- roster controller ----------

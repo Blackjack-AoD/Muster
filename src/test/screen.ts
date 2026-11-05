@@ -6,7 +6,7 @@ import { afterEach, expect, vi } from 'vitest';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
-import { dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
+import { deleteRoster, dismissToast, getState, importRosters, init, removeRepo, setGame } from '../store';
 import { encodeSnapshot, viewUrl, type Snapshot } from '../ui/snapshot';
 import { FORCE, catalogueXml, gameSystemXml, type WorldOptions } from './fixture';
 
@@ -80,6 +80,7 @@ export async function resetStore(): Promise<void> {
   // a repo that storage refused has a sync status and no record
   const stored = (await db.repos()).map((r) => r.repo);
   for (const repo of new Set([...stored, ...Object.keys(getState().sync)])) await removeRepo(repo);
+  for (const uid of getState().unsaved) await deleteRoster(uid);
   for (const { uid } of await db.rosters()) await db.delRoster(uid);
   // importing nothing reloads memory from storage, dropping a list whose save failed
   await importRosters([]);
