@@ -33,6 +33,12 @@ export interface WorldOptions {
   costLimit?: number;
 }
 
+/** The uid from an `addSel` that a test expects to work. */
+export function addedUid(uid: string | null): string {
+  if (uid === null) throw new Error('the add was skipped: its force or parent is not in the roster');
+  return uid;
+}
+
 /** A catalogue with `units` at its root and an empty one-force roster to build in. */
 export function world(units: string, o: WorldOptions = {}) {
   const gst = gameSystem(o.gst ?? FORCE);
@@ -82,19 +88,13 @@ export function world(units: string, o: WorldOptions = {}) {
     /** add a root unit, filling its mandatory defaults */
     add: (name: string, number = 1, forceUid = 'f1') => {
       const opt = root(name);
-      return addSel(
-        roster,
-        contexts,
-        forceUid,
-        null,
-        opt,
-        number,
-        opt.node.categoryLinks.find((c) => c.primary)?.targetId,
+      return addedUid(
+        addSel(roster, contexts, forceUid, null, opt, number, opt.node.categoryLinks.find((c) => c.primary)?.targetId),
       );
     },
     /** add an option beneath a selection */
     pick: (parentUid: string, name: string, number = 1) =>
-      addSel(roster, contexts, 'f1', parentUid, beneath(parentUid, name), number),
+      addedUid(addSel(roster, contexts, 'f1', parentUid, beneath(parentUid, name), number)),
     /** a second detachment of the same catalogue */
     addForce: (uid = 'f2') => {
       roster.forces.push({ uid, forceEntryId: fe.id, catalogueId: cat.id, selections: [] });

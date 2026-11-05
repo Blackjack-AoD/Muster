@@ -150,6 +150,7 @@ for (const m of meta.values()) {
           1,
           o.node.categoryLinks.find((c) => c.primary)?.targetId,
         );
+        if (su === null) throw new Error('the unit was not added');
         const ev = new Evaluator(roster, contexts);
         units++;
         const size = nodes(roster.forces[0].selections);

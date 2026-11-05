@@ -509,10 +509,10 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
   const add = (o: Opt, catId?: string) => {
     let newUid = '';
     ctl.mutate((r) => {
-      newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId);
+      newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, catId) ?? '';
     });
     onClose();
-    go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
+    if (newUid) go(`/r/${ctl.roster.uid}/u/${newUid}`, true);
   };
   // swipe right: add with standard options and stay here; counts shown only while this list is open
   const [quick, setQuick] = useState<Record<string, number>>({});

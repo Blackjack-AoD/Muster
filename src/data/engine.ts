@@ -920,7 +920,7 @@ export function removeSel(roster: Roster, selUid: string) {
 
 /**
  * Add an option under parent (or as a root unit), then fill in mandatory defaults.
- * Returns the new selection uid.
+ * Returns the new selection uid, or null when the force or parent isn't in the roster and nothing was added.
  */
 export function addSel(
   roster: Roster,
@@ -930,11 +930,12 @@ export function addSel(
   opt: Opt,
   number = 1,
   categoryId?: string,
-): string {
-  const force = roster.forces.find((f) => f.uid === forceUid)!;
+): string | null {
+  const force = roster.forces.find((f) => f.uid === forceUid);
+  const list = parentUid ? locate(roster, parentUid)?.sel.children : force?.selections;
+  if (!force || !list) return null;
   const s: Sel = { uid: uid(), key: opt.key, number, children: [] };
   if (categoryId) s.categoryId = categoryId;
-  const list = parentUid ? locate(roster, parentUid)!.sel.children : force.selections;
   list.push(s);
   fillDefaults(roster, contexts, s.uid, 0);
   // second pass: one model's picks can unlock another's (e.g. a sergeant's weapon mirrors the squad's choice)

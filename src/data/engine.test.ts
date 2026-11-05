@@ -12,7 +12,7 @@ import {
   type Issue,
 } from './engine';
 import type { Opt } from './catalog';
-import { children, entry, unit, world } from '../test/fixture';
+import { addedUid, children, entry, unit, world } from '../test/fixture';
 
 const mods = (...m: string[]) => `<modifiers>${m.join('')}</modifiers>`;
 const cons = (...c: string[]) => `<constraints>${c.join('')}</constraints>`;
@@ -1129,9 +1129,9 @@ describe('validation', () => {
       });
       const f2 = w.addForce();
       const [one, two] = forceRootOptions(w.ctx, w.ctx.forceEntries()[0]);
-      const a = addSel(w.roster, w.contexts, 'f1', null, one);
+      const a = addedUid(addSel(w.roster, w.contexts, 'f1', null, one));
       addSel(w.roster, w.contexts, 'f1', null, two);
-      const b = addSel(w.roster, w.contexts, f2, null, one);
+      const b = addedUid(addSel(w.roster, w.contexts, f2, null, one));
       addSel(w.roster, w.contexts, f2, null, two);
       const message = 'Hero: at most 1 allowed (has 2)';
       expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, b)]);
@@ -1756,7 +1756,7 @@ describe('roster edits', () => {
     const w = world(
       unit('u', 'Squad', 0, '<categoryLinks><categoryLink id="l" targetId="troops" primary="true"/></categoryLinks>'),
     );
-    const uid = addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen');
+    const uid = addedUid(addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen'));
     expect(w.ev().find(uid)!.eff.primary).toBe('chosen');
   });
 
