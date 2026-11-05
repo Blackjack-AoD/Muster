@@ -1759,6 +1759,46 @@ describe('roster edits', () => {
     const uid = addSel(w.roster, w.contexts, 'f1', null, w.root('Squad'), 1, 'chosen');
     expect(w.ev().find(uid)!.eff.primary).toBe('chosen');
   });
+
+  describe('an add with nowhere to go', () => {
+    const SQUAD = unit(
+      'u',
+      'Squad',
+      0,
+      children(entry('b', 'Banner', 0, children(entry('f', 'Flag', 0, cons(min(1)))))),
+    );
+
+    it('skips a root unit when its force is not in the roster', () => {
+      const w = world(SQUAD);
+      expect(addSel(w.roster, w.contexts, 'gone', null, w.root('Squad'))).toBeNull();
+      expect(w.roster.forces[0].selections).toEqual([]);
+    });
+
+    it('skips an option, and fills in none of its defaults, when its force is not in the roster', () => {
+      const w = world(SQUAD);
+      const u = w.add('Squad');
+      const before = structuredClone(w.roster);
+      expect(addSel(w.roster, w.contexts, 'gone', u, w.beneath(u, 'Banner'))).toBeNull();
+      expect(w.roster).toEqual(before);
+    });
+
+    it('skips an option when its parent is not in the roster', () => {
+      const w = world(SQUAD);
+      const u = w.add('Squad');
+      const banner = w.beneath(u, 'Banner');
+      const before = structuredClone(w.roster);
+      expect(addSel(w.roster, w.contexts, 'f1', 'gone', banner)).toBeNull();
+      expect(w.roster).toEqual(before);
+    });
+  });
+});
+
+describe('ctxFor', () => {
+  it('fails with a message a player can act on when the army has no context', () => {
+    const w = world('');
+    const force = { ...w.roster.forces[0], catalogueId: 'gone' };
+    expect(() => w.ev().ctxFor(force)).toThrow('This army is no longer in the synced data');
+  });
 });
 
 describe('defaultMember', () => {

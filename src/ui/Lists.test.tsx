@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
+import { removeRepo } from '../store';
 import { unit, world } from '../test/fixture';
 import { renderScreen, worldFiles } from '../test/screen';
 import { Lists } from './Lists';
@@ -37,6 +38,18 @@ describe('Lists', () => {
     expect(location.hash).toBe(`#/r/${saved?.uid}`);
     await screen.findByRole('heading', { name: 'Strike Force' });
     await waitFor(() => expect(document.querySelector('.pts')?.textContent).toBe('0/1,500pts'));
+  });
+
+  it("says the army's data has gone when its repo is removed under the new list sheet", async () => {
+    await renderScreen(<App />, { files: worldFiles(UNITS) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New list' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Army' }));
+    await screen.findByRole('button', { name: 'Create list' });
+    await removeRepo('test/repo');
+
+    await waitFor(() => expect(screen.queryByText("This army's data isn't on the phone.")).not.toBeNull());
+    expect(screen.queryByRole('button', { name: 'Create list' })).toBeNull();
   });
 
   it("shows each saved list's name and points limit on a card that opens it", async () => {
