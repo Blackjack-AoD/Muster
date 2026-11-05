@@ -62,19 +62,16 @@ let sheetSeq = 0;
 /** a sheet that just closed itself: its history step is released a moment later unless another sheet takes it over */
 let releasing: { cancelled: boolean } | null = null;
 
-export function Sheet({
-  title,
-  onClose,
-  children,
-  full,
-}: {
-  title: ComponentChildren;
-  onClose: () => void;
-  children: ComponentChildren;
-  full?: boolean;
-}) {
-  const close = useRef(onClose);
-  close.current = onClose;
+/** A ref to the latest value, for effects that run once and must not hold on to a stale one. */
+function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+/** Gives a sheet its own history step, so the phone's back button closes it instead of leaving the page. */
+function useSheetHistory(onClose: () => void) {
+  const close = useLatest(onClose);
   const id = useRef(0);
   const popped = useRef(false);
   // Back can close a picker shown inside the sheet and leave the sheet up, which then needs a step of its own again.
@@ -85,10 +82,6 @@ export function Sheet({
   });
   // layout effect: runs in the same commit as a previous sheet's cleanup, so one sheet can hand its step to the next
   useLayoutEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
-    addEventListener('keydown', k);
-    document.body.classList.add('locked');
-    // The sheet gets its own history step, so the phone's back button closes it instead of leaving the page.
     // Navigating from inside a sheet should use go(path, true), which replaces this step.
     id.current = ++sheetSeq;
     if (releasing) {
@@ -103,9 +96,7 @@ export function Sheet({
     };
     addEventListener('popstate', onPop);
     return () => {
-      removeEventListener('keydown', k);
       removeEventListener('popstate', onPop);
-      document.body.classList.remove('locked');
       // closed with the X, a tap outside or a choice: take our history step back off
       if (!popped.current && history.state?.sheet === id.current) {
         const r = (releasing = { cancelled: false });
@@ -115,6 +106,30 @@ export function Sheet({
           history.back();
         });
       }
+    };
+  }, []);
+}
+
+export function Sheet({
+  title,
+  onClose,
+  children,
+  full,
+}: {
+  title: ComponentChildren;
+  onClose: () => void;
+  children: ComponentChildren;
+  full?: boolean;
+}) {
+  const close = useLatest(onClose);
+  useSheetHistory(onClose);
+  useLayoutEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
+    addEventListener('keydown', k);
+    document.body.classList.add('locked');
+    return () => {
+      removeEventListener('keydown', k);
+      document.body.classList.remove('locked');
     };
   }, []);
   return (
