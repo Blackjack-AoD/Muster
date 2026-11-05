@@ -198,6 +198,18 @@ describe('Library', () => {
       expect(await storedName('thrax')).toBe('Squad Iron');
     });
 
+    it('keeps the old name when the rename leaves the name empty', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+      const before = getState().savedUnits;
+
+      rename('Squad Thrax', '   ');
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(getState().savedUnits).toBe(before);
+      expect(savedNames()).toEqual(['Squad Thrax']);
+      expect(await storedName('thrax')).toBe('Squad Thrax');
+    });
+
     it('tells the player when storage refuses the rename, and keeps the old name', async () => {
       await openArmy([saved('thrax', 'Squad Thrax')]);
       refuse('put');
