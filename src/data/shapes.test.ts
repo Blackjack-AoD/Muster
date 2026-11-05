@@ -1,7 +1,7 @@
 // One test for each common shape of data. Each states what the shape means, in the XML the data uses.
 import { describe, expect, it } from 'vitest';
 import { removeSel } from './engine';
-import { TWO_FORCES, children, conds, cons, entry, mods, unit, world } from '../test/fixture';
+import { TWO_FORCES, children, conds, cons, entry, mods, selIn, unit, world } from '../test/fixture';
 
 /** 10 points more while every condition holds. */
 const plusTen = (...c: string[]) => mods(`<modifier type="increment" field="pts" value="10">${conds(...c)}</modifier>`);
@@ -22,8 +22,7 @@ type World = ReturnType<typeof world>;
 
 const hiddenBeneath = (w: World, parentUid: string, name: string) => {
   const ev = w.ev();
-  const rs = ev.find(parentUid);
-  if (!rs) throw new Error(`no selection ${parentUid}`);
+  const rs = selIn(ev, parentUid);
   return ev.optionEff(w.beneath(parentUid, name), rs, rs.force).hidden;
 };
 

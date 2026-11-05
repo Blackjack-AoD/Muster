@@ -225,6 +225,11 @@ describe('syncRepo', () => {
 
 describe('importLocalFiles', () => {
   const file = (name: string, body: BlobPart, lastModified = 5) => new File([body], name, { lastModified });
+  const storedRepo = async (repo: string) =>
+    present(
+      (await db.repos()).find((r) => r.repo === repo),
+      'the stored repo',
+    );
 
   it('imports plain and zipped data files, ignoring the rest', async () => {
     const repo = repoName();
@@ -234,10 +239,7 @@ describe('importLocalFiles', () => {
       file('notes.txt', 'x'),
     ]);
     expect(added).toBe(2);
-    const state = present(
-      (await db.repos()).find((r) => r.repo === repo),
-      'the stored repo',
-    );
+    const state = await storedRepo(repo);
     expect(state.files.map((f) => [f.path, f.sha, f.header?.id])).toEqual([
       ['a.cat', 'local-5', 'a'],
       ['b.catz', 'local-5', 'b'],
@@ -258,10 +260,7 @@ describe('importLocalFiles', () => {
         ])) as BlobPart,
       ),
     ]);
-    const stored = present(
-      (await db.repos()).find((r) => r.repo === repo),
-      'the stored repo',
-    );
+    const stored = await storedRepo(repo);
     expect(stored.files.map((f) => f.path)).toEqual(['a.cat', 'sub/b.cat']);
   });
 
@@ -276,20 +275,14 @@ describe('importLocalFiles', () => {
         ])) as BlobPart,
       ),
     ]);
-    const stored = present(
-      (await db.repos()).find((r) => r.repo === repo),
-      'the stored repo',
-    );
+    const stored = await storedRepo(repo);
     expect(stored.files.map((f) => f.path)).toEqual(['a/x.cat', 'b/y.cat']);
   });
 
   it('keeps paths when files sit at the top of the zip', async () => {
     const repo = repoName();
     await importLocalFiles(repo, [file('dl.zip', (await makeZip([{ name: 'x.cat', text: xml('x') }])) as BlobPart)]);
-    const stored = present(
-      (await db.repos()).find((r) => r.repo === repo),
-      'the stored repo',
-    );
+    const stored = await storedRepo(repo);
     expect(stored.files.map((f) => f.path)).toEqual(['x.cat']);
   });
 
@@ -297,10 +290,7 @@ describe('importLocalFiles', () => {
     const repo = repoName();
     await importLocalFiles(repo, [file('a.cat', xml('a')), file('b.cat', xml('b'))]);
     await importLocalFiles(repo, [file('a.cat', xml('a', 'New'))]);
-    const files = present(
-      (await db.repos()).find((r) => r.repo === repo),
-      'the stored repo',
-    ).files;
+    const files = (await storedRepo(repo)).files;
     expect(files.map((f) => f.header?.name)).toEqual(['New', 'b']);
   });
 });

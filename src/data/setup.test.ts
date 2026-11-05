@@ -9,7 +9,7 @@ import {
   setUpForce,
   switchesOn,
 } from './setup';
-import { children, entry, present, unit, world } from '../test/fixture';
+import { children, entry, selIn, unit, world } from '../test/fixture';
 
 const min1 = (scope: string) =>
   `<constraints><constraint id="c" type="min" value="1" field="selections" scope="${scope}"/></constraints>`;
@@ -184,7 +184,7 @@ describe('pick', () => {
     const w = world(setupEntry('p', 'Panel', group('g', 'Choice', children(entry('a', 'A'), entry('b', 'B')))));
     const p = w.add('Panel');
     const ev = w.ev();
-    const rs = present(ev.find(p), 'the selection');
+    const rs = selIn(ev, p);
     const [g] = w.ctx.options(rs.node);
     return { w, p, rs, g };
   };

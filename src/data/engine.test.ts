@@ -15,7 +15,7 @@ import {
   type Issue,
 } from './engine';
 import type { Opt } from './catalog';
-import { TWO_FORCES, children, conds, cons, entry, group, mods, present, unit, world } from '../test/fixture';
+import { TWO_FORCES, children, conds, cons, entry, group, mods, present, selIn, unit, world } from '../test/fixture';
 
 const min = (n: number) => `<constraint id="c-min" type="min" value="${n}" field="selections" scope="parent"/>`;
 const max = (n: number) => `<constraint id="c-max" type="max" value="${n}" field="selections" scope="parent"/>`;
@@ -165,7 +165,7 @@ describe('modifiers', () => {
     );
     const u = w.add('Squad');
     const ev = w.ev();
-    expect(ev.limits(w.beneath(u, 'Gun'), present(ev.find(u), 'the selection'), ev.forces[0]).max).toBe(3);
+    expect(ev.limits(w.beneath(u, 'Gun'), selIn(ev, u), ev.forces[0]).max).toBe(3);
   });
 
   it('skips a modifier whose field matches nothing', () => {
@@ -737,7 +737,7 @@ describe('conditions', () => {
       );
       const s = w.add('Squad');
       const ev = w.ev();
-      expect(ev.optionEff(w.beneath(s, 'Gun'), present(ev.find(s), 'the selection'), ev.forces[0]).hidden).toBe(true);
+      expect(ev.optionEff(w.beneath(s, 'Gun'), selIn(ev, s), ev.forces[0]).hidden).toBe(true);
     });
   });
 });
@@ -1676,7 +1676,7 @@ describe('limits for the option picker', () => {
     const w = world(squad(constraints, modifiers));
     const u = w.add('Squad');
     const ev = w.ev();
-    return ev.limits(w.beneath(u, 'Gun'), present(ev.find(u), 'the selection'), ev.forces[0]);
+    return ev.limits(w.beneath(u, 'Gun'), selIn(ev, u), ev.forces[0]);
   };
 
   it('defaults to no minimum and no maximum', () => {
@@ -1740,7 +1740,7 @@ describe('limits for the option picker', () => {
       const b = w.add('Squad');
       const room = () => {
         const ev = w.ev();
-        return ev.roomBeyondParent(w.beneath(b, 'Gun'), present(ev.find(b), 'the selection'), ev.forces[0]);
+        return ev.roomBeyondParent(w.beneath(b, 'Gun'), selIn(ev, b), ev.forces[0]);
       };
       expect(room()).toBe(true);
       w.pick(a, 'Gun');
@@ -1752,7 +1752,7 @@ describe('limits for the option picker', () => {
       const b = w.add('Squad', 1, w.addForce());
       w.pick(a, 'Gun');
       const ev = w.ev();
-      expect(ev.roomBeyondParent(w.beneath(b, 'Gun'), present(ev.find(b), 'the selection'), ev.forces[1])).toBe(false);
+      expect(ev.roomBeyondParent(w.beneath(b, 'Gun'), selIn(ev, b), ev.forces[1])).toBe(false);
     });
   });
 
@@ -1774,7 +1774,7 @@ describe('selected', () => {
     w.pick(u, 'Axe');
     w.pick(u, 'Bow');
     const ev = w.ev();
-    const rs = present(ev.find(u), 'the selection');
+    const rs = selIn(ev, u);
     const [g] = w.ctx.options(rs.node);
     expect(ev.selected(g, rs, ev.forces[0]).map((s) => s.node.name)).toEqual(['Axe', 'Bow']);
     expect(ev.selected(g.members[0], rs, ev.forces[0]).map((s) => s.node.name)).toEqual(['Axe']);
@@ -2085,13 +2085,13 @@ describe('profiles and rules for display', () => {
     const w = world(unit('u', 'Squad', 0, inner), o);
     const u = w.add('Squad');
     const ev = w.ev();
-    return ev.profilesFor(present(ev.find(u), 'the selection'));
+    return ev.profilesFor(selIn(ev, u));
   };
   const rulesOf = (inner: string, o = {}) => {
     const w = world(unit('u', 'Squad', 0, inner), o);
     const u = w.add('Squad');
     const ev = w.ev();
-    return ev.rulesFor(present(ev.find(u), 'the selection'));
+    return ev.rulesFor(selIn(ev, u));
   };
 
   it("lists a unit's profiles and those of its selected children", () => {
@@ -2106,7 +2106,7 @@ describe('profiles and rules for display', () => {
     );
     const u = w.add('Squad');
     const ev = w.ev();
-    expect(ev.profilesFor(present(ev.find(u), 'the selection')).map((p) => p.name)).toEqual(['A', 'B']);
+    expect(ev.profilesFor(selIn(ev, u)).map((p) => p.name)).toEqual(['A', 'B']);
   });
   it('shows a repeated profile once', () => {
     const w = world(
@@ -2122,7 +2122,7 @@ describe('profiles and rules for display', () => {
     );
     const u = w.add('Squad');
     const ev = w.ev();
-    expect(ev.profilesFor(present(ev.find(u), 'the selection'))).toHaveLength(1);
+    expect(ev.profilesFor(selIn(ev, u))).toHaveLength(1);
   });
   it('leaves out hidden profiles', () => {
     expect(profilesOf(stat('A', 'hidden="true"'))).toEqual([]);
@@ -2167,8 +2167,8 @@ describe('profiles and rules for display', () => {
     const w = world(unit('u', 'Squad', 0, stat('A', '', mods('<modifier type="set" field="sv" value="2+"/>'))));
     const u = w.add('Squad');
     const ev = w.ev();
-    ev.profilesFor(present(ev.find(u), 'the selection'));
-    expect(present(ev.find(u), 'the selection').node.profiles[0].characteristics[1].value).toBe('3+');
+    ev.profilesFor(selIn(ev, u));
+    expect(selIn(ev, u).node.profiles[0].characteristics[1].value).toBe('3+');
   });
   it('skips a modifier on a profile when its condition fails', () => {
     const m = mods(
@@ -2189,7 +2189,7 @@ describe('profiles and rules for display', () => {
     );
     const u = w.add('Squad');
     const ev = w.ev();
-    expect(ev.rulesFor(present(ev.find(u), 'the selection')).map((r) => r.name)).toEqual(['A', 'B']);
+    expect(ev.rulesFor(selIn(ev, u)).map((r) => r.name)).toEqual(['A', 'B']);
   });
   it('leaves out hidden rules', () => {
     expect(rulesOf(rule('A', 'hidden="true"'))).toEqual([]);
@@ -2284,7 +2284,7 @@ describe('issuesOn', () => {
   };
   const messages = (w: ReturnType<typeof world>, uid: string) => {
     const ev = w.ev();
-    return issuesOn(ev, present(ev.find(uid), 'the selection')).map((i) => i.message);
+    return issuesOn(ev, selIn(ev, uid)).map((i) => i.message);
   };
 
   it('finds an issue two levels beneath the unit', () => {

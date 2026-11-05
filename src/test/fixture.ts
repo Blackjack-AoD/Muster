@@ -49,6 +49,8 @@ export function present<T>(value: T | null | undefined, what: string): T {
   return value;
 }
 
+export const selIn = (ev: Evaluator, selUid: string) => present(ev.find(selUid), 'the selection');
+
 /** A catalogue with `units` at its root and an empty one-force roster to build in. */
 export function world(units: string, o: WorldOptions = {}) {
   const gst = gameSystem(o.gst ?? FORCE);
@@ -86,7 +88,7 @@ export function world(units: string, o: WorldOptions = {}) {
     return opt;
   };
   const ev = () => new Evaluator(roster, contexts);
-  const sel = (selUid: string) => present(ev().find(selUid), 'the selection');
+  const sel = (selUid: string) => selIn(ev(), selUid);
   return {
     gst,
     cat,
