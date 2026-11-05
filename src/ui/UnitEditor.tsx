@@ -22,9 +22,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
     );
   }
   const isRoot = !rs.parent;
-  const issues = ctl.ev.issues.filter(
-    (i) => i.level === 'error' && i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)),
-  );
+  const issues = ctl.ev.issues.filter((i) => i.selUid && (i.selUid === rs.sel.uid || under(rs, i.selUid)));
   const cat = rs.eff.primary ? cleanCat(rs.force.ctx.categoryName(rs.eff.primary)) : '';
   const unitLike = rs.node.type === 'unit' || rs.node.type === 'model';
   // set-up entries (e.g. Expanded Army Lists) often have no profiles or rules: then there's only Options, and no tabs
@@ -54,7 +52,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
       {issues.length > 0 && tab === 'options' && (
         <ul class="issues inline">
           {issues.map((i) => (
-            <li class="error">
+            <li class={i.level}>
               <Icon name="warn" size={16} />
               <span>{i.message.split(' › ').pop()}</span>
             </li>

@@ -789,6 +789,9 @@ input:focus {
 .unit-row.bad {
   border-left-color: var(--red);
 }
+.unit-row.warn {
+  border-left-color: var(--amber);
+}
 .ur-main {
   flex: 1;
   min-width: 0;
@@ -802,6 +805,13 @@ input:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.ur-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--amber);
+  font-size: 12.5px;
 }
 .ur-pts {
   font-variant-numeric: tabular-nums;

@@ -324,9 +324,9 @@ function reUid(s: Sel): Sel {
 
 /** Tap to open. Swipe left to delete (with Undo), swipe right to duplicate. */
 function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
-  const bad = ctl.ev.issues.some(
-    (i) => i.level === 'error' && i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)),
-  );
+  const issues = ctl.ev.issues.filter((i) => i.selUid && (i.selUid === u.sel.uid || isDescendant(u, i.selUid)));
+  const bad = issues.some((i) => i.level === 'error');
+  const noted = !bad && issues.length > 0;
   const summary = unitSummary(u);
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; id: number; swiping: boolean; moved: boolean } | null>(null);
@@ -406,7 +406,7 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
         </div>
       )}
       <a
-        class={'unit-row' + (bad ? ' bad' : '') + (dx ? ' dragging' : '')}
+        class={'unit-row' + (bad ? ' bad' : noted ? ' warn' : '') + (dx ? ' dragging' : '')}
         href={'#' + to}
         style={dx ? { transform: `translateX(${dx}px)` } : undefined}
         onClick={(e) => {
@@ -428,6 +428,12 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
           </div>
           {summary && <div class="ur-sub">{summary}</div>}
         </div>
+        {noted && (
+          <span class="ur-note">
+            <Icon name="warn" size={14} />
+            note
+          </span>
+        )}
         {u.total || swipeable ? <span class="ur-pts">{fmtN(u.total)}</span> : <Icon name="chev" size={18} />}
       </a>
     </div>
