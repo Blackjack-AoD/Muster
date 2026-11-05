@@ -140,29 +140,33 @@ export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withR
   return { data: await pack({ ...s, rules: undefined }), withRules: false };
 }
 
-const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'string');
+const isText = (v: unknown) => typeof v === 'string';
+const isTextPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(isText);
 const isListOf = (v: unknown, each: (x: unknown) => boolean) => Array.isArray(v) && v.every(each);
 
-const isSnapProfile = (p: unknown) => isRecord(p) && isListOf(p.chars, isTextPair);
+const isGearLine = (g: unknown) => isRecord(g) && typeof g.d === 'number';
+const isSnapProfile = (p: unknown) => isRecord(p) && typeof p.type === 'string' && isListOf(p.chars, isTextPair);
 const isSnapUnit = (u: unknown) =>
   isRecord(u) &&
   typeof u.pts === 'number' &&
-  isListOf(u.gear, isRecord) &&
+  isListOf(u.gear, isGearLine) &&
   isListOf(u.profiles, isSnapProfile) &&
-  Array.isArray(u.rules);
+  isListOf(u.rules, isText);
 const isSnapForce = (f: unknown) =>
   isRecord(f) &&
   typeof f.pts === 'number' &&
   isListOf(f.units, isSnapUnit) &&
-  (f.setup === undefined || Array.isArray(f.setup));
+  (f.setup === undefined || isListOf(f.setup, isText));
 
-/** The fields the sheet can't draw without, in the shapes `buildSnapshot` writes, so old v1 links still pass. */
+/** The fields the sheet uses as numbers or joins as text. Only `rules` and `setup` may be absent from a link. */
 function isSnapshot(s: unknown): s is Snapshot {
   return (
     isRecord(s) &&
     s.v === 1 &&
     typeof s.pts === 'number' &&
     typeof s.limit === 'number' &&
+    typeof s.issues === 'number' &&
+    typeof s.at === 'number' &&
     isListOf(s.forces, isSnapForce) &&
     (s.rules === undefined || isListOf(s.rules, isTextPair))
   );
