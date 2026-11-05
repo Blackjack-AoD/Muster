@@ -274,7 +274,7 @@ function saveEdit(r: Roster) {
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void> {
   const force = r.forces.find((f) => f.uid === rs.force.force.uid);
   const sel = force?.selections.find((s) => s.uid === rs.sel.uid);
-  if (!force || !sel) return;
+  if (!force || !sel) throw new Error('Only a unit of this list can be saved.');
   const now = Date.now();
   const saved: SavedUnit = {
     id: uid(),
