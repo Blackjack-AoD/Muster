@@ -240,7 +240,7 @@ describe('RosterView', () => {
       expect(button).not.toBeNull();
       if (button) fireEvent.click(button);
     }
-    const asked = vi.fn(() => true);
+    const asked = vi.fn<(message: string) => boolean>();
 
     async function openBroken(broken: Roster, error: string) {
       openHash(`#/r/${broken.uid}`);
@@ -249,7 +249,7 @@ describe('RosterView', () => {
     }
 
     beforeEach(() => {
-      asked.mockClear();
+      asked.mockReset().mockReturnValue(true);
       vi.stubGlobal('confirm', asked);
     });
     afterEach(() => {

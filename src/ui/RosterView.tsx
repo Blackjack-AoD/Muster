@@ -36,6 +36,18 @@ import { rosterText, shareText } from './exporter';
 
 export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
 
+/** Asks the player first, and returns whether the list has gone. */
+async function deleteList(r: Roster): Promise<boolean> {
+  if (!confirm(`Delete "${r.name}"? This can't be undone.`)) return false;
+  try {
+    await deleteRoster(r.uid);
+    return true;
+  } catch (e) {
+    toast(failureMessage('delete this list', e));
+    return false;
+  }
+}
+
 export function RosterView({ uid: rid }: { uid: string }) {
   const roster = useStore((s) => s.rosters.find((r) => r.uid === rid));
   const { ctl, error, loading } = useRosterCtl(roster);
@@ -58,6 +70,16 @@ export function RosterView({ uid: rid }: { uid: string }) {
       <div class="page">
         <TopBar title="List" backTo="/" />
         <p class="error-text pad">{error}</p>
+        <div class="pad">
+          <button
+            class="btn danger wide"
+            onClick={async () => {
+              if (await deleteList(roster)) go('/', true);
+            }}
+          >
+            <Icon name="trash" /> Delete list
+          </button>
+        </div>
       </div>
     );
   return <RosterBody ctl={ctl} />;
@@ -658,13 +680,7 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
         <button
           class="danger"
           onClick={async () => {
-            if (!confirm(`Delete "${ctl.roster.name}"? This can't be undone.`)) return;
-            try {
-              await deleteRoster(ctl.roster.uid);
-            } catch (e) {
-              toast(failureMessage('delete this list', e));
-              return;
-            }
+            if (!(await deleteList(ctl.roster))) return;
             onClose();
             go('/', true);
           }}
