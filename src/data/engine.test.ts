@@ -528,6 +528,14 @@ describe('conditions', () => {
       w.addForce();
       expect(holds(w, u)).toBe(true);
     });
+    it('counts no detachment when a condition measures points of a force entry', () => {
+      const w = world(guarded('<condition type="atLeast" value="1" field="pts" scope="force" childId="det"/>'));
+      expect(holds(w, w.add('Squad'))).toBe(false);
+    });
+    it('counts no detachment when a condition asks at parent scope', () => {
+      const w = world(guarded('<condition type="atLeast" value="1" field="selections" scope="parent" childId="det"/>'));
+      expect(holds(w, w.add('Squad'))).toBe(false);
+    });
     it('a list with no detachment of that force entry counts none', () => {
       const w = world(
         guarded('<condition type="lessThan" value="1" field="selections" scope="roster" childId="ally"/>'),
@@ -836,6 +844,34 @@ describe('effects that depend on each other', () => {
     expect(built(xml, 'Reader', 'Marked', 'Spotter')).toEqual(expected);
   });
 
+  it('keeps going after a pass that swaps one category for another', () => {
+    const plain = '<categoryLinks><categoryLink id="l" targetId="plain"/></categoryLinks>';
+    const spotted = conds('<condition type="atLeast" value="10" field="pts" scope="force" childId="s"/>');
+    const xml =
+      unit('s', 'Spotter', 10) +
+      unit(
+        'm',
+        'Marked',
+        0,
+        plain +
+          mods(
+            `<modifier type="remove" field="category" value="plain">${spotted}</modifier>`,
+            `<modifier type="add" field="category" value="elite">${spotted}</modifier>`,
+          ),
+      ) +
+      unit(
+        'r',
+        'Reader',
+        1,
+        mods(
+          `<modifier type="increment" field="pts" value="5">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="elite"/>')}</modifier>`,
+        ),
+      );
+    const expected = { total: 16, pts: { Spotter: 10, Marked: 0, Reader: 6 } };
+    expect(built(xml, 'Spotter', 'Marked', 'Reader')).toEqual(expected);
+    expect(built(xml, 'Reader', 'Marked', 'Spotter')).toEqual(expected);
+  });
+
   it('keeps going after a pass that changes only a primary category', () => {
     const hq = '<categoryLinks><categoryLink id="l" targetId="hq" primary="true"/></categoryLinks>';
     const xml =
@@ -1033,6 +1069,118 @@ describe('validation', () => {
     expect(w.ev().optionEff(w.root('Squad'), null, w.ev().forces[0]).hidden).toBe(true);
     expect(w.warnings()).toEqual([]);
   });
+  describe('an entry that hides itself once one is taken', () => {
+    const SELF_HIDE = `<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</modifier>`;
+    const OTHER_TAKEN = conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>');
+    const withOther = (...modifiers: string[]) => {
+      const w = world(unit('u', 'Squad', 0, mods(SELF_HIDE, ...modifiers)) + unit('x', 'Other', 0));
+      w.add('Squad');
+      return w;
+    };
+
+    it("doesn't warn over another hide whose condition doesn't hold", () => {
+      const w = withOther(`<modifier type="set" field="hidden" value="true">${OTHER_TAKEN}</modifier>`);
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it("doesn't warn when another modifier shows the entry again", () => {
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          mods(`<modifier type="set" field="hidden" value="false">${OTHER_TAKEN}</modifier>`, SELF_HIDE),
+        ) + unit('x', 'Other', 0),
+      );
+      w.add('Squad');
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it("doesn't warn over a modifier of hidden that only a set can apply", () => {
+      const w = withOther(`<modifier type="append" field="hidden" value="true">${OTHER_TAKEN}</modifier>`);
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it("doesn't warn over a modifier of another field", () => {
+      const w = withOther(`<modifier type="set" field="name" value="true">${OTHER_TAKEN}</modifier>`);
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it('knows itself by the id of the link it was added through', () => {
+      const shared = entry(
+        'u',
+        'Squad',
+        0,
+        mods(
+          `<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="link"/>')}</modifier>`,
+        ),
+        'type="unit"',
+      );
+      const w = world('', {
+        cat: `<entryLinks><entryLink id="link" name="Squad" targetId="u" type="selectionEntry"/></entryLinks>
+          <sharedSelectionEntries>${shared}</sharedSelectionEntries>`,
+      });
+      w.add('Squad');
+      expect(w.ev().optionEff(w.root('Squad'), null, w.ev().forces[0]).hidden).toBe(true);
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it('finds itself in a condition group inside a condition group', () => {
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          mods(
+            `<modifier type="set" field="hidden" value="true"><conditionGroups><conditionGroup type="and"><conditionGroups><conditionGroup type="and">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</conditionGroup></conditionGroups></conditionGroup></conditionGroups></modifier>`,
+          ),
+        ),
+      );
+      w.add('Squad');
+      expect(w.ev().optionEff(w.root('Squad'), null, w.ev().forces[0]).hidden).toBe(true);
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it('finds itself beside another condition in one guard', () => {
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          mods(
+            `<modifier type="set" field="hidden" value="true">${conds(
+              '<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>',
+              '<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>',
+            )}</modifier>`,
+          ),
+        ) + unit('x', 'Other', 0),
+      );
+      w.add('Squad');
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+
+    it("finds itself in one of a modifier's guards", () => {
+      const w = world(
+        unit(
+          'u',
+          'Squad',
+          0,
+          `<modifierGroups><modifierGroup>
+            ${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}
+            ${mods(`<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</modifier>`)}
+          </modifierGroup></modifierGroups>`,
+        ) + unit('x', 'Other', 0),
+      );
+      w.add('Squad');
+      w.add('Other');
+      expect(w.warnings()).toEqual([]);
+    });
+  });
+
   it('still warns when something else hides a self-hiding entry', () => {
     const w = world(
       unit(
@@ -1110,6 +1258,26 @@ describe('validation', () => {
       const f2 = w.addForce();
       const message = 'HQ: needs at least 1 (has 0)';
       expect(w.ev().issues).toEqual([issue('force', message, 'f1'), issue('force', message, f2)]);
+    });
+
+    it('gives a category limit across the list one issue, however many forces reach it', () => {
+      const gst = `<categoryEntries><categoryEntry id="hq" name="HQ"/></categoryEntries>
+        <forceEntries><forceEntry id="det" name="Detachment"><categoryLinks>
+          <categoryLink id="l" name="HQ" targetId="hq"><constraints>
+            <constraint id="c" type="max" value="1" field="selections" scope="roster"/>
+          </constraints></categoryLink>
+        </categoryLinks></forceEntry></forceEntries>`;
+      const hero = unit(
+        'u',
+        'Hero',
+        0,
+        '<categoryLinks><categoryLink id="c-hq" targetId="hq" primary="true"/></categoryLinks>',
+      );
+      const w = world(hero, { gst });
+      const f2 = w.addForce();
+      w.add('Hero');
+      w.add('Hero', 1, f2);
+      expect(w.ev().issues).toEqual([issue('list', 'HQ: at most 1 allowed in the list (has 2)', 'f1')]);
     });
 
     it('gives a missing root unit one issue on each force', () => {
@@ -1521,6 +1689,15 @@ describe('limits for the option picker', () => {
     expect(limits(a + b).max).toBe(5);
     expect(limits(b + a).max).toBe(5);
   });
+  it('a max of 0 is a real limit', () => {
+    expect(limits('<constraint id="a" type="max" value="0" field="selections" scope="parent"/>').max).toBe(0);
+  });
+  it('a max of 0 beats a higher max in either order', () => {
+    const none = '<constraint id="a" type="max" value="0" field="selections" scope="parent"/>';
+    const five = '<constraint id="b" type="max" value="5" field="selections" scope="parent"/>';
+    expect(limits(none + five).max).toBe(0);
+    expect(limits(five + none).max).toBe(0);
+  });
   it('a modifier that sets a max to -1 leaves another real limit in force', () => {
     const a = '<constraint id="a" type="max" value="5" field="selections" scope="parent"/>';
     const b = '<constraint id="b" type="max" value="2" field="selections" scope="parent"/>';
@@ -1699,6 +1876,11 @@ describe('adding a unit fills in what it must have', () => {
     const nested = `<selectionEntryGroups><selectionEntryGroup id="inner" name="Inner">${children(hiddenFree, entry('s', 'Sword', 10))}</selectionEntryGroup></selectionEntryGroups>`;
     const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + children(entry('b', 'Bow', 5)) + nested)));
     expect(names(w, w.add('Squad'))).toEqual(['1x Bow']);
+  });
+  it('prices a nested group by its cheapest member, wherever that sits', () => {
+    const nested = `<selectionEntryGroups><selectionEntryGroup id="inner" name="Inner">${children(entry('s', 'Sword', 10), entry('d', 'Dagger', 1))}</selectionEntryGroup></selectionEntryGroups>`;
+    const w = world(unit('u', 'Squad', 0, group(cons(min(1)) + children(entry('b', 'Bow', 5)) + nested)));
+    expect(names(w, w.add('Squad'))).toEqual(['1x Dagger']);
   });
   it('compares nested groups by what they hold', () => {
     const inner = (id: string, member: string) =>
