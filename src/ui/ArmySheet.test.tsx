@@ -178,7 +178,6 @@ describe('Share link', () => {
     });
     await pressShareLink(SHARED);
     await waitFor(() => expect(copied).toHaveBeenCalled());
-    await copied.mock.results[0].value.catch(() => {});
     await expectToast("Couldn't share: Permission denied");
   });
 

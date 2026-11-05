@@ -55,18 +55,33 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
   return lines.join('\n');
 }
 
-export const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+const isCancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
 
-export async function shareText(text: string, title: string) {
+/** Copies `text` after the share sheet rejected with `e`, unless the player cancelled it. */
+export async function copyAfterFailedShare(text: string, e: unknown): Promise<void> {
+  if (isCancelled(e)) return;
   try {
-    if (navigator.share) {
+    await navigator.clipboard.writeText(text);
+    toast(`${failureMessage('share', e)}. Copied it instead`);
+  } catch {
+    toast(failureMessage('share', e));
+  }
+}
+
+export async function shareText(text: string, title: string): Promise<void> {
+  if (navigator.share) {
+    try {
       await navigator.share({ title, text });
-    } else {
-      await navigator.clipboard.writeText(text);
-      toast('Copied to clipboard');
+    } catch (e) {
+      await copyAfterFailedShare(text, e);
     }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied to clipboard');
   } catch (e) {
-    if (!isCancelled(e)) toast(failureMessage('share', e));
+    toast(failureMessage('share', e));
   }
 }
 
