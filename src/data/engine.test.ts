@@ -944,13 +944,27 @@ describe('validation', () => {
       const fe = w.ctx.forceEntries()[0];
       expect(forceRootOptions(w.ctx, fe)).toBe(forceRootOptions(w.ctx, fe));
     });
-    // BUG: the stand-in force entry has no categoryLinks, so validation throws. A list whose detachment
-    // type has gone from the data can't be opened at all.
-    it.fails('falls back to a stand-in force entry when the data lost it', () => {
+    it('falls back to a stand-in force entry when the data lost it', () => {
       const w = world(unit('u', 'Squad', 5));
       w.add('Squad');
       w.roster.forces[0].forceEntryId = 'gone';
       expect(w.ev().forces[0].entry.name).toBe('Force');
+    });
+    it('still counts the units of a force whose entry has gone', () => {
+      const w = world(unit('u', 'Squad', 5));
+      w.add('Squad', 2);
+      w.add('Squad', 1, w.addForce());
+      w.roster.forces[0].forceEntryId = 'gone';
+      const ev = w.ev();
+      expect(ev.forces.map((f) => f.total)).toEqual([10, 5]);
+      expect(ev.total).toBe(15);
+    });
+    it('applies no category limits to a force whose entry has gone', () => {
+      const w = world(units, { gst: FOC });
+      w.add('Boss', 3);
+      expect(w.errors()).toEqual(['HQ: at most 2 allowed (has 3)']);
+      w.roster.forces[0].forceEntryId = 'gone';
+      expect(w.errors()).toEqual([]);
     });
   });
 });
