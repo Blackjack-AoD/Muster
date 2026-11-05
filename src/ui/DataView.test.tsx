@@ -166,6 +166,75 @@ describe('DataView', () => {
     await expectToast("Couldn't reload a fresh copy: caches is not defined");
   });
 
+  describe('Restore', () => {
+    const restoreFile = (text: string) =>
+      fireEvent.change(screen.getByLabelText('Restore'), {
+        target: { files: [new File([text], 'backup.json')] },
+      });
+    const backup = JSON.stringify({ app: 'muster', version: 1, rosters: [world('').roster] });
+
+    it('restores the lists in a backup file', async () => {
+      await renderScreen(<App />);
+
+      restoreFile(backup);
+
+      await expectToast('Restored 1 list(s)');
+      expect((await db.rosters()).map((r) => r.uid)).toEqual(['r']);
+    });
+
+    it('reads a bare list of rosters as a backup', async () => {
+      await renderScreen(<App />);
+
+      restoreFile(JSON.stringify([world('').roster]));
+
+      await expectToast('Restored 1 list(s)');
+      expect(getState().rosters.map((r) => r.uid)).toEqual(['r']);
+    });
+
+    it.each([
+      ['text that is not JSON', 'not json'],
+      ['JSON with no lists in it', '{"app":"muster"}'],
+      ['the JSON value null', 'null'],
+    ])("says %s isn't a backup", async (_what, text) => {
+      await renderScreen(<App />);
+
+      restoreFile(text);
+
+      await expectToast("That file isn't a Muster backup");
+    });
+
+    it('shows the reason when storage refuses the lists', async () => {
+      await renderScreen(<App />);
+      refuse('put');
+
+      restoreFile(backup);
+
+      await expectToast("Couldn't restore: Storage is full");
+    });
+  });
+
+  it('shows the reason when an imported file cannot be read', async () => {
+    await renderScreen(<App />);
+    const damaged = new File(['not a zip'], 'army.zip');
+
+    fireEvent.change(screen.getByLabelText('Import data files or a repo .zip'), { target: { files: [damaged] } });
+
+    await waitFor(() => expect(getState().toast).toMatch(/^Couldn't import: /));
+    expect(await db.repos()).toEqual([]);
+  });
+
+  it('shows the reason in a toast when the install prompt fails', async () => {
+    const offer = Object.assign(new Event('beforeinstallprompt'), {
+      prompt: () => Promise.reject(new Error('Install was blocked')),
+    });
+    dispatchEvent(offer);
+    await renderScreen(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install app' }));
+
+    await expectToast("Couldn't install: Install was blocked");
+  });
+
   it('leaves out the storage line, with no toast, when the browser refuses a storage estimate', async () => {
     const estimate = vi.fn().mockRejectedValue(new Error('denied'));
     Object.defineProperty(navigator, 'storage', { configurable: true, value: { estimate } });
