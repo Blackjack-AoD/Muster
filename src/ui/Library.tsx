@@ -262,6 +262,8 @@ function useCtx(repoName: string, catId: string) {
 
 function UnitList({ repo, catId }: { repo: string; catId: string }) {
   const { ctx, err } = useCtx(repo, catId);
+  const allSaved = useStore((s) => s.savedUnits);
+  const saved = allSaved.filter((u) => u.repo === repo && u.catalogueId === catId);
   const [q, setQ] = useState('');
   const groups = useMemo(() => {
     if (!ctx) return [];
@@ -301,6 +303,16 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
       <div class="search">
         <Icon name="search" size={18} />
         <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+      </div>
+      <div class="list-label">Saved units</div>
+      <div class="pick-list" role="group" aria-label="Saved units">
+        {saved.map((u) => (
+          <div class="pick" key={u.id}>
+            <span>
+              <b>{u.name}</b>
+            </span>
+          </div>
+        ))}
       </div>
       {groups.map((g) => {
         const items = g.items.filter((x) => x.o.node.name.toLowerCase().includes(ql));
