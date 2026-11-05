@@ -39,6 +39,12 @@ export function addedUid(uid: string | null): string {
   return uid;
 }
 
+/** A value a test needs, so a missing one fails there by name. */
+export function present<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`${what} is missing`);
+  return value;
+}
+
 /** A catalogue with `units` at its root and an empty one-force roster to build in. */
 export function world(units: string, o: WorldOptions = {}) {
   const gst = gameSystem(o.gst ?? FORCE);
@@ -62,7 +68,7 @@ export function world(units: string, o: WorldOptions = {}) {
     return opt;
   };
   const beneath = (parentUid: string, name: string) => {
-    const rs = ev().find(parentUid)!;
+    const rs = present(ev().find(parentUid), 'the parent selection');
     const walk = (opts: Opt[]): Opt | undefined => {
       for (const o of opts) {
         if (o.node.name === name) return o;
@@ -100,7 +106,7 @@ export function world(units: string, o: WorldOptions = {}) {
       roster.forces.push({ uid, forceEntryId: fe.id, catalogueId: cat.id, selections: [] });
       return uid;
     },
-    pts: (selUid: string) => ev().find(selUid)!.total,
+    pts: (selUid: string) => present(ev().find(selUid), 'the selection').total,
     errors: () =>
       ev()
         .issues.filter((i) => i.level === 'error')
