@@ -128,13 +128,19 @@ function forgetUnsaved(u: string) {
   set({ unsaved: new Set([...state.unsaved].filter((x) => x !== u)) });
 }
 
+/** Saves started for each list. Two can share a millisecond, so `updated` can't order them. */
+const savesStarted = new Map<string, number>();
+
 export async function saveRoster(r: Roster) {
+  const started = (savesStarted.get(r.uid) ?? 0) + 1;
+  savesStarted.set(r.uid, started);
   r.updated = Date.now();
   // update memory first so screens opened straight after an edit see it
   const rosters = state.rosters.filter((x) => x.uid !== r.uid);
   rosters.push(structuredClone(r));
   set({ rosters });
   await db.putRoster(r);
+  if (savesStarted.get(r.uid) !== started) return;
   forgetUnsaved(r.uid);
   if (state.toastAction?.failedSave === r.uid) dismissToast();
 }
@@ -238,7 +244,11 @@ function saveEdit(r: Roster) {
     const latest = state.rosters.find((x) => x.uid === r.uid);
     if (latest) saveEdit(latest);
   };
-  saveRoster(r).catch(() => {
+  const saving = saveRoster(r);
+  // saveRoster counts itself before it first waits, and a newer save reports on the list instead of this one
+  const started = savesStarted.get(r.uid);
+  saving.catch(() => {
+    if (savesStarted.get(r.uid) !== started) return;
     set({ unsaved: new Set([...state.unsaved, r.uid]) });
     toast("Couldn't save this list", { label: 'Retry', run: retry, failedSave: r.uid });
   });
