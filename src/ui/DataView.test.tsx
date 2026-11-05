@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, within } from '@testing-library/preact';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
-import { renderScreen } from '../test/screen';
+import { getState } from '../store';
+import { renderScreen, worldFiles } from '../test/screen';
 
 const GST = '<gameSystem id="gst" name="Test Game" revision="1"/>';
 const CAT = '<catalogue id="cat" name="Test Army" revision="1" gameSystemId="gst"/>';
@@ -41,7 +42,18 @@ beforeEach(() => {
   history.replaceState(null, '', '#/data');
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const REPO_FILES = worldFiles('');
+const STORAGE_FULL = new DOMException('Storage is full', 'QuotaExceededError');
+const refuse = (method: 'put' | 'delete') =>
+  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
+    throw STORAGE_FULL;
+  });
+const expectToast = (text: string) => waitFor(() => expect(getState().toast).toBe(text));
 
 describe('DataView', () => {
   it.each(['owner/data', 'https://github.com/owner/data/tree/main'])(
@@ -74,5 +86,58 @@ describe('DataView', () => {
     await screen.findByText('Use the form owner/repo, e.g. BSData/horus-heresy');
     expect(urls).toEqual([]);
     expect(await db.repos()).toEqual([]);
+  });
+
+  it('shows a failed download on its card alone, with no toast', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    await renderScreen(<App />);
+
+    addRepo('owner/data');
+
+    await screen.findByText('Repo not found (is it public?)');
+    expect(getState().toast).toBeUndefined();
+  });
+
+  it('shows the reason in a toast when storage refuses a sync', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    await renderScreen(<App />);
+    refuse('put');
+
+    addRepo('owner/data');
+
+    await expectToast("Couldn't sync: Storage is full");
+  });
+
+  it('shows the reason in a toast when removing a repo fails, and keeps the repo', async () => {
+    vi.stubGlobal('confirm', () => true);
+    await renderScreen(<App />, { files: REPO_FILES });
+    refuse('delete');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove test/repo' }));
+
+    await expectToast("Couldn't remove: Storage is full");
+    expect(getState().repos.map((r) => r.repo)).toEqual(['test/repo']);
+  });
+
+  it('shows the reason in a toast when reloading a fresh copy fails', async () => {
+    vi.stubGlobal('confirm', () => true);
+    await renderScreen(<App />);
+
+    // jsdom has no `caches`, as on a page served without https
+    fireEvent.click(screen.getByText('Reload a fresh copy'));
+
+    await expectToast("Couldn't reload a fresh copy: caches is not defined");
+  });
+
+  it('leaves out the storage line, with no toast, when the browser refuses a storage estimate', async () => {
+    const estimate = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'storage', { configurable: true, value: { estimate } });
+    onTestFinished(() => Reflect.deleteProperty(navigator, 'storage'));
+    await renderScreen(<App />);
+
+    await waitFor(() => expect(estimate).toHaveBeenCalled());
+    await screen.findByText('Army data sources');
+    expect(screen.queryByText(/Storage used/)).toBeNull();
+    expect(getState().toast).toBeUndefined();
   });
 });

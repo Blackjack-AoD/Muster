@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
-import { deleteRoster, getState, saveRoster, toast, useRosterCtl } from './store';
+import { DEFAULT_REPOS } from './data/sync';
+import { deleteRoster, getState, init, removeRepo, saveRoster, toast, useRosterCtl } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
@@ -254,5 +255,44 @@ describe('how long the failed save toast stays up', () => {
     await saveRoster({ ...newList(), uid: 'other' });
 
     expect(getState().toast).toBe(SAVE_FAILED);
+  });
+});
+
+describe('starting up', () => {
+  /** A first open: online with no data, and neither GitHub nor storage will take a download. */
+  function failFirstDownload() {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    failSaves();
+  }
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    // removing a repo also clears its record in the store's sync progress
+    await removeRepo(DEFAULT_REPOS[0]);
+  });
+
+  it('shows the reason in a toast when storage refuses the first download', async () => {
+    failFirstDownload();
+    await init();
+    expect(getState().toast).toBe("Couldn't sync: Storage is full");
+    expect(getState().ready).toBe(true);
+  });
+
+  // BUG: a sync that can't record its failure stays "working", which disables every sync button until a reload
+  it.fails('stops showing a repo as working when storage refuses its failure', async () => {
+    failFirstDownload();
+    await init();
+    expect(getState().sync[DEFAULT_REPOS[0]]?.stage).toBe('error');
+  });
+
+  it('opens with no toast when the browser refuses persistent storage', async () => {
+    const persist = vi.fn().mockRejectedValue(new Error('denied'));
+    const storage = { persisted: async () => false, persist };
+    vi.stubGlobal('navigator', { onLine: false, storage });
+    await init();
+    expect(persist).toHaveBeenCalled();
+    expect(getState().toast).toBeUndefined();
   });
 });
