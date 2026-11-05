@@ -6,7 +6,7 @@ import { db } from '../data/db';
 import { getState } from '../store';
 import { children, entry, unit, world } from '../test/fixture';
 import { expectToast, linkHash, openHash, press, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
-import type { Snapshot } from './snapshot';
+import type { SnapProfile, Snapshot } from './snapshot';
 
 const UNITS =
   unit('tac', 'Tactical Squad', 100, children(entry('melta', 'Melta Gun', 15))) + unit('assault', 'Assault Squad', 80);
@@ -102,6 +102,61 @@ describe('SharedView', () => {
 
     await screen.findByText("This link doesn't contain a readable list. It may have been cut short when it was sent.");
     expect(sheetUnits()).toEqual([]);
+  });
+});
+
+describe('the stats on a unit', () => {
+  const stat = (name: string, type: string, value = '4') => ({
+    name,
+    type,
+    chars: [['S', value]] as [string, string][],
+  });
+  const WORDY = 'a line far too long for a grid';
+
+  /** Each block of stats on the sheet, as the profile names it shows. */
+  async function statBlocks(profiles: SnapProfile[]) {
+    const unit = { name: 'Servitor', cat: 'Elites', pts: 25, gear: [], profiles, rules: [] };
+    openHash(await linkHash({ ...SHARED, forces: [{ ...SHARED.forces[0], units: [unit] }] }));
+    await renderScreen(<App />);
+    await screen.findByRole('heading', { name: 'Friendly Fire' });
+    return [...document.querySelectorAll('.as-stats')].map((block) =>
+      [...block.querySelectorAll('b')].map((name) => name.textContent),
+    );
+  }
+
+  it('puts unit stats first, then weapons, then the rest, and keeps the order within each', async () => {
+    const profiles = [
+      stat('Psychic Power', 'Psychic'),
+      stat('Bolter', 'Ranged Weapon'),
+      stat('Servitor', 'Unit'),
+      stat('Fist', 'Melee Weapon'),
+      stat('Tank', 'Vehicle'),
+      stat('Aura', 'Ability'),
+    ];
+    expect(await statBlocks(profiles)).toEqual([
+      ['Servitor'],
+      ['Tank'],
+      ['Bolter'],
+      ['Fist'],
+      ['Psychic Power'],
+      ['Aura'],
+    ]);
+  });
+
+  it('draws every profile of a type in one block, wherever it sits in the unit', async () => {
+    const profiles = [stat('Bolter', 'Weapon'), stat('Servitor', 'Unit'), stat('Fist', 'Weapon')];
+    expect(await statBlocks(profiles)).toEqual([['Servitor'], ['Bolter', 'Fist']]);
+  });
+
+  it('leaves out a type with a wordy value, unless it is a unit or a weapon', async () => {
+    const profiles = [
+      stat('Servitor', 'Unit', WORDY),
+      stat('Bolter', 'Weapon', WORDY),
+      stat('Short', 'Ability'),
+      stat('Long', 'Ability', WORDY),
+      stat('Aura', 'Psychic'),
+    ];
+    expect(await statBlocks(profiles)).toEqual([['Servitor'], ['Bolter'], ['Aura']]);
   });
 });
 
