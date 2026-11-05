@@ -148,6 +148,75 @@ describe('share links', () => {
     const noForces = (await encodeSnapshot({ v: 1 } as unknown as Snapshot)).data;
     await expect(decodeSnapshot(noForces)).rejects.toThrow('Not a Muster list');
   });
+  describe('from any v1 list', () => {
+    const FULL = {
+      v: 1,
+      name: 'Friendly Fire',
+      game: 'Test Game',
+      pts: 25,
+      limit: 2000,
+      forces: [
+        {
+          name: 'Detachment',
+          army: 'Test Army',
+          pts: 25,
+          setup: ['Allegiance: Loyalist'],
+          units: [
+            {
+              name: 'Servitor',
+              cat: 'Elites',
+              pts: 25,
+              gear: [{ d: 0, t: 'Servo Arm' }],
+              profiles: [{ name: 'Servitor', type: 'Unit', chars: [['M', '6']] }],
+              rules: ['Mindlock'],
+            },
+          ],
+        },
+      ],
+      rules: [['Mindlock', 'Moves slowly.']],
+      issues: 0,
+      at: 0,
+    };
+    const force = FULL.forces[0];
+    const servitor = force.units[0];
+    const withForce = (change: object) => ({ ...FULL, forces: [{ ...force, ...change }] });
+    const withUnit = (change: object) => withForce({ units: [{ ...servitor, ...change }] });
+    const pack = async (value: unknown) => (await encodeSnapshot(value as Snapshot)).data;
+
+    it('opens a list with everything in it', async () => {
+      expect(await decodeSnapshot(await pack(FULL))).toEqual(FULL);
+    });
+
+    it('opens a list with no rule text and no set-up line, as older links have', async () => {
+      const { rules: _rules, ...noRules } = withForce({ setup: undefined });
+      expect(await decodeSnapshot(await pack(noRules))).toEqual(noRules);
+    });
+
+    it.each([
+      ['no points', { ...FULL, pts: undefined }],
+      ['points as text', { ...FULL, pts: '25' }],
+      ['a limit as text', { ...FULL, limit: '2000' }],
+      ['rule text that is not a list', { ...FULL, rules: 'Mindlock' }],
+      ['a rule that is not a name and a text', { ...FULL, rules: ['Mindlock'] }],
+      ['a detachment with nothing in it', { ...FULL, forces: [{}] }],
+      ['a detachment that is null', { ...FULL, forces: [null] }],
+      ['a detachment with no points', withForce({ pts: undefined })],
+      ['a set-up line as text', withForce({ setup: 'Allegiance' })],
+      ['units that are not a list', withForce({ units: 'Servitor' })],
+      ['a unit that is null', withForce({ units: [null] })],
+      ['a unit with points as text', withUnit({ pts: '25' })],
+      ['a unit with no gear', withUnit({ gear: undefined })],
+      ['a gear line that is null', withUnit({ gear: [null] })],
+      ['a unit with no profiles', withUnit({ profiles: undefined })],
+      ['a profile that is null', withUnit({ profiles: [null] })],
+      ['a profile with no stats', withUnit({ profiles: [{ name: 'Servitor', type: 'Unit' }] })],
+      ['a stat that is not a name and a value', withUnit({ profiles: [{ type: 'Gear', chars: [['M']] }] })],
+      ['a unit with no rules', withUnit({ rules: undefined })],
+    ])('reject a list with %s', async (_what, broken) => {
+      await expect(decodeSnapshot(await pack(broken))).rejects.toThrow('Not a Muster list');
+    });
+  });
+
   it('reject garbage', async () => {
     await expect(decodeSnapshot('not-really-a-link')).rejects.toThrow();
   });
