@@ -956,9 +956,10 @@ describe('validation', () => {
 });
 
 describe('limits for the option picker', () => {
-  const squad = (constraints: string) => unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(constraints))));
-  const limits = (constraints: string) => {
-    const w = world(squad(constraints));
+  const squad = (constraints: string, modifiers: string) =>
+    unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(constraints) + modifiers)));
+  const limits = (constraints: string, modifiers = '') => {
+    const w = world(squad(constraints, modifiers));
     const u = w.add('Squad');
     const ev = w.ev();
     return ev.limits(w.beneath(u, 'Gun'), ev.find(u)!, ev.forces[0]);
@@ -982,12 +983,21 @@ describe('limits for the option picker', () => {
     ).toEqual({ min: 0, max: -1 });
   });
 
-  // BUG: -1 means unlimited, but when it comes second it beats a real limit, and when first it doesn't.
-  // categoryLimits skips -1 properly. The data has 34 max constraints of -1 and 51 modifiers that set one.
-  it.fails('a max of -1 does not depend on the order of the constraints', () => {
+  it('a max of -1 does not depend on the order of the constraints', () => {
     const a = '<constraint id="a" type="max" value="5" field="selections" scope="parent"/>';
     const b = '<constraint id="b" type="max" value="-1" field="selections" scope="parent"/>';
-    expect(limits(a + b).max).toBe(limits(b + a).max);
+    expect(limits(a + b).max).toBe(5);
+    expect(limits(b + a).max).toBe(5);
+  });
+  it('a modifier that sets a max to -1 leaves another real limit in force', () => {
+    const a = '<constraint id="a" type="max" value="5" field="selections" scope="parent"/>';
+    const b = '<constraint id="b" type="max" value="2" field="selections" scope="parent"/>';
+    const lift = mods('<modifier type="set" field="b" value="-1"/>');
+    expect(limits(a + b, lift).max).toBe(5);
+    expect(limits(b + a, lift).max).toBe(5);
+  });
+  it('a max of -1 on its own means unlimited', () => {
+    expect(limits('<constraint id="a" type="max" value="-1" field="selections" scope="parent"/>').max).toBe(-1);
   });
 
   describe('room beyond the parent', () => {
