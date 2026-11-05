@@ -1,6 +1,6 @@
 // Loads and caches parsed data files from on-phone storage, and builds Contexts.
 import { Context } from './catalog';
-import { db, type FileMeta, type RepoState } from './db';
+import { db, type FileHeader, type FileMeta, type RepoState } from './db';
 import type { Roster } from './engine';
 import type { DataFile } from './model';
 import { parseDataFile } from './parse';
@@ -11,6 +11,12 @@ export interface SystemInfo {
   catalogues: FileMeta[]; // playable (non-library)
   libraries: FileMeta[];
 }
+
+/** A file whose header could be read. Any other file belongs to no game. */
+interface ReadableFile extends FileMeta {
+  header: FileHeader;
+}
+const isReadable = (f: FileMeta): f is ReadableFile => f.header != null;
 
 const parsed = new Map<string, DataFile>();
 const contexts = new Map<string, Context>();
@@ -33,21 +39,22 @@ export function activeSystems(repos: RepoState[], game?: string): { systems: Sys
 export function systemsOf(repos: RepoState[]): SystemInfo[] {
   const out: SystemInfo[] = [];
   for (const r of repos) {
-    for (const g of r.files.filter((f) => f.header?.kind === 'gameSystem')) {
-      const cats = r.files.filter((f) => f.header?.kind === 'catalogue' && f.header.gameSystemId === g.header!.id);
+    const files = r.files.filter(isReadable);
+    for (const g of files.filter((f) => f.header.kind === 'gameSystem')) {
+      const cats = files.filter((f) => f.header.kind === 'catalogue' && f.header.gameSystemId === g.header.id);
       out.push({
         repo: r.repo,
         gst: g,
-        catalogues: cats.filter((c) => !c.header!.library).sort((a, b) => a.header!.name.localeCompare(b.header!.name)),
-        libraries: cats.filter((c) => c.header!.library),
+        catalogues: cats.filter((c) => !c.header.library).sort((a, b) => a.header.name.localeCompare(b.header.name)),
+        libraries: cats.filter((c) => c.header.library),
       });
     }
   }
   return out;
 }
 
-async function loadFile(repo: string, meta: FileMeta): Promise<DataFile> {
-  const key = `${repo}|${meta.header!.id}`;
+async function loadFile(repo: string, meta: ReadableFile): Promise<DataFile> {
+  const key = `${repo}|${meta.header.id}`;
   const hit = parsed.get(key);
   if (hit) return hit;
   const text = await db.getFile(repo, meta.path);
@@ -65,17 +72,17 @@ export async function getContext(repo: RepoState, catalogueId: string): Promise<
   const key = `${repo.repo}|${catalogueId}`;
   const hit = contexts.get(key);
   if (hit) return hit;
-  const byId = new Map(repo.files.filter((f) => f.header).map((f) => [f.header!.id, f]));
+  const files = repo.files.filter(isReadable);
+  const byId = new Map(files.map((f) => [f.header.id, f]));
   const catMeta = byId.get(catalogueId);
   if (!catMeta) throw new Error('This army is no longer in the synced data');
   const cat = await loadFile(repo.repo, catMeta);
-  const gstMeta = byId.get(cat.gameSystemId ?? '') ?? repo.files.find((f) => f.header?.kind === 'gameSystem');
+  const gstMeta = byId.get(cat.gameSystemId ?? '') ?? files.find((f) => f.header.kind === 'gameSystem');
   if (!gstMeta) throw new Error('Game system file missing');
   const gst = await loadFile(repo.repo, gstMeta);
   const linked: DataFile[] = [];
   const queue = [cat];
-  while (queue.length) {
-    const c = queue.pop()!;
+  for (let c = queue.pop(); c; c = queue.pop()) {
     for (const l of c.catalogueLinks) {
       const m = byId.get(l.targetId);
       if (!m || linked.some((x) => x.id === l.targetId) || l.targetId === cat.id) continue;
