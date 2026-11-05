@@ -156,6 +156,10 @@ function isRoster(r: unknown): r is Roster {
     isRecord(r) &&
     typeof r.uid === 'string' &&
     r.uid !== '' &&
+    typeof r.name === 'string' &&
+    typeof r.repo === 'string' &&
+    typeof r.gameSystemId === 'string' &&
+    typeof r.costLimit === 'number' &&
     typeof r.updated === 'number' &&
     Array.isArray(r.forces) &&
     r.forces.every(isForce)
