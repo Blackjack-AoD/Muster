@@ -9,6 +9,7 @@ import {
   removeSel,
   unavailable,
   type Eff,
+  type Issue,
 } from './engine';
 import type { Opt } from './catalog';
 import { children, entry, unit, world } from '../test/fixture';
@@ -1057,6 +1058,139 @@ describe('validation', () => {
     expect(w.roster.forces[0].selections).toHaveLength(1);
   });
 
+  describe('issues keep to their reach', () => {
+    const issue = (reach: Issue['reach'], message: string, forceUid?: string, selUid?: string) => ({
+      level: 'error',
+      reach,
+      forceUid,
+      selUid,
+      message,
+    });
+    const pickIn = (w: ReturnType<typeof world>, forceUid: string, parentUid: string, name: string) =>
+      addSel(w.roster, w.contexts, forceUid, parentUid, w.beneath(parentUid, name));
+    const inForce = cons('<constraint id="c" type="max" value="1" field="selections" scope="force"/>');
+    const inList = cons('<constraint id="c" type="max" value="1" field="selections" scope="roster"/>');
+
+    it('gives each unit its own issue for a limit of its own', () => {
+      const w = world(unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(max(1))))));
+      const a = w.add('Squad');
+      const b = w.add('Squad');
+      w.pick(a, 'Gun', 2);
+      w.pick(b, 'Gun', 2);
+      const message = 'Squad › Gun: at most 1 allowed (has 2)';
+      expect(w.ev().issues).toEqual([issue('unit', message, 'f1', a), issue('unit', message, 'f1', b)]);
+    });
+
+    it('gives wargear over a detachment limit one issue on each force', () => {
+      const w = world(unit('u', 'Squad', 0, children(entry('r', 'Relic', 0, inForce))));
+      const f2 = w.addForce();
+      const [a, b] = [w.add('Squad'), w.add('Squad')];
+      const [c, d] = [w.add('Squad', 1, f2), w.add('Squad', 1, f2)];
+      for (const u of [a, b]) pickIn(w, 'f1', u, 'Relic');
+      for (const u of [c, d]) pickIn(w, f2, u, 'Relic');
+      const message = 'Relic: at most 1 allowed in this detachment (has 2)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, c)]);
+    });
+
+    it('gives a root unit over a detachment limit one issue on each force', () => {
+      const w = world(unit('u', 'Hero', 0, inForce));
+      const f2 = w.addForce();
+      const a = w.add('Hero', 2);
+      const b = w.add('Hero', 2, f2);
+      const message = 'Hero: at most 1 allowed in this detachment (has 2)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, b)]);
+    });
+
+    it('gives a category limit one issue on each force', () => {
+      const gst = `<categoryEntries><categoryEntry id="hq" name="HQ"/></categoryEntries>
+        <forceEntries><forceEntry id="det" name="Detachment"><categoryLinks>
+          <categoryLink id="l" name="HQ" targetId="hq">${cons(min(1))}</categoryLink>
+        </categoryLinks></forceEntry></forceEntries>`;
+      const w = world('', { gst });
+      const f2 = w.addForce();
+      const message = 'HQ: needs at least 1 (has 0)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1'), issue('force', message, f2)]);
+    });
+
+    it('gives a missing root unit one issue on each force', () => {
+      const w = world(unit('u', 'Hero', 0, cons(min(1))));
+      const f2 = w.addForce();
+      const message = 'Hero: needs at least 1 (has 0)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1'), issue('force', message, f2)]);
+    });
+
+    it("treats a parent limit on a root unit as the detachment's, across links to one entry", () => {
+      const links = `<entryLinks>
+        <entryLink id="l1" name="Hero" targetId="h" type="selectionEntry"/>
+        <entryLink id="l2" name="Hero" targetId="h" type="selectionEntry"/>
+      </entryLinks>`;
+      const w = world('', {
+        cat: `${links}<sharedSelectionEntries>${unit('h', 'Hero', 0, cons(max(1)))}</sharedSelectionEntries>`,
+      });
+      const f2 = w.addForce();
+      const [one, two] = forceRootOptions(w.ctx, w.ctx.forceEntries()[0]);
+      const a = addSel(w.roster, w.contexts, 'f1', null, one);
+      addSel(w.roster, w.contexts, 'f1', null, two);
+      const b = addSel(w.roster, w.contexts, f2, null, one);
+      addSel(w.roster, w.contexts, f2, null, two);
+      const message = 'Hero: at most 1 allowed (has 2)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1', a), issue('force', message, f2, b)]);
+    });
+
+    it('keeps a list-wide issue on the first unit that reached it', () => {
+      const w = world(unit('u', 'Squad', 0, children(entry('r', 'Relic', 0, inList))));
+      const f2 = w.addForce();
+      const a = w.add('Squad');
+      const b = w.add('Squad', 1, f2);
+      pickIn(w, 'f1', a, 'Relic');
+      pickIn(w, f2, b, 'Relic');
+      expect(w.ev().issues).toEqual([issue('list', 'Relic: at most 1 allowed in the list (has 2)', 'f1', a)]);
+    });
+
+    it('keeps the same text from different reaches apart', () => {
+      const w = world(
+        unit('u', 'Squad', 0, children(entry('g', 'Gun', 0, cons(max(1))))) + unit('s', 'Squad › Gun', 0, cons(max(1))),
+      );
+      const root = w.add('Squad › Gun', 2);
+      const u = w.add('Squad');
+      w.pick(u, 'Gun', 2);
+      const message = 'Squad › Gun: at most 1 allowed (has 2)';
+      expect(w.ev().issues).toEqual([issue('force', message, 'f1', root), issue('unit', message, 'f1', u)]);
+    });
+
+    it('puts going over the points limit on the whole list', () => {
+      const w = world(unit('u', 'Squad', 60), { costLimit: 50 });
+      w.add('Squad');
+      expect(w.ev().issues).toEqual([issue('list', 'Over points limit by 10')]);
+    });
+
+    it('warns about each unit that is hidden by other choices', () => {
+      const hidden = `<modifier type="set" field="hidden" value="true">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}</modifier>`;
+      const w = world(unit('u', 'Squad', 0, mods(hidden)) + unit('x', 'Other', 0));
+      const a = w.add('Squad');
+      const b = w.add('Squad');
+      w.add('Other');
+      const message = 'Squad is not available with the current choices';
+      expect(w.ev().issues).toEqual([
+        { ...issue('unit', message, 'f1', a), level: 'warn' },
+        { ...issue('unit', message, 'f1', b), level: 'warn' },
+      ]);
+    });
+
+    it('warns about skipped units on each force', () => {
+      const w = world(unit('u', 'Squad', 0));
+      const f2 = w.addForce();
+      w.add('Squad');
+      w.add('Squad', 1, f2);
+      for (const force of w.roster.forces) force.selections[0].key = 'gone';
+      const message = '1 unit(s) no longer exist in the data and were skipped';
+      expect(w.ev().issues).toEqual([
+        { ...issue('force', message, 'f1'), level: 'warn' },
+        { ...issue('force', message, f2), level: 'warn' },
+      ]);
+    });
+  });
+
   describe('wargear gone from the data', () => {
     const SQUAD = unit('u', 'Squad', 10);
     const SQUAD_WITH_GUN = unit('u', 'Squad', 10, children(entry('g', 'Gun', 5)));
@@ -1067,7 +1201,9 @@ describe('validation', () => {
       const u = w.add('Squad');
       w.pick(u, 'Gun');
       const without = new Evaluator(w.roster, world(SQUAD).contexts);
-      expect(without.issues).toEqual([{ level: 'warn', forceUid: 'f1', selUid: u, message: skipped('Squad', 1) }]);
+      expect(without.issues).toEqual([
+        { level: 'warn', reach: 'unit', forceUid: 'f1', selUid: u, message: skipped('Squad', 1) },
+      ]);
     });
 
     it('leaves gone wargear in the saved list and out of the points', () => {
@@ -1109,7 +1245,9 @@ describe('validation', () => {
       const m = w.pick(u, 'Model');
       w.pick(m, 'Gun');
       const without = new Evaluator(w.roster, world(squad('')).contexts);
-      expect(without.issues).toEqual([{ level: 'warn', forceUid: 'f1', selUid: m, message: skipped('Model', 1) }]);
+      expect(without.issues).toEqual([
+        { level: 'warn', reach: 'unit', forceUid: 'f1', selUid: m, message: skipped('Model', 1) },
+      ]);
       expect(without.find(u)?.total).toBe(30);
     });
 
@@ -1121,8 +1259,8 @@ describe('validation', () => {
       w.pick(second, 'Gun');
       const without = new Evaluator(w.roster, world(SQUAD).contexts);
       expect(without.issues).toEqual([
-        { level: 'warn', forceUid: 'f1', selUid: first, message: skipped('Squad', 1) },
-        { level: 'warn', forceUid: 'f1', selUid: second, message: skipped('Squad', 1) },
+        { level: 'warn', reach: 'unit', forceUid: 'f1', selUid: first, message: skipped('Squad', 1) },
+        { level: 'warn', reach: 'unit', forceUid: 'f1', selUid: second, message: skipped('Squad', 1) },
       ]);
     });
 
@@ -1269,7 +1407,7 @@ describe('validation', () => {
       w.add('Squad');
       w.roster.forces[0].forceEntryId = 'gone';
       expect(w.ev().issues).toEqual([
-        { level: 'warn', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
+        { level: 'warn', reach: 'force', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
       ]);
     });
     it('warns on each force whose entry has gone', () => {
@@ -1321,8 +1459,13 @@ describe('validation', () => {
         w.roster.forces[0].selections[0].key = 'gone';
         w.roster.forces[0].forceEntryId = 'gone';
         expect(w.ev().issues).toEqual([
-          { level: 'warn', forceUid: 'f1', message: '1 unit(s) no longer exist in the data and were skipped' },
-          { level: 'warn', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
+          {
+            level: 'warn',
+            reach: 'force',
+            forceUid: 'f1',
+            message: '1 unit(s) no longer exist in the data and were skipped',
+          },
+          { level: 'warn', reach: 'force', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
         ]);
       });
       it('still reports a limit inside a unit', () => {
