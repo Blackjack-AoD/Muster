@@ -26,6 +26,17 @@ const hiddenBeneath = (w: World, parentUid: string, name: string) => {
   return ev.optionEff(w.beneath(parentUid, name), rs, rs.force).hidden;
 };
 
+/** Watcher costs 10 and carries the modifier; Carrier can hold what `carried` offers. */
+const watching = (condition: string, carried = tokenIn('l')) => {
+  const w = world(unit('w', 'Watcher', 10, plusTen(condition)) + unit('c', 'Carrier', 0, carried), {
+    cat: TOKEN,
+    gst: TWO_FORCES,
+  });
+  const watcher = w.add('Watcher');
+  const ally = w.addForce('f2', 'ally');
+  return { w, watcher, ally };
+};
+
 describe('conditions counting inside the selection itself', () => {
   const rank = (n: string) => `<modifier type="append" field="name" value="(${n})">`;
   const RANKS = mods(
@@ -210,16 +221,6 @@ describe('conditions on the detachment', () => {
     const there = w.add('Unit', 1, w.addForce('f2', 'ally'));
     return { w, here, there };
   };
-  /** Watcher costs 10 and carries the modifier; Carrier can hold a Token. */
-  const watching = (condition: string) => {
-    const w = world(unit('w', 'Watcher', 10, plusTen(condition)) + unit('c', 'Carrier', 0, tokenIn('l')), {
-      cat: TOKEN,
-      gst: TWO_FORCES,
-    });
-    const watcher = w.add('Watcher');
-    const ally = w.addForce('f2', 'ally');
-    return { w, watcher, ally };
-  };
 
   it('instanceOf asks what type of detachment the entry is in', () => {
     const { w, here, there } = inForce(
@@ -259,16 +260,6 @@ describe('conditions on the detachment', () => {
 });
 
 describe('conditions on the whole list', () => {
-  const watching = (condition: string, carried = tokenIn('l')) => {
-    const w = world(unit('w', 'Watcher', 10, plusTen(condition)) + unit('c', 'Carrier', 0, carried), {
-      cat: TOKEN,
-      gst: TWO_FORCES,
-    });
-    const watcher = w.add('Watcher');
-    const ally = w.addForce('f2', 'ally');
-    return { w, watcher, ally };
-  };
-
   it('lessThan with children sees a nested pick in another detachment', () => {
     const { w, watcher, ally } = watching(
       '<condition type="lessThan" value="1" field="selections" scope="roster" childId="x" includeChildSelections="true"/>',
