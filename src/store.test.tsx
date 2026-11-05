@@ -307,7 +307,7 @@ describe('saves of one list that overlap', () => {
     expect(await storedUnits()).toBe(2);
   });
 
-  it('leaves no mark when a save fails after its list was deleted', async () => {
+  it('leaves no mark or toast when a save fails after its list was deleted', async () => {
     const list = newList();
     await renderWithToast(list);
     const held = holdNextSave();
@@ -318,6 +318,7 @@ describe('saves of one list that overlap', () => {
 
     expect(getState().rosters).toEqual([]);
     expect(getState().unsaved.size).toBe(0);
+    expect(getState().toast).toBeUndefined();
   });
 
   it('counts saves for each list apart', async () => {
