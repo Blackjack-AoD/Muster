@@ -6,7 +6,7 @@ import type { SavedUnit } from '../data/db';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
 import { failureReason } from '../data/sync';
-import { failureMessage, renameSavedUnit, toast, useRosterCtl, useStore } from '../store';
+import { deleteSavedUnit, failureMessage, renameSavedUnit, toast, useRosterCtl, useStore } from '../store';
 import { Empty, Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
@@ -319,7 +319,7 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
                 <button class="icon-btn sm" aria-label={`Rename ${u.name}`} onClick={() => setNaming(u)}>
                   <Icon name="edit" size={16} />
                 </button>
-                <button class="icon-btn sm" aria-label={`Delete ${u.name}`}>
+                <button class="icon-btn sm" aria-label={`Delete ${u.name}`} onClick={() => deleteSaved(u)}>
                   <Icon name="trash" size={16} />
                 </button>
               </div>
@@ -349,6 +349,11 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
       })}
     </div>
   );
+}
+
+function deleteSaved(unit: SavedUnit) {
+  if (!confirm(`Delete "${unit.name}"? Lists that hold it keep it as a normal unit, without the name.`)) return;
+  deleteSavedUnit(unit.id).catch((e: unknown) => toast(failureMessage('delete this saved unit', e)));
 }
 
 function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
