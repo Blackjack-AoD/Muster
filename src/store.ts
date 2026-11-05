@@ -308,7 +308,7 @@ function changeCopies(id: string, change: (copy: Sel) => void) {
 
 export async function renameSavedUnit(id: string, name: string): Promise<void> {
   const saved = state.savedUnits.find((u) => u.id === id);
-  if (!saved) return;
+  if (!saved) throw new Error("This saved unit isn't on this phone.");
   const renamed = { ...saved, name, updated: Date.now() };
   await db.putSavedUnit(renamed);
   set({ savedUnits: state.savedUnits.map((u) => (u.id === id ? renamed : u)) });
