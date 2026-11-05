@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 import { db } from './data/db';
 import { addSel, forceRootOptions, type Roster } from './data/engine';
-import { deleteRoster, getState, toast, useRosterCtl } from './store';
+import { deleteRoster, getState, saveRoster, toast, useRosterCtl } from './store';
 import { unit, world } from './test/fixture';
 import { renderScreen, worldFiles } from './test/screen';
 
@@ -231,5 +231,28 @@ describe('how long the failed save toast stays up', () => {
 
     expect(await storedUnits()).toBe(2);
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
+  it('leaves a different toast up when a later edit saves', async () => {
+    await renderWithToast(newList());
+    const put = await failASave();
+    showUndo();
+
+    put.mockRestore();
+    await addUnit();
+
+    expect(await storedUnits()).toBe(2);
+    expect(getState().toast).toBe('Removed Tactical Squad');
+    expect(getState().toastAction?.label).toBe('Undo');
+  });
+
+  it('stays up when a different list saves', async () => {
+    await renderWithToast(newList());
+    const put = await failASave();
+
+    put.mockRestore();
+    await saveRoster({ ...newList(), uid: 'other' });
+
+    expect(getState().toast).toBe(SAVE_FAILED);
   });
 });
