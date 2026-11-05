@@ -64,6 +64,10 @@ describe('normaliseRepo', () => {
     expect(normaliseRepo('https://github.com/owner/repo/tree/main')).toBe('owner/repo');
   });
 
+  it('reads a page link whatever the case of the host', () => {
+    expect(normaliseRepo('https://GitHub.com/owner/repo/tree/main')).toBe('owner/repo');
+  });
+
   it.each([
     'https://github.com/owner/repo/tree/feature/x',
     'https://github.com/owner/repo/blob/main/x.cat',
