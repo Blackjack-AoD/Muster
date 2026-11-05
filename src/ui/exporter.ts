@@ -28,7 +28,7 @@ export function rosterText(ctl: RosterCtl, repos: RepoState[]): string {
         for (const c of r.children) {
           const k = c.sel.number * mult;
           lines.push(
-            `${'  '.repeat(depth)}• ${k > 1 ? k + '× ' : ''}${c.eff.name}${c.total ? ` (${n(c.total * mult)})` : ''}`,
+            `${'  '.repeat(depth)}• ${k > 1 ? k + '× ' : ''}${displayName(c)}${c.total ? ` (${n(c.total * mult)})` : ''}`,
           );
           walk(c, depth + 1, k);
         }
