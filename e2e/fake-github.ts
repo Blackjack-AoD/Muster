@@ -3,7 +3,7 @@ import type { BrowserContext } from '@playwright/test';
 const COMMIT = 'fixture-commit';
 const CORS = { 'access-control-allow-origin': '*' };
 
-// The app downloads both default repos on first open, so both must answer.
+// The app downloads each default repo on first open, so each must answer.
 const REPOS: Readonly<Record<string, readonly string[]>> = {
   'Blackjack-AoD/NRData': ['test-game.gst', 'test-army.cat'],
   'Blackjack-AoD/M40GA': [],

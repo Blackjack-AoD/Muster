@@ -575,7 +575,7 @@ describe('selection limits with child selections', () => {
     expect(w.errors()).toEqual(['Token: at most 1 allowed (has 2)']);
   });
 
-  it('a min scoped to the parent asks for a child that was removed', () => {
+  it('a min scoped to the parent asks again once the player removes the child', () => {
     const w = world(unit('s', 'Squad', 0, children(entry('g', 'Gun', 0, cons(MIN_PARENT)))));
     const s = w.add('Squad');
     expect(w.errors()).toEqual([]);
@@ -583,21 +583,21 @@ describe('selection limits with child selections', () => {
     expect(w.errors()).toEqual(['Squad › Gun: needs at least 1 (has 0)']);
   });
 
-  it('a min scoped to the parent at the root is met by a nested copy', () => {
+  it('a nested copy meets a min scoped to the parent at the root', () => {
     const w = rootToken(MIN_PARENT);
     expect(w.errors()).toEqual(['Token: needs at least 1 (has 0)']);
     w.pick(w.add('Carrier'), 'Token');
     expect(w.errors()).toEqual([]);
   });
 
-  it('a min on the list is met by a nested copy in any detachment', () => {
+  it('a nested copy in any detachment meets a min on the list', () => {
     const w = rootToken(MIN_ROSTER);
     expect(w.errors()).toEqual(['Token: needs at least 1 in the list (has 0)']);
     w.pick(w.add('Carrier', 1, w.addForce('f2', 'ally')), 'Token');
     expect(w.errors()).toEqual([]);
   });
 
-  it('a min on the detachment is not met by a copy in another detachment', () => {
+  it('a copy in another detachment does not meet a min on the detachment', () => {
     const w = rootToken(MIN_FORCE);
     w.pick(w.add('Carrier', 1, w.addForce('f2', 'ally')), 'Token');
     expect(w.errors()).toEqual(['Token: needs at least 1 in this detachment (has 0)']);
@@ -657,7 +657,7 @@ describe('points limits with child selections', () => {
     expect(w.errors()).toEqual(['HQ: at most 0 pts allowed (has 50)']);
   });
 
-  it('a min on an entry is met by what it holds', () => {
+  it('what an entry holds meets a min on it', () => {
     const w = squad(
       '<constraint id="c" type="min" value="120" field="pts" scope="parent" includeChildSelections="true"/>',
     );

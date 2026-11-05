@@ -67,7 +67,7 @@ export async function renderScreen(
   const picked = Object.entries(files).map(([path, xml]) => new File([xml], path));
   if (picked.length) await importLocalFiles(REPO, picked);
   for (const roster of rosters) await db.putRoster(roster);
-  // offline, or init downloads the default repos whenever no data is seeded
+  // offline, or init downloads the default repos whenever the seed holds no data
   const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
   await init();
   online.mockRestore();

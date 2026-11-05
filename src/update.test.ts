@@ -215,7 +215,7 @@ describe('checkForUpdate', () => {
     expect(await update.checkForUpdate()).toBe('unsupported');
   });
 
-  it('reports unsupported when no worker is registered', async () => {
+  it('reports unsupported when the browser has no worker', async () => {
     stubBrowser().getRegistration.mockResolvedValue(undefined);
     expect(await update.checkForUpdate()).toBe('unsupported');
   });

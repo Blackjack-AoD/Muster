@@ -140,7 +140,7 @@ describe('between tests', () => {
     expect(new Evaluator(w.roster, contexts).find(tactical)?.total).toBe(80);
   });
 
-  it('does not download the default repos when nothing is seeded', async () => {
+  it('does not download the default repos when the seed holds nothing', async () => {
     const download = vi.fn(async () => new Response('', { status: 404 }));
     vi.stubGlobal('fetch', download);
     await renderScreen(<Lists />);

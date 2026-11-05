@@ -596,7 +596,7 @@ describe('conditions', () => {
       expect(holds(w, w.add('Squad'))).toBe(true);
     });
 
-    it('points conditions give the same answer whatever order units were added', () => {
+    it('points conditions give the same answer whatever order the player adds units in', () => {
       const xml = guarded('<condition type="atLeast" value="10" field="pts" scope="force" childId="x"/>');
       const after = world(xml);
       const a = after.add('Squad');
@@ -1051,7 +1051,7 @@ describe('validation', () => {
     w.add('Other');
     expect(w.warnings()).toEqual(['Squad is not available with the current choices']);
   });
-  it('does not warn about an entry that hides itself once one is taken', () => {
+  it('does not warn about an entry that hides itself once the list has one', () => {
     const w = world(
       unit(
         'u',
@@ -1066,7 +1066,7 @@ describe('validation', () => {
     expect(w.ev().optionEff(w.root('Squad'), null, w.ev().forces[0]).hidden).toBe(true);
     expect(w.warnings()).toEqual([]);
   });
-  describe('an entry that hides itself once one is taken', () => {
+  describe('an entry that hides itself once the list has one', () => {
     const SELF_HIDE = `<modifier type="set" field="hidden" value="true">${conds('<condition type="equalTo" value="1" field="selections" scope="force" childId="u"/>')}</modifier>`;
     const OTHER_TAKEN = conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>');
     const withOther = (...modifiers: string[]) => {
@@ -1327,7 +1327,7 @@ describe('validation', () => {
       expect(w.ev().issues).toEqual([issue('list', 'Over points limit by 10')]);
     });
 
-    it('warns about each unit that is hidden by other choices', () => {
+    it('warns about each unit that other choices hide', () => {
       const hidden = `<modifier type="set" field="hidden" value="true">${conds('<condition type="atLeast" value="1" field="selections" scope="force" childId="x"/>')}</modifier>`;
       const w = world(unit('u', 'Squad', 0, mods(hidden)) + unit('x', 'Other', 0));
       const a = w.add('Squad');

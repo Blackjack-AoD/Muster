@@ -1,6 +1,5 @@
-// Finds cases worth a unit test. Exploration only: it never fails a build, and it isn't a substitute for the tests.
-//   1. Adds every unit of every army to a 2,000-point list with its set-up in place, as a new list in the app has,
-//      and groups what goes wrong, with the smallest unit showing each kind of problem.
+// Finds cases worth a unit test. It never fails a build, and it isn't a substitute for the tests.
+//   1. Adds each unit of each army to a list set up as the app does, and groups what goes wrong by smallest example.
 //   2. Lists the shapes of condition, repeat, constraint and modifier in the data that no unit test mentions.
 import { DOMParser } from '@xmldom/xmldom';
 import { readFileSync, readdirSync, statSync } from 'node:fs';

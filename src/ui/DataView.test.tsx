@@ -193,7 +193,7 @@ describe('DataView', () => {
     });
   });
 
-  it('shows the reason when an imported file cannot be read', async () => {
+  it('shows the reason when the app cannot read an imported file', async () => {
     await renderScreen(<App />);
     const damaged = new File(['not a zip'], 'army.zip');
 

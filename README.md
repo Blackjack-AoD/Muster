@@ -88,7 +88,7 @@ Two contracts sit behind the skills:
 - The phone's back button steps back one screen at a time and closes any open pop-up first.
 - **Army sheet** (list menu → Army sheet): every unit with points, wargear, stats and rules, plus a rules reference. **Print / save PDF** uses the phone's print dialog (choose "Save as PDF"). **Share link** sends a link (WhatsApp etc.) that opens a read-only copy of the list in any browser, no Muster data needed. Very long lists leave the rules reference out of the link to keep it short.
 - **Updates**: the app checks for a new version once a week (when opened with a connection) and restarts into it. Data tab → App → **Check for updates** does it on demand; **Reload a fresh copy** fixes a stuck update without touching lists or data.
-- **Data**: download / update repos, import files, back up lists.
+- **Data**: download / update repos, import files, back up lists. A failed download shows its reason on the repo's card and in a toast.
 
 ## How the data is read
 - Data files can sit in subfolders and can be zipped (`.gstz` / `.catz`). The Data tab can also import a whole repo `.zip` (GitHub's Download ZIP).
@@ -99,9 +99,9 @@ Two contracts sit behind the skills:
 - Percentage limits (e.g. "no more than 25% of the army's points") are checked against the current total.
 
 ## Tested data
-Every unit the app offers in every army has been added, with its set-up in place, without a crash in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e. That shows the app copes with the data, not that its points are right; that's what the unit tests are for.
+The sweep adds every unit the app offers in every army, with its set-up in place, without a crash in: Blackjack-AoD/NRData, Blackjack-AoD/M40GA, BSData/horus-heresy-2nd-edition and BSData/wh40k-10e. That shows the app copes with the data, not that its points are right; that's what the unit tests are for.
 
 ## Not yet covered
 - **Child forces** (forces inside forces, e.g. Age of Sigmar 4's regiments inside an army). AoS data loads, but lists can't be built properly yet.
-- Some BattleScribe features aren't implemented: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), `self`-scoped constraints, a min scoped to an entry id, and the `add` modifiers on `error`, `warning` and `info` that show a player a message.
-- New Recruit's extensions aren't implemented: modifiers that reach other entries (`affects`, used by 10th edition wargear that changes stats), the `replace`, `floor` and `ceil` modifier types, and scopes such as `root-entry` and `model`.
+- Muster doesn't implement some BattleScribe features: per-link `shared="false"` counting, force-count limits on the roster (`forces` constraints), `self`-scoped constraints, a min scoped to an entry id, and the `add` modifiers on `error`, `warning` and `info` that show a player a message.
+- Muster doesn't implement New Recruit's extensions: modifiers that reach other entries (`affects`, used by 10th edition wargear that changes stats), the `replace`, `floor` and `ceil` modifier types, and scopes such as `root-entry` and `model`.

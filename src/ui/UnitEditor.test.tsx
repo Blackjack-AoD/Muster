@@ -68,7 +68,7 @@ const inlineLevels = () =>
 
 const option = (role: 'checkbox' | 'radio', name: RegExp) => screen.getByRole(role, { name });
 
-/** Opens the page of a list's only unit. A list can be built on `builtOn`, data older than what's on the phone. */
+/** Opens the page of a list's only unit. `builtOn` builds the list on data older than what's on the phone. */
 async function openUnit(units = UNITS, builtOn = units) {
   const w = world(builtOn, { costLimit: 2000 });
   await openPage(w, w.add('Tactical Squad'), units);
@@ -184,7 +184,7 @@ describe('UnitEditor', () => {
     expect(saved?.forces[0]?.selections[0]?.children.map((c) => c.key)).toEqual(['fist']);
   });
 
-  it("shows a missing required option on the unit's page until it's chosen", async () => {
+  it("shows a missing required option on the unit's page until the player chooses it", async () => {
     await openUnit(VOX_REQUIRED, VOX_OPTIONAL);
     expect(inlineIssues()).toEqual(['Vox Caster: needs at least 1 (has 0)']);
 

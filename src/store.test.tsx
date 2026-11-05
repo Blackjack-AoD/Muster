@@ -59,7 +59,7 @@ async function renderWithToast(source: Roster) {
   );
 }
 
-/** Installed once the list has loaded, as loading waits on a timer. Leaves storage's own scheduling real. */
+/** Install this once the list has loaded, as loading waits on a timer. It leaves storage's own scheduling real. */
 async function fakeClock() {
   await screen.findByRole('button', { name: 'Add a unit' });
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

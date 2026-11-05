@@ -190,7 +190,7 @@ describe('Share link', () => {
     await waitFor(() => expect(getState().toast).toBe("Couldn't share: Permission denied"));
   });
 
-  it('shows the reason when the link cannot be packed', async () => {
+  it('shows the reason when packing the link fails', async () => {
     const { copied } = stubSharing({});
     openHash(await linkHash(SHARED));
     await renderScreen(<App />);

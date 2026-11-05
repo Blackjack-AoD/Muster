@@ -40,7 +40,7 @@ describe('Lists', () => {
     await waitFor(() => expect(document.querySelector('.pts')?.textContent).toBe('0/1,500pts'));
   });
 
-  it("says the army's data has gone when its repo is removed under the new list sheet", async () => {
+  it("says the army's data has gone when the player removes its repo under the new list sheet", async () => {
     await renderScreen(<App />, { files: worldFiles(UNITS) });
 
     fireEvent.click(screen.getByRole('button', { name: 'New list' }));

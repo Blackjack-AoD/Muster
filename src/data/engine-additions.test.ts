@@ -111,7 +111,7 @@ describe('issues', () => {
     expect(w.errors()).toEqual(['Hero: at most 1 allowed in the list (has 2)']);
   });
 
-  it('keeps one issue for each limit that is broken', () => {
+  it('keeps one issue for each limit the list breaks', () => {
     const cap = cons('<constraint id="c" type="max" value="0" field="selections" scope="roster"/>');
     const w = world(unit('a', 'Squad', 0, children(entry('r', 'Relic', 0, cap), entry('b', 'Banner', 0, cap))));
     const u = w.add('Squad');

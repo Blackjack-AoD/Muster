@@ -59,7 +59,10 @@ export function DataView() {
           <span>
             Install Muster for full-screen, offline use:{' '}
             {installEvent ? (
-              <button class="link" onClick={() => installEvent?.prompt().catch((e) => toast(failureMessage('install', e)))}>
+              <button
+                class="link"
+                onClick={() => installEvent?.prompt().catch((e) => toast(failureMessage('install', e)))}
+              >
                 Install app
               </button>
             ) : (

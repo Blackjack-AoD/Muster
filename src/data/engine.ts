@@ -532,7 +532,7 @@ export class Evaluator {
         });
   }
 
-  /** Data hides an entry once one is taken, to stop a second. That doesn't make the first unavailable. */
+  /** Data hides an entry once a list has one, to stop a second. That doesn't make the first unavailable. */
   private hiddenByOthers(node: RNode, w: Where): boolean {
     const onItself = (g: ConditionGroup): boolean =>
       g.conditions.some((c) => c.childId === node.id || c.childId === node.linkId) || g.groups.some(onItself);
@@ -958,7 +958,7 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
 
 /**
  * Add an option under parent (or as a root unit), then fill in mandatory defaults.
- * Returns the new selection uid, or null when the force or parent isn't in the roster and nothing was added.
+ * Returns the new selection's uid, or null, adding nothing, when the roster lacks the force or parent.
  */
 export function addSel(
   roster: Roster,

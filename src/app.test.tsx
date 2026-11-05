@@ -128,7 +128,7 @@ describe('routes', () => {
     await button('List options')();
   });
 
-  it('swaps the screen and returns to the top when a tab is tapped', async () => {
+  it('swaps the screen and returns to the top when the player taps a tab', async () => {
     await renderApp();
     scrollTo.mockClear();
     fireEvent.click(screen.getByRole('link', { name: 'Games' }));

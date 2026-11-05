@@ -5,7 +5,7 @@ import type { Roster } from './engine';
 import type { DataFile } from './model';
 import { parseDataFile } from './parse';
 
-/** A file whose header could be read. Any other file belongs to no game. */
+/** A file with a header the app can read. Any other file belongs to no game. */
 interface ReadableFile extends FileMeta {
   header: FileHeader;
 }
