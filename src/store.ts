@@ -83,13 +83,17 @@ export function setGame(game: string | undefined) {
   set({ game });
 }
 
-/** A repo's download failure lands on its card through `sync`, so only a failure in storage rejects here. */
+/** A failed download shows on the repo's card and in a toast, and the next repo still syncs. A failed save stops here. */
 export async function syncAll(list?: string[]) {
   const targets = list ?? state.repos.map((r) => r.repo);
   const show = (p: SyncProgress) => set({ sync: { ...state.sync, [p.repo]: p } });
+  const showAndWarn = (p: SyncProgress) => {
+    show(p);
+    if (p.stage === 'error') toast(failureMessage('sync', p.message));
+  };
   for (const repo of targets) {
     try {
-      await syncRepo(repo, show);
+      await syncRepo(repo, showAndWarn);
       clearCaches(repo);
       set({ repos: await db.repos() });
     } catch (e) {
