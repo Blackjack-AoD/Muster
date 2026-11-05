@@ -95,7 +95,8 @@ export function App() {
     page = <DataView />;
   } else page = <Lists />;
 
-  const showNav = !(parts[0] === 'r' && parts[1]) && !(parts[0] === 'lib' && parts[4]) && parts[0] !== 'view';
+  const showNav =
+    !(parts[0] === 'r' && parts[1]) && !(parts[0] === 'lib' && parts[4]) && !(parts[0] === 'view' && parts[1]);
   return (
     <div class={'app' + (showNav ? ' has-nav' : '')}>
       {page}
