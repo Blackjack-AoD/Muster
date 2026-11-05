@@ -137,11 +137,15 @@ describe('rosterText', () => {
     ]);
   });
   it('shows a named unit as its name with the data name after it', () => {
-    expect(rosterText(ctlOf(namedSquad()), repos).split('\n').slice(4, 9)).toEqual([
+    expect(rosterText(ctlOf(namedSquad()), repos).split('\n').slice(4, 7)).toEqual([
       '-- Other --',
       'Boss [50]',
       'Squad Thrax (Breacher Squad) [110]',
-      '  • Sergeant (10)',
+    ]);
+  });
+  it('names a named model in the gear lines by its custom name', () => {
+    expect(rosterText(ctlOf(namedSquad()), repos).split('\n').slice(7, 9)).toEqual([
+      '  • Kell (10)',
       '  • 4× Breacher',
     ]);
   });
