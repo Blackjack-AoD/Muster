@@ -14,7 +14,7 @@ import {
   type Sel,
 } from '../data/engine';
 import type { Profile, Rule } from '../data/model';
-import type { RosterCtl } from '../store';
+import { failureMessage, saveUnit, toast, type RosterCtl } from '../store';
 import { Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { onOffPair, pick } from '../data/setup';
@@ -64,7 +64,12 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         }
       />
       {naming && <NameSheet title="Unit" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
-      {saving && <SaveSheet onClose={() => setSaving(false)} />}
+      {saving && <SaveSheet ctl={ctl} rs={rs} onClose={() => setSaving(false)} />}
+      {rs.sel.saved !== undefined && (
+        <div class="banner info" role="note">
+          Changes here apply to every list that holds this saved unit.
+        </div>
+      )}
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -102,9 +107,13 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
               a Rite of War needs a Primarch, or a character with Master of the Legion).
             </p>
           )}
-          <button class="btn" onClick={() => setSaving(true)}>
-            Save as saved unit
-          </button>
+          {!ctl.scratch && isRoot && unitLike && rs.sel.saved === undefined && (
+            <div class="unit-actions">
+              <button class="btn" onClick={() => setSaving(true)}>
+                Save as saved unit
+              </button>
+            </div>
+          )}
           {!ctl.scratch && isRoot && unitLike && (
             <div class="unit-actions">
               <button
@@ -564,15 +573,29 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
   );
 }
 
-function SaveSheet({ onClose }: { onClose: () => void }) {
+/** Saves the unit as a saved unit under the name given, or the data name if that's empty. Closing saves nothing. */
+function SaveSheet({ ctl, rs, onClose }: { ctl: RosterCtl; rs: RSel; onClose: () => void }) {
+  const [name, setName] = useState(displayName(rs));
+  const save = async () => {
+    try {
+      await saveUnit(ctl.roster, rs, name.trim() || rs.eff.name);
+    } catch (e) {
+      toast(failureMessage('save this unit', e));
+      return;
+    }
+    // saveUnit links the unit outside ctl.mutate: closing the sheet re-renders the page to show it
+    onClose();
+  };
   return (
     <Sheet title="Save as saved unit" onClose={onClose}>
       <div class="form">
         <label>
           Name
-          <input value="" />
+          <input value={name} placeholder={rs.eff.name} onInput={(e) => setName(e.currentTarget.value)} />
         </label>
-        <button class="btn primary">Save</button>
+        <button class="btn primary" onClick={save}>
+          Save
+        </button>
       </div>
     </Sheet>
   );
@@ -604,8 +627,12 @@ function splitOff(r: Roster, selUid: string): Sel | null {
   return copy;
 }
 
-/** Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone. */
-function nameSel(ctl: RosterCtl, rs: RSel, name: string | undefined) {
+/**
+ * Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone.
+ * A saved unit always has a name, so clearing a linked copy's gives it the data name.
+ */
+function nameSel(ctl: RosterCtl, rs: RSel, given: string | undefined) {
+  const name = given ?? (rs.sel.saved !== undefined ? rs.eff.name : undefined);
   if (name === rs.sel.name) return;
   ctl.mutate((r) => {
     const own = locate(r, rs.sel.uid)?.sel;
