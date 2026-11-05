@@ -167,12 +167,13 @@ const isSel = (s: unknown, level: number): boolean =>
 
 const isForce = (f: unknown) =>
   isRecord(f) &&
+  typeof f.uid === 'string' &&
   typeof f.catalogueId === 'string' &&
   typeof f.forceEntryId === 'string' &&
   Array.isArray(f.selections) &&
   f.selections.every((s) => isSel(s, 1));
 
-/** The fields Lists can't draw without, and every selection. Every release has written all of them. */
+/** Every field of the type, as a copy keeps whatever a known field holds. Every release has written all of them. */
 function isRoster(r: unknown): r is Roster {
   return (
     isRecord(r) &&
@@ -182,6 +183,7 @@ function isRoster(r: unknown): r is Roster {
     typeof r.repo === 'string' &&
     typeof r.gameSystemId === 'string' &&
     typeof r.costLimit === 'number' &&
+    typeof r.created === 'number' &&
     typeof r.updated === 'number' &&
     Array.isArray(r.forces) &&
     r.forces.every(isForce)
