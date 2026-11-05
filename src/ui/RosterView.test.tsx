@@ -3,8 +3,10 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
-import { children, entry, unit, world } from '../test/fixture';
+import { addMandatoryRoots } from '../data/setup';
+import { children, entry, unit, world, type WorldOptions } from '../test/fixture';
 import { renderScreen, worldFiles } from '../test/screen';
+import { SWIPE } from './swipe';
 
 const SERGEANT = entry(
   'sgt',
@@ -21,9 +23,9 @@ const UNITS = unit('tac', 'Tactical Squad', 100, children(SERGEANT)) + ASSAULT;
 const openHash = (hash: string) => history.replaceState(null, '', hash);
 
 /** Waits for the list itself, as its heading also shows while the data loads. */
-async function openList(w: ReturnType<typeof world>, units = UNITS) {
+async function openList(w: ReturnType<typeof world>, units = UNITS, data: Pick<WorldOptions, 'gst'> = {}) {
   openHash('#/r/r');
-  await renderScreen(<App />, { files: worldFiles(units), rosters: [w.roster] });
+  await renderScreen(<App />, { files: worldFiles(units, data), rosters: [w.roster] });
   await waitFor(() => expect(sumPoints()).not.toBeUndefined());
 }
 
@@ -46,6 +48,24 @@ const unitRows = () =>
     row.querySelector('.ur-name')?.textContent,
     row.querySelector('.ur-pts')?.textContent,
   ]);
+
+/** Opens the add sheet from one of the buttons with this name, and returns it. */
+async function openAddSheet(name: string, nth = 0) {
+  const button = screen.getAllByRole('button', { name })[nth];
+  if (!button) throw new Error(`no button ${nth} called ${name}`);
+  fireEvent.click(button);
+  return screen.findByRole('dialog');
+}
+
+const offered = (sheet: HTMLElement) => [...sheet.querySelectorAll('.pick b')].map((name) => name.textContent);
+
+function swipeRight(row: HTMLElement) {
+  const pointer = { pointerId: 1, pointerType: 'touch' };
+  row.setPointerCapture = vi.fn(); // jsdom has none
+  fireEvent.pointerDown(row, { ...pointer, clientX: 0, clientY: 0 });
+  fireEvent.pointerMove(row, { ...pointer, clientX: SWIPE, clientY: 0 });
+  fireEvent.pointerUp(row, pointer);
+}
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', () => {}); // jsdom has none, and App calls it on each address
@@ -131,5 +151,176 @@ describe('RosterView', () => {
 
     within(sheet).getByText(/No problems found/);
     expect(issues()).toEqual([]);
+  });
+
+  describe('add sheet', () => {
+    const HQ_DATA = {
+      gst: `<categoryEntries><categoryEntry id="hq" name="HQ"/></categoryEntries>
+        <forceEntries>
+          <forceEntry id="det" name="Detachment">
+            <categoryLinks>
+              <categoryLink id="det-hq" name="HQ" targetId="hq" primary="false">
+                <constraints>
+                  <constraint id="hq-max" type="max" field="selections" scope="force" value="1"/>
+                </constraints>
+              </categoryLink>
+            </categoryLinks>
+          </forceEntry>
+        </forceEntries>`,
+    };
+
+    it('leaves out an entry at its max in the detachment and keeps one with room left', async () => {
+      const units =
+        unit(
+          'term',
+          'Terminators',
+          100,
+          `<constraints>
+            <constraint id="term-max" type="max" field="selections" scope="force" value="2"/>
+          </constraints>`,
+        ) +
+        unit(
+          'scout',
+          'Scouts',
+          50,
+          `<constraints>
+            <constraint id="scout-max" type="max" field="selections" scope="force" value="3"/>
+          </constraints>`,
+        );
+      const w = world(units);
+      w.add('Terminators', 2);
+      w.add('Scouts', 2);
+      await openList(w, units);
+
+      expect(offered(await openAddSheet('Add unit'))).toEqual(['Scouts']);
+    });
+
+    it('leaves out a set-up entry with no room left and keeps one the set-up added whose max allows another', async () => {
+      const units =
+        entry(
+          'allegiance',
+          'Allegiance',
+          0,
+          `<constraints>
+            <constraint id="alg-min" type="min" field="selections" scope="parent" value="1"/>
+            <constraint id="alg-max" type="max" field="selections" scope="parent" value="1"/>
+          </constraints>`,
+        ) +
+        entry(
+          'honours',
+          'Battle Honours',
+          0,
+          `<constraints>
+            <constraint id="hon-min" type="min" field="selections" scope="parent" value="1"/>
+            <constraint id="hon-max" type="max" field="selections" scope="parent" value="2"/>
+          </constraints>`,
+        );
+      const w = world(units);
+      addMandatoryRoots(w.roster, w.contexts, 'f1');
+      await openList(w, units);
+
+      expect(offered(await openAddSheet('Add unit'))).toEqual(['Battle Honours']);
+    });
+
+    it('counts a list-wide max across detachments, and a detachment max in that detachment only', async () => {
+      const units =
+        unit(
+          'lord',
+          'Warlord',
+          100,
+          `<constraints>
+            <constraint id="lord-max" type="max" field="selections" scope="roster" value="1"/>
+          </constraints>`,
+        ) +
+        unit(
+          'guard',
+          'Honour Guard',
+          50,
+          `<constraints>
+            <constraint id="guard-max" type="max" field="selections" scope="force" value="1"/>
+          </constraints>`,
+        );
+      const w = world(units);
+      w.addForce('f2');
+      w.add('Warlord');
+      w.add('Honour Guard');
+      await openList(w, units);
+
+      expect(offered(await openAddSheet('Add unit', 1))).toEqual(['Honour Guard']);
+    });
+
+    it.each(['Add unit', 'Add HQ'])('keeps a unit whose category is full, from the %s button', async (button) => {
+      const units =
+        unit(
+          'captain',
+          'Captain',
+          100,
+          '<categoryLinks><categoryLink id="capt-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>',
+        ) +
+        unit(
+          'champ',
+          'Champion',
+          50,
+          `<categoryLinks><categoryLink id="champ-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>
+          <constraints>
+            <constraint id="champ-max" type="max" field="selections" scope="force" value="1"/>
+          </constraints>`,
+        );
+      const w = world(units, HQ_DATA);
+      w.add('Champion');
+      await openList(w, units, HQ_DATA);
+
+      expect(offered(await openAddSheet(button))).toEqual(['Captain']);
+    });
+
+    it('drops an entry from the open sheet when a swipe takes the last one', async () => {
+      const units =
+        entry(
+          'relic',
+          'Relic',
+          10,
+          `<constraints>
+            <constraint id="relic-max" type="max" field="selections" scope="force" value="1"/>
+          </constraints>`,
+        ) + ASSAULT;
+      const w = world(units);
+      await openList(w, units);
+      const sheet = await openAddSheet('Add unit');
+      expect(offered(sheet)).toEqual(['Relic', 'Assault Squad']);
+
+      const relic = within(sheet).getByRole('button', { name: /Relic/ });
+      swipeRight(relic);
+
+      await waitFor(() => expect(offered(sheet)).toEqual(['Assault Squad']));
+      const [saved] = await db.rosters();
+      expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['relic']);
+    });
+
+    it('opens a list already past an entry max with every copy and its issue, and offers no more', async () => {
+      const units =
+        unit(
+          'term',
+          'Terminators',
+          100,
+          `<constraints>
+            <constraint id="term-max" type="max" field="selections" scope="force" value="1"/>
+          </constraints>`,
+        ) + ASSAULT;
+      const w = world(units);
+      w.add('Terminators');
+      w.add('Terminators');
+      await openList(w, units);
+
+      expect(unitRows()).toEqual([
+        ['Terminators', '100'],
+        ['Terminators', '100'],
+      ]);
+      expect(sumPoints()).toBe('200pts');
+      expect(chip()?.textContent).toBe('1 issue');
+      const [saved] = await db.rosters();
+      expect(saved?.forces[0]?.selections.map((s) => s.key)).toEqual(['term', 'term']);
+
+      expect(offered(await openAddSheet('Add unit'))).toEqual(['Assault Squad']);
+    });
   });
 });
