@@ -5,31 +5,18 @@ import { App } from '../app';
 import { db } from '../data/db';
 import { getState } from '../store';
 import { world } from '../test/fixture';
+import { github } from '../test/github';
 import { expectToast, openHash, refuse, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const GST = '<gameSystem id="gst" name="Test Game" revision="1"/>';
 const CAT = '<catalogue id="cat" name="Test Army" revision="1" gameSystemId="gst"/>';
 const BODIES: Readonly<Record<string, string>> = { 'test.gst': GST, 'armies/test.cat': CAT };
 
-/** A stand-in for GitHub holding one public repo, which records what the app asks for. */
-function fakeGitHub() {
-  const urls: string[] = [];
-  vi.stubGlobal('fetch', async (url: string) => {
-    urls.push(url);
-    const { hostname, pathname } = new URL(url);
-    if (hostname === 'raw.githubusercontent.com') {
-      return new Response(BODIES[pathname.replace('/owner/data/c1/', '')]);
-    }
-    if (pathname === '/repos/owner/data') return Response.json({ default_branch: 'main' });
-    if (pathname === '/repos/owner/data/branches/main') return Response.json({ commit: { sha: 'c1' } });
-    if (pathname === '/repos/owner/data/git/trees/c1') {
-      const tree = Object.keys(BODIES).map((path) => ({ type: 'blob', path, sha: path, size: 0 }));
-      return Response.json({ tree: [...tree, { type: 'blob', path: 'README.md', sha: 'r', size: 0 }] });
-    }
-    return new Response('', { status: 404 });
+const fakeGitHub = () =>
+  github({
+    tree: [...Object.keys(BODIES), 'README.md'].map((path) => ({ path, sha: path })),
+    bodies: BODIES,
   });
-  return urls;
-}
 
 const repoInput = () => screen.getByPlaceholderText('owner/repo or GitHub URL');
 const addRepo = (text: string) => {
