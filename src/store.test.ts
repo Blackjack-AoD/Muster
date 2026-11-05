@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
-import type { Roster } from './data/engine';
+import { uid as newUid, type Roster, type Sel } from './data/engine';
+import { setUpForce } from './data/setup';
 import {
   deleteRoster,
   dismissToast,
@@ -16,6 +17,7 @@ import {
   syncAll,
   toast,
 } from './store';
+import { SWORD, children, sergeant, unit, world } from './test/fixture';
 
 const roster = (uid: string, name = 'List') =>
   ({ uid, name, repo: 'r', gameSystemId: 'g', costLimit: 0, forces: [], created: 0, updated: 0 }) as Roster;
@@ -172,6 +174,46 @@ describe('restoring a backup', () => {
     const before = (await db.rosters()).length;
     await importRosters([broken]);
     expect(await db.rosters()).toHaveLength(before);
+  });
+  describe('with fields it does not know', () => {
+    const SQUAD = unit(
+      'tac',
+      'Tactical Squad',
+      100,
+      `<categoryLinks><categoryLink id="tac-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>
+      <constraints><constraint id="tac-min" type="min" field="selections" scope="force" value="1"/></constraints>
+      ${children(sergeant(children(SWORD)))}`,
+    );
+    /** A list as the app writes it: the set-up adds a root selection, and adding a unit fills its defaults. */
+    const realList = (listUid: string) => {
+      const w = world(SQUAD, { costLimit: 2000 });
+      w.roster.uid = listUid;
+      w.roster.created = 1700000000000;
+      w.roster.updated = 1700000000001;
+      setUpForce(w.roster, w.contexts, 'f1', 'Test Army');
+      w.add('Tactical Squad', 2);
+      return JSON.parse(JSON.stringify(w.roster)) as Roster;
+    };
+    const junkSel = (s: Sel): unknown => ({ ...s, junk: 'sel', children: s.children.map(junkSel) });
+    const withJunk = (r: Roster) => ({
+      ...r,
+      junk: 'roster',
+      forces: r.forces.map((f) => ({ ...f, junk: 'force', selections: f.selections.map(junkSel) })),
+    });
+
+    it('stores a list the app built with every real field, and none of the junk', async () => {
+      const list = realList(newUid());
+      expect(list.forces[0]?.selections.some((s) => s.categoryId === 'hq')).toBe(true);
+      expect(await importRosters([withJunk(list)])).toBe(1);
+      expect(await stored(list.uid)).toEqual([list]);
+    });
+    it('leaves a category absent from a selection that has none', async () => {
+      const list = realList('nocategory');
+      await importRosters([withJunk(list)]);
+      const [restored] = await stored('nocategory');
+      const child = restored?.forces[0]?.selections.at(-1)?.children[0];
+      expect(Object.keys(child ?? {}).sort()).toEqual(['children', 'key', 'number', 'uid']);
+    });
   });
   it('restores the rest of a backup past a selection that is null', async () => {
     const lists = [roster('r1'), withSel(null), roster('r2')];

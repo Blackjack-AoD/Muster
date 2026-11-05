@@ -3,7 +3,9 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../app';
 import { db } from '../data/db';
+import type { Sel } from '../data/engine';
 import { addMandatoryRoots } from '../data/setup';
+import { importRosters } from '../store';
 import {
   ASSAULT,
   RULED_OUT_BY_ASSAULT,
@@ -200,6 +202,21 @@ describe('RosterView', () => {
         ['Assault Squad', 'unit-row', undefined],
       ]);
     });
+  });
+
+  it('opens a restored list that had deep junk in its unknown fields', async () => {
+    const w = world(UNITS);
+    const tac = w.add('Tactical Squad');
+    let junk: unknown = 'junk';
+    for (let level = 0; level < 3_000; level++) junk = { junk };
+    const junkSel = (s: Sel): unknown => ({ ...s, junk, children: s.children.map(junkSel) });
+    const forces = w.roster.forces.map((f) => ({ ...f, junk, selections: f.selections.map(junkSel) }));
+
+    expect(await importRosters([{ ...w.roster, junk, forces }])).toBe(1);
+    openHash('#/r/r');
+    await renderScreen(<App />, { files: worldFiles(UNITS) });
+
+    await waitFor(() => expect(sumPoints()).toBe(`${w.pts(tac)}pts`));
   });
 
   it('says so in the issues sheet when a list has no issues', async () => {
