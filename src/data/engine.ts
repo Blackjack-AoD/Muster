@@ -112,8 +112,10 @@ export class Evaluator {
     this.build();
   }
 
-  ctxFor(f: Force) {
-    return this.contexts.get(f.catalogueId)!;
+  ctxFor(f: Force): Context {
+    const ctx = this.contexts.get(f.catalogueId);
+    if (!ctx) throw new Error('This army is no longer in the synced data');
+    return ctx;
   }
 
   find(selUid: string) {
