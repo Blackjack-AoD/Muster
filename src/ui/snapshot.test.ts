@@ -181,6 +181,7 @@ describe('share links', () => {
     const servitor = force.units[0];
     const withForce = (change: object) => ({ ...FULL, forces: [{ ...force, ...change }] });
     const withUnit = (change: object) => withForce({ units: [{ ...servitor, ...change }] });
+    const withProfile = (change: object) => withUnit({ profiles: [{ ...servitor.profiles[0], ...change }] });
     const pack = async (value: unknown) => (await encodeSnapshot(value as Snapshot)).data;
 
     it('opens a list with everything in it', async () => {
@@ -210,8 +211,8 @@ describe('share links', () => {
       ['a unit with no profiles', withUnit({ profiles: undefined })],
       ['a profile that is null', withUnit({ profiles: [null] })],
       ['a profile with no stats', withUnit({ profiles: [{ name: 'Servitor', type: 'Unit' }] })],
-      ['a stat that is not a name and a value', withUnit({ profiles: [{ type: 'Gear', chars: [['M']] }] })],
-      ['a stat value that is a number', withUnit({ profiles: [{ type: 'Gear', chars: [['M', 6]] }] })],
+      ['a stat that is not a name and a value', withProfile({ chars: [['M']] })],
+      ['a stat value that is a number', withProfile({ chars: [['M', 6]] })],
       ['a rule text that is a number', { ...FULL, rules: [['Mindlock', 1]] }],
       ['a gear line that is text', withUnit({ gear: ['Servo Arm'] })],
       ['a unit with no rules', withUnit({ rules: undefined })],
@@ -224,7 +225,23 @@ describe('share links', () => {
       ['a gear line with no depth', withUnit({ gear: [{ t: 'Servo Arm' }] })],
       ['a gear depth that is an object', withUnit({ gear: [{ d: {}, t: 'Servo Arm' }] })],
       ['a profile with no type', withUnit({ profiles: [{ name: 'Servitor', chars: [] }] })],
-      ['a profile type that is an object', withUnit({ profiles: [{ type: {}, chars: [] }] })],
+      ['a profile type that is an object', withProfile({ type: {} })],
+      ['a list name that is a nested list', { ...FULL, name: [[]] }],
+      ['no list name', { ...FULL, name: undefined }],
+      ['a game that is a nested list', { ...FULL, game: [[]] }],
+      ['no game', { ...FULL, game: undefined }],
+      ['a detachment name that is a nested list', withForce({ name: [[]] })],
+      ['a detachment with no name', withForce({ name: undefined })],
+      ['an army that is a nested list', withForce({ army: [[]] })],
+      ['a detachment with no army', withForce({ army: undefined })],
+      ['a unit name that is a nested list', withUnit({ name: [[]] })],
+      ['a unit with no name', withUnit({ name: undefined })],
+      ['a unit category that is a nested list', withUnit({ cat: [[]] })],
+      ['a unit with no category', withUnit({ cat: undefined })],
+      ['a gear text that is a nested list', withUnit({ gear: [{ d: 0, t: [[]] }] })],
+      ['a gear line with no text', withUnit({ gear: [{ d: 0 }] })],
+      ['a profile name that is a nested list', withProfile({ name: [[]] })],
+      ['a profile with no name', withProfile({ name: undefined })],
     ])('reject a list with %s', async (_what, broken) => {
       await expect(decodeSnapshot(await pack(broken))).rejects.toThrow('Not a Muster list');
     });

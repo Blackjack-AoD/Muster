@@ -95,6 +95,7 @@ describe('SharedView', () => {
     { broken: 'a list from a newer Muster', hash: () => linkHashOf({ ...SHARED, v: 2 }) },
     { broken: 'a link that unpacks past 5 MB', hash: () => linkHashOf({ ...SHARED, name: 'x'.repeat(5_000_001) }) },
     { broken: 'a link with too many units', hash: () => linkHash(tooManyUnits) },
+    { broken: 'a list name that is a nested list', hash: () => linkHashOf({ ...SHARED, name: [[{}]] }) },
   ])('shows the readable error for $broken', async ({ hash }) => {
     openHash(await hash());
 
