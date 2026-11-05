@@ -119,6 +119,15 @@ export async function importRosters(list: Roster[]) {
   set({ rosters: await db.rosters() });
 }
 
+/** Retry reads memory, which holds every edit, as `r` may be stale or deleted by then. */
+function saveEdit(r: Roster) {
+  const retry = () => {
+    const latest = state.rosters.find((x) => x.uid === r.uid);
+    if (latest) saveEdit(latest);
+  };
+  saveRoster(r).catch(() => toast("Couldn't save this list", { label: 'Retry', run: retry }));
+}
+
 // ---------- roster controller ----------
 export interface RosterCtl {
   roster: Roster;
@@ -176,7 +185,7 @@ export function useRosterCtl(
       mutate: (fn) => {
         fn(local);
         setVersion((v) => v + 1);
-        if (!scratch) saveRoster(local);
+        if (!scratch) saveEdit(local);
       },
     },
   };
