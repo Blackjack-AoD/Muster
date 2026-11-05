@@ -188,10 +188,7 @@ async function inflate(bytes: Uint8Array): Promise<string> {
   let size = 0;
   for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
     size += chunk.value.length;
-    if (size > MAX_UNPACKED_BYTES) {
-      await reader.cancel();
-      throw new Error('This link is too big to open');
-    }
+    if (size > MAX_UNPACKED_BYTES) throw new Error('This link is too big to open');
     text += decoder.decode(chunk.value, { stream: true });
   }
   return text + decoder.decode();
