@@ -32,6 +32,8 @@ mise exec -- npx tsx scripts/compare.ts <data-dir> <old src dir> <new src dir>  
 ## Testing
 Unit tests sit next to the code as `*.test.ts`. They're written as BattleScribe XML (see `src/test/fixture.ts`), run through the real parser, so a test reads like the data it stands for. A deploy stops if they fail. They cover the data layer, storage, backups and share links; the UI screens and `src/update.ts` aren't covered yet.
 
+A screen test is a `*.test.tsx` file that starts with `// @vitest-environment jsdom` and calls `renderScreen` from `src/test/screen.ts`. It renders on the real store with seeded data and lists, and resets the store after each test. Every other test runs in node.
+
 `it.fails` marks a known bug: the test states the right behaviour and passes while the bug exists. Fixing the bug turns it red, and it then becomes a normal `it`.
 
 The sweep finds new cases and never fails a build. It adds every unit of every army in a data folder, then prints the problems it hit with the smallest example of each, and the shapes of condition, repeat, constraint and modifier in that data that no unit test mentions. Turn what it finds into small unit tests.

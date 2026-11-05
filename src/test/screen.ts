@@ -1,11 +1,12 @@
 // Renders a screen on the real store, with data and lists seeded into fake-indexeddb.
 import 'fake-indexeddb/auto';
-import { render } from '@testing-library/preact';
+import { cleanup, render } from '@testing-library/preact';
 import type { ComponentChild } from 'preact';
+import { afterEach, vi } from 'vitest';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
-import { init } from '../store';
+import { dismissToast, importRosters, init, removeRepo, setGame } from '../store';
 import { COST_TYPES, FORCE, type WorldOptions } from './fixture';
 
 export interface ScreenSeed {
@@ -32,8 +33,23 @@ export async function renderScreen(
   const picked = Object.entries(files).map(([path, xml]) => new File([xml], path));
   if (picked.length) await importLocalFiles(REPO, picked);
   for (const roster of rosters) await db.putRoster(roster);
+  // offline, or init downloads the default repos whenever no data is seeded
+  const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
   await init();
+  online.mockRestore();
   render(screen);
 }
 
-export async function resetStore(): Promise<void> {}
+export async function resetStore(): Promise<void> {
+  dismissToast();
+  setGame(undefined);
+  for (const { repo } of await db.repos()) await removeRepo(repo);
+  for (const { uid } of await db.rosters()) await db.delRoster(uid);
+  // importing nothing reloads memory from storage, dropping a list whose save failed
+  await importRosters([]);
+}
+
+afterEach(async () => {
+  cleanup();
+  await resetStore();
+});
