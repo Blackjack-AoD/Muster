@@ -81,8 +81,8 @@ export function failureMessage(action: string, e: unknown): string {
 }
 
 export async function init() {
-  const [repos, rosters] = await Promise.all([db.repos(), db.rosters()]);
-  set({ ready: true, repos, rosters });
+  const [repos, rosters, savedUnits] = await Promise.all([db.repos(), db.rosters(), db.savedUnits()]);
+  set({ ready: true, repos, rosters, savedUnits });
   persistStorage().catch(() => {
     /* nothing depends on it: the browser just keeps its right to clear storage */
   });
@@ -270,7 +270,31 @@ function saveEdit(r: Roster) {
   });
 }
 
-export async function saveUnit(_r: Roster, _rs: RSel, _name: string): Promise<void> {}
+/** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
+export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void> {
+  const force = r.forces.find((f) => f.uid === rs.force.force.uid);
+  const sel = force?.selections.find((s) => s.uid === rs.sel.uid);
+  if (!force || !sel) return;
+  const now = Date.now();
+  const saved: SavedUnit = {
+    id: uid(),
+    name,
+    repo: r.repo,
+    gameSystemId: r.gameSystemId,
+    catalogueId: force.catalogueId,
+    key: sel.key,
+    // as the Add unit sheet groups a unit with no category
+    categoryId: rs.eff.primary ?? '',
+    build: structuredClone(sel),
+    created: now,
+    updated: now,
+  };
+  await db.putSavedUnit(saved);
+  set({ savedUnits: [...state.savedUnits, saved] });
+  sel.saved = saved.id;
+  sel.name = name;
+  saveEdit(r);
+}
 
 // ---------- roster controller ----------
 export interface RosterCtl {
