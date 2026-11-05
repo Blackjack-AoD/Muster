@@ -506,6 +506,11 @@ describe('saved units', () => {
     expect((await inStorage('rn3')).map((s) => s.name)).toEqual(['Squad Vorr']);
   });
 
+  it('refuses to rename a saved unit that is not on this phone', async () => {
+    await expect(renameSavedUnit('gone', 'Squad Iron')).rejects.toThrow("This saved unit isn't on this phone.");
+    expect(await storedSavedUnit('gone')).toBeUndefined();
+  });
+
   it('deletes a saved unit, leaving its copies with their build and no link or name', async () => {
     const { roster: first, squad: firstSquad, id } = await savedSquad('dl1', 'Squad Thrax');
     const { roster: second, squad: secondSquad } = await listWithCopy('dl2', id, 'Squad Thrax');
