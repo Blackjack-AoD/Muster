@@ -100,7 +100,7 @@ export async function resetStore(): Promise<void> {
   for (const repo of new Set([...stored, ...Object.keys(getState().sync)])) await removeRepo(repo);
   for (const uid of getState().unsaved) await deleteRoster(uid);
   for (const { uid } of await db.rosters()) await db.delRoster(uid);
-  // importing nothing reloads memory from storage, dropping a list whose save failed
+  // importing nothing reloads memory from storage
   await importRosters([]);
 }
 
