@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { storageUse } from '../data/db';
 import { DEFAULT_REPOS, importLocalFiles, normaliseRepo } from '../data/sync';
 import { clearCaches } from '../data/library';
-import { failureMessage, importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
+import { failureMessage, getState, importRosters, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
 import { backupLists, shareBackup } from './exporter';
@@ -223,7 +223,8 @@ export function DataView() {
               }
               try {
                 await importRosters(lists);
-                toast(`Restored ${lists.length} list(s)`);
+                // the Retry toast is the only way left to save a list's edit
+                if (!getState().toastAction?.failedSave) toast(`Restored ${lists.length} list(s)`);
               } catch (err) {
                 toast(failureMessage('restore', err));
               }
