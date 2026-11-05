@@ -966,6 +966,26 @@ describe('validation', () => {
       w.roster.forces[0].forceEntryId = 'gone';
       expect(w.errors()).toEqual([]);
     });
+    it("warns on a force whose entry has gone, with the force's uid", () => {
+      const w = world(unit('u', 'Squad', 5));
+      w.add('Squad');
+      w.roster.forces[0].forceEntryId = 'gone';
+      expect(w.ev().issues).toEqual([
+        { level: 'warn', forceUid: 'f1', message: "This detachment's type is no longer in the data" },
+      ]);
+    });
+    it('warns on each force whose entry has gone', () => {
+      const w = world(unit('u', 'Squad', 5));
+      w.addForce();
+      for (const f of w.roster.forces) f.forceEntryId = 'gone';
+      expect(w.ev().issues.map((i) => i.forceUid)).toEqual(['f1', 'f2']);
+    });
+    it('warns only on the force whose entry has gone', () => {
+      const w = world(unit('u', 'Squad', 5));
+      w.addForce();
+      w.roster.forces[1].forceEntryId = 'gone';
+      expect(w.ev().issues.map((i) => i.forceUid)).toEqual(['f2']);
+    });
   });
 });
 
