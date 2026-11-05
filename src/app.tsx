@@ -44,6 +44,15 @@ export function back(fallback = '/') {
   else go(fallback, true);
 }
 
+/** A damaged address must reach its screen as it is, for the screen to report, not crash the app. */
+function decodePart(part: string) {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}
+
 export function App() {
   const hash = useHash();
   const ready = useStore((s) => s.ready);
@@ -53,7 +62,7 @@ export function App() {
     window.scrollTo(0, 0);
   }, [hash]);
 
-  const parts = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  const parts = hash.replace(/^#\/?/, '').split('/').map(decodePart);
   let page;
   let tab = 'lists';
   if (!ready)
