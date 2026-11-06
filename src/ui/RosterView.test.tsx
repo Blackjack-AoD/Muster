@@ -734,6 +734,33 @@ describe('RosterView', () => {
       expect(screen.getByRole('dialog')).toBe(sheet);
     });
 
+    it('labels the swipe on a saved row "Add saved build", and on a data row "Add with standard options"', async () => {
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [SQUAD]);
+      const sheet = await openAddSheet('Add Troops');
+      const labels = (rows: ParentNode) => [...rows.querySelectorAll('.ps-bg')].map((bg) => bg.textContent?.trim());
+
+      expect(labels(savedSection(sheet))).toEqual(['Add saved build']);
+      expect(labels(sheet)).toEqual(['Add saved build', 'Add with standard options']);
+      expect(sheet.querySelector('.pick-hint')?.textContent?.trim()).toBe(
+        'Tap to add and open a unit. Swipe right to add it and stay here.',
+      );
+    });
+
+    it('names a removed copy by its custom name in the toast, and keeps its saved unit', async () => {
+      const w = world(SAVED_UNITS, CATEGORIES);
+      expect(addSavedUnit(w.roster, w.contexts, 'f1', SQUAD)).toMatchObject({ added: true });
+      await openWithSaved(w, [SQUAD]);
+
+      const [row] = document.querySelectorAll<HTMLElement>('.unit-row');
+      if (!row) throw new Error('no unit row');
+      drag(row, [[-SWIPE, 0]]);
+
+      await expectToast('Removed Squad Iron');
+      await waitFor(async () => expect(await storedRoots()).toEqual([]));
+      expect(getState().savedUnits.map((u) => u.id)).toEqual(['squad']);
+      expect((await db.savedUnits()).map((u) => u.id)).toEqual(['squad']);
+    });
+
     it("shows a named unit's custom name over its data name, and an unnamed unit's name alone", async () => {
       const w = world(SAVED_UNITS, CATEGORIES);
       expect(addSavedUnit(w.roster, w.contexts, 'f1', SQUAD)).toMatchObject({ added: true });
