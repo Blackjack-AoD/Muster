@@ -66,10 +66,10 @@ const title = () => document.querySelector('.topbar h1')?.textContent;
 /** The label of each model or group row, such as "4× Marine". */
 const rows = () => [...document.querySelectorAll('.sub-head > span:not(.o-pts)')].map((s) => s.textContent);
 
-const savedUnit = async () => (await db.rosters())[0]?.forces[0]?.selections[0];
+const storedUnit = async () => (await db.rosters())[0]?.forces[0]?.selections[0];
 
-/** The model rows of the saved unit, as count and name. */
-const savedModels = async () => (await savedUnit())?.children.map((c: Sel) => [c.number, c.name]);
+/** The model rows of the stored unit, as count and name. */
+const savedModels = async () => (await storedUnit())?.children.map((c: Sel) => [c.number, c.name]);
 
 /** Types a name into the open name sheet and closes it. */
 function nameAs(name: string) {
@@ -302,7 +302,7 @@ describe('UnitEditor', () => {
     nameAs('Squad Thrax');
 
     await waitFor(() => expect(title()).toBe('Squad Thrax'));
-    await waitFor(async () => expect((await savedUnit())?.name).toBe('Squad Thrax'));
+    await waitFor(async () => expect((await storedUnit())?.name).toBe('Squad Thrax'));
   });
 
   it('Clear takes the name off the unit, and the title shows the data name again', async () => {
@@ -317,7 +317,7 @@ describe('UnitEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
-    await waitFor(async () => expect(await savedUnit()).not.toHaveProperty('name'));
+    await waitFor(async () => expect(await storedUnit()).not.toHaveProperty('name'));
     expect(title()).toBe('Tactical Squad');
   });
 
@@ -464,7 +464,7 @@ describe('UnitEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     nameAs('   ');
 
-    await waitFor(async () => expect(await savedUnit()).not.toHaveProperty('name'));
+    await waitFor(async () => expect(await storedUnit()).not.toHaveProperty('name'));
     expect(title()).toBe('Tactical Squad');
   });
 
@@ -562,8 +562,8 @@ describe('UnitEditor saved units', () => {
       expect((await db.savedUnits()).map((u) => [u.name, u.key])).toEqual([['Squad Thrax', 'tac']]),
     );
     const [saved] = await db.savedUnits();
-    await waitFor(async () => expect((await savedUnit())?.saved).toBe(saved?.id));
-    expect((await savedUnit())?.name).toBe('Squad Thrax');
+    await waitFor(async () => expect((await storedUnit())?.saved).toBe(saved?.id));
+    expect((await storedUnit())?.name).toBe('Squad Thrax');
     await waitFor(() => expect(title()).toBe('Squad Thrax'));
     expect(banner()).toBe('Changes here apply to every list that holds this saved unit.');
     expect(saveButton()).toBeNull();
@@ -598,7 +598,7 @@ describe('UnitEditor saved units', () => {
     nameAndSave('  ');
 
     await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
-    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+    await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
   });
 
   it('closing the save sheet saves nothing and leaves the unit unlinked', async () => {
@@ -609,7 +609,7 @@ describe('UnitEditor saved units', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(await db.savedUnits()).toEqual([]);
-    expect(await savedUnit()).not.toHaveProperty('saved');
+    expect(await storedUnit()).not.toHaveProperty('saved');
     expect(banner()).toBeUndefined();
     expect(saveButton()).not.toBeNull();
   });
@@ -626,7 +626,7 @@ describe('UnitEditor saved units', () => {
       put.mockRestore();
     }
     expect(await db.savedUnits()).toEqual([]);
-    expect(await savedUnit()).not.toHaveProperty('saved');
+    expect(await storedUnit()).not.toHaveProperty('saved');
     expect(title()).toBe('Tactical Squad');
     expect(banner()).toBeUndefined();
   });
@@ -671,7 +671,7 @@ describe('UnitEditor saved units', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
-    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+    await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
     await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
     expect(title()).toBe('Tactical Squad');
   });
@@ -682,7 +682,7 @@ describe('UnitEditor saved units', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     nameAs('');
 
-    await waitFor(async () => expect((await savedUnit())?.name).toBe('Tactical Squad'));
+    await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
     await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
   });
 

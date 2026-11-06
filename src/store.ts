@@ -308,7 +308,7 @@ async function restoreSavedUnits(units: readonly SavedUnit[]): Promise<ReadonlyM
   return ids;
 }
 
-/** Returns how many lists and saved units it restored. Anything that isn't one is skipped. */
+/** Returns how many lists and saved units it restored. It skips anything that isn't a list or a saved unit. */
 export async function importBackup(
   list: readonly unknown[],
   units: readonly unknown[] = [],
@@ -365,8 +365,8 @@ const linkedCopies = (r: Roster): Sel[] =>
   r.forces.flatMap((f) => f.selections.filter((s) => s.saved !== undefined)).map((s) => structuredClone(s));
 
 /**
- * Applies `edit` to a list and saves it, then copies each linked unit the edit changed to its saved unit
- * and to the other lists. A copy the edit added, or left alone, changes nothing else.
+ * Applies `edit` to a list and saves it, then copies each linked unit's changes to its saved unit and to the
+ * other lists. Only a copy the edit changed counts: one it added or left alone changes nothing else.
  */
 export function saveListEdit(r: Roster, edit: (r: Roster) => void): Promise<void> {
   const before = linkedCopies(r);
@@ -409,7 +409,10 @@ async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
   );
 }
 
-/** Stores the saved unit and returns it for the unit page to link the unit, so a refused write, which has no Retry, leaves the unit unlinked. */
+/**
+ * Stores the saved unit and returns it for the unit page to link the unit,
+ * so a refused write, which has no Retry, leaves the unit unlinked.
+ */
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<SavedUnit> {
   const loc = locate(r, rs.sel.uid);
   if (!loc || loc.list !== loc.force.selections) throw new Error('Only a unit of this list can be saved.');
@@ -422,7 +425,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<Saved
     gameSystemId: r.gameSystemId,
     catalogueId: force.catalogueId,
     key: sel.key,
-    // as the Add unit sheet groups a unit with no category
+    // '' for a unit with no primary category, as the Add unit sheet groups it
     categoryId: rs.eff.primary ?? '',
     build: buildOf(structuredClone(sel)),
     created: now,

@@ -1098,8 +1098,8 @@ export type AddSavedResult =
   | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' | 'unit-gone' };
 
 /**
- * Add a copy of a saved unit to a detachment, rebuilt against the current data: options the data
- * no longer has are left out and counted in `dropped`, and mandatory defaults filled.
+ * Adds a copy of a saved unit to a detachment, rebuilt against the current data: it leaves out options the data
+ * no longer has, counts them in `dropped`, and fills mandatory defaults.
  * A list holds a saved unit at most once.
  */
 export function addSavedUnit(
