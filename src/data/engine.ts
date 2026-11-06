@@ -988,6 +988,11 @@ export function displayName(rs: RSel): string {
   return rs.sel.name ?? rs.eff.name;
 }
 
+/** The data's name, to show under the player's name for a selection, or undefined when it has none. */
+export function dataNameIfNamed(rs: RSel): string | undefined {
+  return rs.sel.name === undefined ? undefined : rs.eff.name;
+}
+
 /**
  * Add an option under parent (or as a root unit), then fill in mandatory defaults.
  * Returns the new selection's uid, or null, adding nothing, when the roster lacks the force or parent.

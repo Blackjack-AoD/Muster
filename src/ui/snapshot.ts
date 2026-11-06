@@ -1,7 +1,7 @@
 // A self-contained picture of a list (units, stats, wargear, rules) that needs no game data to show.
 // Used for the printable army sheet (PDF) and for share links that friends can open without Muster's data.
 import type { RepoState } from '../data/db';
-import { displayName, isRecord, type RSel } from '../data/engine';
+import { dataNameIfNamed, displayName, isRecord, type RSel } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { catalogueName, systemName } from './Lists';
 
@@ -59,9 +59,10 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
     walk(u, 0, u.sel.number);
     const rules = ev.rulesFor(u);
     for (const r of rules) if (!ruleText.has(r.name)) ruleText.set(r.name, r.description);
+    const dataName = dataNameIfNamed(u);
     return {
       name: `${u.sel.number > 1 ? u.sel.number + '× ' : ''}${displayName(u)}`,
-      ...(u.sel.name !== undefined && { dataName: u.eff.name }),
+      ...(dataName !== undefined && { dataName }),
       cat: u.eff.primary ? clean(u.force.ctx.categoryName(u.eff.primary)) : '',
       pts: u.total,
       gear,

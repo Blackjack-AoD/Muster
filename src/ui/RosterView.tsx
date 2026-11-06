@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { go } from '../app';
 import {
   addSavedUnit,
+  dataNameIfNamed,
   addSel,
   displayName,
   duplicateSel,
@@ -349,6 +350,7 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
   const bad = issues.some((i) => i.level === 'error');
   const noted = !bad && issues.length > 0;
   const summary = unitSummary(u);
+  const dataName = dataNameIfNamed(u);
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; id: number; swiping: boolean; moved: boolean } | null>(null);
   const to = `/r/${ctl.roster.uid}/u/${u.sel.uid}`;
@@ -443,7 +445,7 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
             {u.sel.number > 1 ? `${u.sel.number}× ` : ''}
             {displayName(u)}
           </div>
-          {u.sel.name !== undefined && <div class="ur-sub ur-data">{u.eff.name}</div>}
+          {dataName !== undefined && <div class="ur-sub ur-data">{dataName}</div>}
           {summary && <div class="ur-sub">{summary}</div>}
         </div>
         {noted && (
