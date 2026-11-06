@@ -475,7 +475,16 @@ describe('naming and splitting models', () => {
     expect(nameToSet(w.sel(tac), undefined)).toBe('Tactical Squad');
   });
 
-  it('adds new models to the biggest unnamed row, never a named one', () => {
+  it('adds new models to an unnamed row, never a named one before it', () => {
+    const { w, tac, rows } = squad([1, 1], { 0: 'Brother Kael' });
+    addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
+    expect(rows()).toEqual([
+      [1, 'Brother Kael'],
+      [3, undefined],
+    ]);
+  });
+
+  it('adds new models to the biggest unnamed row', () => {
     const { w, tac, rows } = squad([1, 1, 3], { 0: 'Brother Kael' });
     addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
     expect(rows()).toEqual([
