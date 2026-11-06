@@ -1095,7 +1095,8 @@ export function addModels(roster: Roster, contexts: Map<string, Context>, rs: RS
 }
 
 /** What adding a saved unit would do: its points, why the list refuses it, or null when the detachment doesn't offer it. */
-export type SavedTry = { added: true; pts: number } | { added: false; reason: 'already-in-list' | 'unit-gone' } | null;
+export type SavedTry =
+  { added: true; pts: number; rs: RSel } | { added: false; reason: 'already-in-list' | 'unit-gone' } | null;
 
 /** Tries adding a saved unit to a detachment on a copy of the list, which it leaves as it is. */
 export function tryAddSaved(
@@ -1106,7 +1107,11 @@ export function tryAddSaved(
 ): SavedTry {
   const copy = structuredClone(roster);
   const res = addSavedUnit(copy, contexts, forceUid, unit);
-  if (res.added) return { added: true, pts: new Evaluator(copy, contexts).find(res.uid)?.total ?? 0 };
+  if (res.added) {
+    const rs = new Evaluator(copy, contexts).find(res.uid);
+    if (!rs) throw new Error(`The saved unit added as ${res.uid} isn't in the list.`);
+    return { added: true, pts: rs.total, rs };
+  }
   switch (res.reason) {
     case 'already-in-list':
     case 'unit-gone':

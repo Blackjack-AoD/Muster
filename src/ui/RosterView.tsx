@@ -15,6 +15,7 @@ import {
   tryAddSaved,
   uid,
   unavailable,
+  unlinkCopy,
   type AddSavedResult,
   type Issue,
   type RForce,
@@ -27,6 +28,7 @@ import { getContext, systemsOf } from '../data/library';
 import {
   addRoster,
   deleteRoster,
+  deleteSavedUnit,
   failureMessage,
   getState,
   toast,
@@ -496,25 +498,37 @@ const droppedMessage = (n: number) =>
 
 function PickRow({
   name,
+  sub,
   pts,
   added,
   swipeLabel,
   onTap,
   onSwipe,
+  onSwipeLeft,
 }: {
   name: string;
-  pts: number;
+  /** a line under the name, such as a preconfigured unit's wargear */
+  sub?: string;
+  /** the points, or why the list refuses the unit, which then can't be added */
+  pts: number | string;
   added: number;
   swipeLabel: string;
   onTap: () => void;
   onSwipe: () => void;
+  onSwipeLeft?: () => void;
 }) {
-  const { dx, handlers, tap } = useSwipe({ onRight: onSwipe });
+  const { dx, handlers, tap } = useSwipe({ onRight: onSwipe, onLeft: onSwipeLeft });
   return (
-    <div class={'pick-swipe' + (dx ? ' active' : '')}>
-      <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true">
-        <Icon name="plus" size={18} /> {swipeLabel}
-      </div>
+    <div class={'pick-swipe' + (dx ? ' active' : '') + (dx < 0 ? ' left' : '')}>
+      {dx < 0 ? (
+        <div class={'ps-bg del' + (dx <= -SWIPE ? ' armed' : '')} aria-hidden="true">
+          Delete <Icon name="trash" size={18} />
+        </div>
+      ) : (
+        <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true">
+          <Icon name="plus" size={18} /> {swipeLabel}
+        </div>
+      )}
       <button
         class={'pick' + (dx ? ' dragging' : '')}
         style={dx ? { transform: `translateX(${dx}px)` } : undefined}
@@ -523,9 +537,10 @@ function PickRow({
       >
         <span>
           <b>{name}</b>
+          {sub && <small class="pick-sub">{sub}</small>}
         </span>
         <span class="pick-pts">
-          {fmtN(pts)}
+          {typeof pts === 'number' ? fmtN(pts) : pts}
           {added > 0 && (
             <small class="pick-added" aria-label={`${added} added`}>
               {' '}
@@ -552,8 +567,12 @@ function RefusedRow({ name, reason }: { name: string; reason: string }) {
   );
 }
 
+/** The uid of the first copy of saved unit `id` in a list, if it holds one. */
+const heldCopy = (r: Roster, id: string) => r.forces.flatMap((f) => f.selections).find((s) => s.saved === id)?.uid;
+
 function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; cat?: string; onClose: () => void }) {
   const [q, setQ] = useState('');
+  const [tab, setTab] = useState<'units' | 'preconfigured'>('units');
   const options = useMemo(() => {
     const list = forceRootOptions(rf.ctx, rf.entry);
     const prim = (o: Opt) => (o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0])?.targetId;
@@ -575,6 +594,40 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
     [savedUnits, rf, cat, ctl.ev],
   );
   const savedShown = saved.filter(({ unit }) => unit.name.toLowerCase().includes(q.toLowerCase()));
+  // the Preconfigured tab: preconfigured and unique units of this category, by the name a player knows them by
+  const configured = useMemo(
+    () =>
+      savedUnits
+        .filter((u) => !cat || u.categoryId === cat)
+        .flatMap((unit) => {
+          const tried = tryAddSaved(ctl.roster, ctl.contexts, rf.force.uid, unit);
+          if (!tried) return [];
+          // a unique unit the list holds can't be tried again: its copy in the list shows its wargear
+          const rs = tried.added ? tried.rs : ctl.ev.find(heldCopy(ctl.roster, unit.id) ?? '');
+          const name = isUnique(unit) ? unit.name : (rs?.eff.name ?? 'Preconfigured unit');
+          return [{ unit, tried, name, sub: rs ? unitSummary(rs) : undefined }];
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [savedUnits, rf, cat, ctl.ev],
+  );
+  const configuredShown = configured.filter(({ name }) => name.toLowerCase().includes(q.toLowerCase()));
+  const copiesOf = (id: string) =>
+    ctl.roster.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
+  const forget = async (unit: SavedUnit, name: string) => {
+    const question = isUnique(unit)
+      ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
+      : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
+    if (!confirm(question)) return;
+    try {
+      await deleteSavedUnit(unit.id);
+    } catch (e) {
+      toast(failureMessage('delete this saved unit', e));
+      return;
+    }
+    ctl.mutate((r) => {
+      for (const f of r.forces) for (const s of f.selections) if (s.saved === unit.id) unlinkCopy(s);
+    });
+  };
   const groups = new Map<string, typeof shown>();
   for (const x of shown) groups.set(x.cat ?? '', [...(groups.get(x.cat ?? '') ?? []), x]);
 
@@ -613,11 +666,49 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
 
   return (
     <Sheet title={cat ? `Add ${cleanCat(rf.ctx.categoryName(cat))}` : 'Add unit'} onClose={onClose} full>
+      <div class="tabs" role="tablist">
+        {(['units', 'preconfigured'] as const).map((t) => (
+          <button role="tab" aria-selected={tab === t} class={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+            {t === 'preconfigured' ? 'Preconfigured' : cat ? cleanCat(rf.ctx.categoryName(cat)) : 'Units'}
+          </button>
+        ))}
+      </div>
       <div class="search">
         <Icon name="search" size={18} />
         <input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      {savedShown.length > 0 && (
+      {tab === 'preconfigured' && (
+        <>
+          {!configuredShown.length && (
+            <p class="muted pad">
+              {q
+                ? 'Nothing matching that.'
+                : "No preconfigured units yet. Change a unit's options and tap Save updates on its page to keep it here."}
+            </p>
+          )}
+          {configuredShown.length > 0 && (
+            <p class="muted small pad-x pick-hint">
+              Tap to add and open a unit. Swipe right to add it and stay here, or left to delete it.
+            </p>
+          )}
+          <div class="pick-list" role="group" aria-label="Preconfigured units">
+            {configuredShown.map(({ unit, tried, name, sub }) => (
+              <PickRow
+                key={unit.id}
+                name={name}
+                sub={sub}
+                pts={tried.added ? tried.pts : REFUSED[tried.reason]}
+                added={isUnique(unit) ? 0 : copiesOf(unit.id)}
+                swipeLabel="Add saved build"
+                onTap={() => tried.added && openSaved(unit)}
+                onSwipe={() => tried.added && addSaved(unit)}
+                onSwipeLeft={() => void forget(unit, name)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      {tab === 'units' && savedShown.length > 0 && (
         <>
           <div class="list-label">Unique units</div>
           <div class="pick-list" role="group" aria-label="Unique units">
@@ -639,28 +730,31 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
           </div>
         </>
       )}
-      {!shown.length && !savedShown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
-      {shown.length + savedShown.length > 0 && (
+      {tab === 'units' && !shown.length && !savedShown.length && (
+        <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>
+      )}
+      {tab === 'units' && shown.length + savedShown.length > 0 && (
         <p class="muted small pad-x pick-hint">Tap to add and open a unit. Swipe right to add it and stay here.</p>
       )}
-      {[...groups].map(([c, items]) => (
-        <div key={c}>
-          {!cat && <div class="list-label">{cleanCat(rf.ctx.categoryName(c)) || 'Other'}</div>}
-          <div class="pick-list">
-            {items.map(({ o, eff, cat: oc }) => (
-              <PickRow
-                key={o.key}
-                name={eff.name}
-                pts={startPts(rf, o, eff, pt)}
-                added={quick[o.key] ?? 0}
-                swipeLabel="Add with standard options"
-                onTap={() => add(o, oc)}
-                onSwipe={() => quickAdd(o, oc)}
-              />
-            ))}
+      {tab === 'units' &&
+        [...groups].map(([c, items]) => (
+          <div key={c}>
+            {!cat && <div class="list-label">{cleanCat(rf.ctx.categoryName(c)) || 'Other'}</div>}
+            <div class="pick-list">
+              {items.map(({ o, eff, cat: oc }) => (
+                <PickRow
+                  key={o.key}
+                  name={eff.name}
+                  pts={startPts(rf, o, eff, pt)}
+                  added={quick[o.key] ?? 0}
+                  swipeLabel="Add with standard options"
+                  onTap={() => add(o, oc)}
+                  onSwipe={() => quickAdd(o, oc)}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
     </Sheet>
   );
 }

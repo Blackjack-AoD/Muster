@@ -788,5 +788,103 @@ describe('RosterView', () => {
         ['Tactical Squad', undefined],
       ]);
     });
+
+    describe('Preconfigured tab', () => {
+      const MELTA = saved('melta', '', sel('tac', [sel('sgt', [sel('fist')])]), { kind: 'preconfigured' });
+      const tab = (sheet: HTMLElement, name: string) => within(sheet).getByRole('tab', { name });
+      const openTab = async (button: string) => {
+        const sheet = await openAddSheet(button);
+        fireEvent.click(tab(sheet, 'Preconfigured'));
+        return sheet;
+      };
+      const tabRows = (sheet: HTMLElement) =>
+        [...within(sheet).getByRole('group', { name: 'Preconfigured units' }).querySelectorAll('.pick')].map((row) => [
+          row.querySelector('b')?.textContent,
+          row.querySelector('.pick-sub')?.textContent,
+          row.querySelector('.pick-pts')?.textContent,
+        ]);
+      const tabRow = (sheet: HTMLElement, name: RegExp) =>
+        within(within(sheet).getByRole('group', { name: 'Preconfigured units' })).getByRole('button', { name });
+
+      it('names its tabs after the category and Preconfigured', async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), []);
+        const sheet = await openAddSheet('Add Troops');
+        expect(
+          within(sheet)
+            .getAllByRole('tab')
+            .map((t) => t.textContent),
+        ).toEqual(['Troops', 'Preconfigured']);
+        expect(tab(sheet, 'Troops').getAttribute('aria-selected')).toBe('true');
+      });
+
+      it("lists this category's preconfigured and unique units, with the data name and wargear of the unnamed", async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [LORD, SQUAD, MELTA]);
+        const sheet = await openTab('Add Troops');
+        expect(tabRows(sheet)).toEqual([
+          ['Squad Iron', 'Sergeant · Power Fist', '135'],
+          ['Tactical Squad', 'Sergeant · Power Fist', '135'],
+        ]);
+      });
+
+      it('adds a preconfigured unit on a tap and opens its unit page', async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
+        const sheet = await openTab('Add Troops');
+
+        fireEvent.click(tabRow(sheet, /Tactical Squad/));
+
+        await waitFor(async () =>
+          expect((await storedRoots()).map((s) => [s.saved, s.name])).toEqual([['melta', undefined]]),
+        );
+        const [copy] = await storedRoots();
+        expect(location.hash).toBe(`#/r/r/u/${copy?.uid}`);
+      });
+
+      it('adds a preconfigured unit on each swipe right, and counts the copies in the list', async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
+        const sheet = await openTab('Add Troops');
+
+        drag(tabRow(sheet, /Tactical Squad/), [[SWIPE, 0]]);
+        await waitFor(async () => expect(await storedRoots()).toHaveLength(1));
+        drag(tabRow(sheet, /Tactical Squad/), [[SWIPE, 0]]);
+
+        await waitFor(async () => expect((await storedRoots()).map((s) => s.saved)).toEqual(['melta', 'melta']));
+        expect(tabRows(sheet)).toEqual([['Tactical Squad', 'Sergeant · Power Fist', '135 ×2']]);
+      });
+
+      it('shows a unique unit the list holds as added', async () => {
+        const w = world(SAVED_UNITS, CATEGORIES);
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', SQUAD)).toMatchObject({ added: true });
+        await openWithSaved(w, [SQUAD]);
+        const sheet = await openTab('Add Troops');
+        expect(tabRows(sheet)).toEqual([['Squad Iron', 'Sergeant · Power Fist', 'Added']]);
+      });
+
+      it('deletes a saved unit on a swipe left, after asking', async () => {
+        const ask = vi.fn(() => true);
+        vi.stubGlobal('confirm', ask);
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
+        const sheet = await openTab('Add Troops');
+
+        drag(tabRow(sheet, /Tactical Squad/), [[-SWIPE, 0]]);
+
+        expect(ask).toHaveBeenCalledWith(
+          'Delete this preconfigured Tactical Squad? Lists that hold it keep it as a normal unit.',
+        );
+        await waitFor(async () => expect(await db.savedUnits()).toEqual([]));
+        expect(await storedRoots()).toEqual([]);
+        vi.unstubAllGlobals();
+      });
+
+      it('keeps the saved unit when the player says no', async () => {
+        vi.stubGlobal('confirm', () => false);
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
+        const sheet = await openTab('Add Troops');
+
+        drag(tabRow(sheet, /Tactical Squad/), [[-SWIPE, 0]]);
+
+        expect((await db.savedUnits()).map((u) => u.id)).toEqual(['melta']);
+        vi.unstubAllGlobals();
+      });
+    });
   });
 });

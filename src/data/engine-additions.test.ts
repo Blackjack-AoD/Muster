@@ -596,7 +596,7 @@ describe('tryAddSaved', () => {
   it("gives the points of the saved build against today's data, and leaves the list as it is", () => {
     const w = world(SQUAD);
     const before = structuredClone(w.roster);
-    expect(tryAddSaved(w.roster, w.contexts, 'f1', saved(sel('sq', 1, [sel('mar', 4), sel('gone')])))).toEqual({
+    expect(tryAddSaved(w.roster, w.contexts, 'f1', saved(sel('sq', 1, [sel('mar', 4), sel('gone')])))).toMatchObject({
       added: true,
       pts: 90,
     });
