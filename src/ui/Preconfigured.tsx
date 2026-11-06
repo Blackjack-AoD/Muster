@@ -1,6 +1,6 @@
-// The army-wide Preconfigured page: every saved unit of the list's armies, and any unit of the data, added
-// straight into the force org without showing it.
-import { useMemo, useState } from 'preact/hooks';
+// The army-wide Preconfigured page: every saved unit of the list's armies, added straight into the force org
+// without showing it, and a search of the data for new units to set up and save.
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { Opt } from '../data/catalog';
 import type { SavedUnit } from '../data/db';
@@ -14,21 +14,12 @@ import {
   unlinkCopy,
   type RForce,
 } from '../data/engine';
-import { deleteSavedUnit, failureMessage, toast, useStore, type RosterCtl } from '../store';
-import { Sheet } from './common';
+import { deleteSavedUnit, failureMessage, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
+import { Loading, Sheet, TopBar } from './common';
+import { UnitEditor } from './UnitEditor';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
-import {
-  PickRow,
-  REFUSED,
-  cleanCat,
-  droppedMessage,
-  heldCopy,
-  isUnitLike,
-  roomFor,
-  startPts,
-  unitSummary,
-} from './RosterView';
+import { PickRow, REFUSED, cleanCat, droppedMessage, heldCopy, isUnitLike, roomFor, unitSummary } from './RosterView';
 
 const primaryOf = (o: Opt) => (o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0])?.targetId ?? '';
 
@@ -52,7 +43,6 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
   const savedUnits = useStore((s) => s.savedUnits);
   const [q, setQ] = useState('');
   const [placing, setPlacing] = useState<Placing | null>(null);
-  const [addingAny, setAddingAny] = useState(false);
 
   const rows = useMemo(
     () =>
@@ -76,8 +66,8 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
     ctl.roster.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
 
   /** Runs `add` on the only detachment with room, or asks which one when more than 1 has room. */
-  const place = (title: string, forces: RForce[], add: Add, fromSheet = false) => {
-    if (forces.length === 1 && forces[0]) add(forces[0], fromSheet);
+  const place = (title: string, forces: RForce[], add: Add) => {
+    if (forces.length === 1 && forces[0]) add(forces[0], false);
     else if (forces.length > 1) setPlacing({ title, forces, add });
   };
   const addSaved =
@@ -109,20 +99,13 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
 
   return (
     <div class="preconfigured">
-      <div class="search-row">
-        <div class="search">
-          <Icon name="search" size={18} />
-          <input placeholder="Search saved units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
-        </div>
-        <button class="icon-btn" aria-label="Add a unit" onClick={() => setAddingAny(true)}>
-          <Icon name="plus" />
-        </button>
+      <div class="search">
+        <Icon name="search" size={18} />
+        <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      {!shown.length && (
+      {!shown.length && !q && (
         <p class="muted pad">
-          {q
-            ? 'No saved units matching that.'
-            : "No saved units for this army yet. Change a unit's options and tap Save updates on its page to keep it here."}
+          No saved units for this army yet. Search for a unit to set one up, or tap Save updates on a unit's page.
         </p>
       )}
       {shown.length > 0 && (
@@ -145,16 +128,7 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
           />
         ))}
       </div>
-      {addingAny && (
-        <AddAnySheet
-          ctl={ctl}
-          onPick={(name, forces, add) => {
-            setAddingAny(false);
-            place(name, forces, add, true);
-          }}
-          onClose={() => setAddingAny(false)}
-        />
-      )}
+      <DataUnits ctl={ctl} forces={ctl.ev.forces} q={q} />
       {placing && <PlaceSheet ctl={ctl} placing={placing} onClose={() => setPlacing(null)} />}
     </div>
   );
@@ -183,68 +157,94 @@ function PlaceSheet({ ctl, placing, onClose }: { ctl: RosterCtl; placing: Placin
   );
 }
 
-/** Every unit of the data any detachment of the list has room for, once each, to search and add. */
-function AddAnySheet({
+/** The plain units of the data, from these detachments and of category `cat` when given, that match `q`. */
+export function DataUnits({
   ctl,
-  onPick,
-  onClose,
+  forces,
+  cat,
+  q,
 }: {
   ctl: RosterCtl;
-  onPick: (name: string, forces: RForce[], add: Add) => void;
-  onClose: () => void;
+  forces: readonly RForce[];
+  cat?: string;
+  q: string;
 }) {
-  const [q, setQ] = useState('');
-  const options = useMemo(() => {
-    const byKey = new Map<string, { o: Opt; name: string; cat: string; pts: number; forces: RForce[] }>();
-    for (const rf of ctl.ev.forces) {
+  const units = useMemo(() => {
+    const byKey = new Map<string, { o: Opt; name: string; cat: string; rf: RForce }>();
+    for (const rf of forces) {
       for (const o of forceRootOptions(rf.ctx, rf.entry)) {
-        if (!isUnitLike(o)) continue;
-        const cat = primaryOf(o);
-        if (!hasRoom(ctl, rf, o.key, cat)) continue;
+        const c = primaryOf(o);
+        if (!isUnitLike(o) || (cat !== undefined && c !== cat)) continue;
+        const e = ctl.ev.optionEff(o, null, rf);
+        if (e.hidden) continue;
         const id = `${rf.force.catalogueId}|${o.key}`;
-        const known = byKey.get(id);
-        if (known) {
-          known.forces.push(rf);
-          continue;
-        }
-        const eff = ctl.ev.optionEff(o, null, rf);
-        byKey.set(id, { o, name: eff.name, cat, pts: startPts(rf, o, eff, ctl.ev.pointsTypeId), forces: [rf] });
+        if (!byKey.has(id)) byKey.set(id, { o, name: e.name, cat: c, rf });
       }
     }
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [ctl.ev]);
-  const shown = options.filter((x) => x.name.toLowerCase().includes(q.toLowerCase()));
-  const addData =
-    (o: Opt, cat: string, open: boolean): Add =>
-    (rf, fromSheet) => {
-      let newUid = '';
-      ctl.mutate((r) => {
-        newUid = addSel(r, ctl.contexts, rf.force.uid, null, o, 1, cat || undefined) ?? '';
-      });
-      if (open && newUid) go(`/r/${ctl.roster.uid}/u/${newUid}`, fromSheet);
-    };
-
+  }, [forces, cat, ctl.ev]);
+  const ql = q.trim().toLowerCase();
+  const shown = ql ? units.filter((u) => u.name.toLowerCase().includes(ql)) : [];
+  if (!shown.length) return null;
   return (
-    <Sheet title="Add unit" onClose={onClose} full>
-      <div class="search">
-        <Icon name="search" size={18} />
-        <input autoFocus placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
-      </div>
-      {!shown.length && <p class="muted pad">Nothing with room{q ? ' matching that' : ''}.</p>}
-      <div class="pick-list">
-        {shown.map(({ o, name, cat, pts, forces }) => (
-          <PickRow
-            key={`${forces[0]?.force.catalogueId}|${o.key}`}
-            name={name}
-            sub={cleanCat(forces[0]?.ctx.categoryName(cat) ?? '')}
-            pts={pts}
-            added={0}
-            swipeLabel="Add with standard options"
-            onTap={() => onPick(name, forces, addData(o, cat, true))}
-            onSwipe={() => onPick(name, forces, addData(o, cat, false))}
-          />
+    <>
+      <div class="list-label">From the data</div>
+      <p class="muted small pad-x pick-hint">Tap a unit to set it up and save it as a preconfigured unit.</p>
+      <div class="pick-list" role="group" aria-label="From the data">
+        {shown.map(({ o, name, cat: c, rf }) => (
+          <button
+            key={`${rf.force.catalogueId}|${o.key}`}
+            class="pick"
+            onClick={() => go(`/r/${ctl.roster.uid}/new/${rf.force.uid}/${encodeURIComponent(o.key)}`)}
+          >
+            <span>
+              <b>{name}</b>
+              {cat === undefined && <small class="pick-sub">{cleanCat(rf.ctx.categoryName(c))}</small>}
+            </span>
+            <Icon name="chev" />
+          </button>
         ))}
       </div>
-    </Sheet>
+    </>
   );
+}
+
+/**
+ * A plain unit of the data, set up on its own page and saved as a preconfigured or unique unit.
+ * It sits in a copy of the list, so its options follow the list's set-up, and the list itself never changes.
+ */
+export function DraftPage({ rosterUid, forceUid, optKey }: { rosterUid: string; forceUid: string; optKey: string }) {
+  const roster = useStore((s) => s.rosters.find((r) => r.uid === rosterUid));
+  const { ctl, error, loading } = useRosterCtl(roster, true, true);
+  const [selUid, setSelUid] = useState<string>();
+  const backTo = `/r/${rosterUid}/pre`;
+  useEffect(() => {
+    if (!ctl || selUid !== undefined) return;
+    const rf = ctl.ev.forces.find((f) => f.force.uid === forceUid);
+    const opt = rf && forceRootOptions(rf.ctx, rf.entry).find((o) => o.key === optKey);
+    let added = '';
+    if (opt) {
+      ctl.mutate((r) => {
+        added = addSel(r, ctl.contexts, forceUid, null, opt, 1, primaryOf(opt) || undefined) ?? '';
+      });
+    }
+    setSelUid(added);
+  }, [ctl, selUid]);
+  if (!ctl || selUid === '')
+    return (
+      <div class="page">
+        <TopBar title="New saved unit" backTo={backTo} />
+        {loading || !ctl ? (
+          loading ? (
+            <Loading label="Loading army data…" />
+          ) : (
+            <p class="error-text pad">{error}</p>
+          )
+        ) : (
+          <p class="error-text pad">This unit isn't in this army's data.</p>
+        )}
+      </div>
+    );
+  if (selUid === undefined) return <Loading label="Loading army data…" />;
+  return <UnitEditor ctl={ctl} selUid={selUid} backTo={backTo} />;
 }

@@ -41,7 +41,7 @@ import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
-import { PreconfiguredView } from './Preconfigured';
+import { DataUnits, PreconfiguredView } from './Preconfigured';
 import { rosterText, shareText } from './exporter';
 
 export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
@@ -58,7 +58,7 @@ async function deleteList(r: Roster): Promise<boolean> {
   }
 }
 
-export function RosterView({ uid: rid }: { uid: string }) {
+export function RosterView({ uid: rid, view = 'foc' }: { uid: string; view?: View }) {
   const roster = useStore((s) => s.rosters.find((r) => r.uid === rid));
   const { ctl, error, loading } = useRosterCtl(roster);
   if (loading)
@@ -92,14 +92,17 @@ export function RosterView({ uid: rid }: { uid: string }) {
         </div>
       </div>
     );
-  return <RosterBody ctl={ctl} />;
+  return <RosterBody ctl={ctl} view={view} />;
 }
 
-function RosterBody({ ctl }: { ctl: RosterCtl }) {
+/** The force org, or the army-wide Preconfigured page, which has an address of its own so back returns to it. */
+export type View = 'foc' | 'preconfigured';
+
+function RosterBody({ ctl, view }: { ctl: RosterCtl; view: View }) {
   const { roster, ev } = ctl;
   const repos = useStore((s) => s.repos);
   const [sheet, setSheet] = useState<null | 'menu' | 'issues' | 'force' | { forceUid: string; cat?: string }>(null);
-  const [view, setView] = useState<'foc' | 'preconfigured'>('foc');
+  const setView = (v: View) => go(v === 'foc' ? `/r/${roster.uid}` : `/r/${roster.uid}/pre`, true);
   const errors = ev.issues.filter((i) => i.level === 'error');
   const warns = ev.issues.filter((i) => i.level === 'warn');
   const pct = roster.costLimit > 0 ? Math.min(100, (ev.total / roster.costLimit) * 100) : 0;
@@ -698,8 +701,8 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
           {!configuredShown.length && (
             <p class="muted pad">
               {q
-                ? 'Nothing matching that.'
-                : "No preconfigured units yet. Change a unit's options and tap Save updates on its page to keep it here."}
+                ? 'No saved units matching that.'
+                : "No preconfigured units yet. Search for a unit to set one up, or tap Save updates on a unit's page."}
             </p>
           )}
           {configuredShown.length > 0 && (
@@ -722,6 +725,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
               />
             ))}
           </div>
+          <DataUnits ctl={ctl} forces={[rf]} cat={cat ?? undefined} q={q} />
         </>
       )}
       {tab === 'units' && savedShown.length > 0 && (

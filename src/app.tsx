@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { dismissToast, useStore } from './store';
 import { Lists } from './ui/Lists';
 import { RosterView } from './ui/RosterView';
+import { DraftPage } from './ui/Preconfigured';
 import { UnitPage } from './ui/UnitPage';
 import { Library } from './ui/Library';
 import { DataView } from './ui/DataView';
@@ -74,6 +75,10 @@ export function App() {
   else if (parts[0] === 'view' && parts[1]) page = <SharedView data={parts[1]} />;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'sheet') page = <SheetPage rosterUid={parts[1]} />;
   else if (parts[0] === 'r' && parts[1] && parts[2] === 'u') page = <UnitPage rosterUid={parts[1]} selUid={parts[3]} />;
+  else if (parts[0] === 'r' && parts[1] && parts[2] === 'new' && parts[3] && parts[4])
+    page = <DraftPage rosterUid={parts[1]} forceUid={parts[3]} optKey={parts[4]} />;
+  else if (parts[0] === 'r' && parts[1] && parts[2] === 'pre')
+    page = <RosterView uid={parts[1]} view="preconfigured" />;
   else if (parts[0] === 'r' && parts[1]) page = <RosterView uid={parts[1]} />;
   else if (parts[0] === 'games') {
     tab = 'games';

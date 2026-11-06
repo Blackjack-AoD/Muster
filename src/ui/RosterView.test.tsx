@@ -877,22 +877,83 @@ describe('RosterView', () => {
         expect((await storedRoots()).map((s) => s.saved)).toEqual([undefined]);
       });
 
-      it('adds any unit of the data from its + button, found by searching', async () => {
-        await openPage(world(SAVED_UNITS, CATEGORIES), []);
+      it('has an address of its own, so coming back to the list returns to it', async () => {
+        await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
+        expect(location.hash).toBe('#/r/r/pre');
+      });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add a unit' }));
-        const sheet = await screen.findByRole('dialog', { name: 'Add unit' });
-        fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'tact' } });
-        expect(offered(sheet)).toEqual(['Tactical Squad']);
-        fireEvent.click(within(sheet).getByRole('button', { name: /Tactical Squad/ }));
+      const dataRows = () =>
+        [...(screen.queryByRole('group', { name: 'From the data' })?.querySelectorAll('.pick b') ?? [])].map(
+          (b) => b.textContent,
+        );
 
-        await waitFor(async () => expect((await storedRoots()).map((s) => s.key)).toEqual(['tac']));
-        const [added] = await storedRoots();
-        expect(added?.categoryId).toBe('troops');
-        expect(location.hash).toBe(`#/r/r/u/${added?.uid}`);
+      it('searches the data for plain units to set up, once the player types', async () => {
+        await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
+        expect(dataRows()).toEqual([]);
+
+        fireEvent.input(screen.getByPlaceholderText('Search units'), { target: { value: 'tac' } });
+
+        expect(dataRows()).toEqual(['Tactical Squad']);
+        fireEvent.click(within(screen.getByRole('group', { name: 'From the data' })).getByRole('button'));
+        expect(location.hash).toBe('#/r/r/new/f1/tac');
       });
     });
 
+    describe('setting up a new saved unit from the data', () => {
+      const openDraft = async () => {
+        await openList(world(SAVED_UNITS, CATEGORIES), SAVED_UNITS, CATEGORIES);
+        openHash('#/r/r/new/f1/tac');
+        dispatchEvent(new HashChangeEvent('hashchange'));
+        await screen.findByRole('heading', { name: 'Tactical Squad' });
+      };
+
+      it('saves it as a preconfigured unit, and leaves the list as it was', async () => {
+        await openDraft();
+        expect(screen.queryByRole('button', { name: /Duplicate/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
+
+        await waitFor(async () =>
+          expect((await db.savedUnits()).map((u) => [u.kind, u.name, u.key, u.categoryId])).toEqual([
+            ['preconfigured', '', 'tac', 'troops'],
+          ]),
+        );
+        expect(await storedRoots()).toEqual([]);
+        await expectToast('Saved as a preconfigured unit');
+      });
+
+      it('saves it as a unique unit once named', async () => {
+        await openDraft();
+        fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+        fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Squad Thrax' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+        await screen.findByRole('heading', { name: 'Squad Thrax' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
+
+        await waitFor(async () =>
+          expect((await db.savedUnits()).map((u) => [u.kind, u.name])).toEqual([[undefined, 'Squad Thrax']]),
+        );
+        expect(await storedRoots()).toEqual([]);
+      });
+    });
+
+    describe('Preconfigured tab search', () => {
+      it("finds plain units of the sheet's category only", async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), []);
+        const sheet = await openAddSheet('Add Troops');
+        fireEvent.click(within(sheet).getByRole('tab', { name: 'Preconfigured' }));
+
+        fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'a' } });
+
+        expect(
+          [...(within(sheet).queryByRole('group', { name: 'From the data' })?.querySelectorAll('.pick b') ?? [])].map(
+            (b) => b.textContent,
+          ),
+        ).toEqual(['Tactical Squad']);
+      });
+    });
     describe('Preconfigured tab', () => {
       const MELTA = saved('melta', '', sel('tac', [sel('sgt', [sel('fist')])]), { kind: 'preconfigured' });
       const tab = (sheet: HTMLElement, name: string) => within(sheet).getByRole('tab', { name });

@@ -440,13 +440,17 @@ export interface RosterCtl {
   contexts: Map<string, Context>;
   ev: Evaluator;
   mutate: (fn: (r: Roster) => void) => void;
+  /** edits stay in memory: the list isn't saved */
   scratch: boolean;
+  /** a scratch list holding a unit being set up as a new saved unit, which can be named and saved */
+  draft?: boolean;
 }
 
 /** Load contexts for a roster and keep an evaluator in sync with edits. */
 export function useRosterCtl(
   source: Roster | undefined,
   scratch = false,
+  draft = false,
 ): { ctl?: RosterCtl; error?: string; loading: boolean } {
   const repos = useStore((s) => s.repos);
   const [contexts, setContexts] = useState<Map<string, Context>>();
@@ -487,9 +491,10 @@ export function useRosterCtl(
       roster: local,
       contexts,
       ev,
-      scratch,
+      scratch: scratch || draft,
+      draft,
       mutate: (fn) => {
-        if (scratch) fn(local);
+        if (scratch || draft) fn(local);
         else saveListEdit(local, fn);
         setVersion((v) => v + 1);
       },
