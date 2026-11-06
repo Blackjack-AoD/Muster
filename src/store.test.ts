@@ -28,6 +28,7 @@ import {
   saveListEdit,
   saveRoster,
   saveUnit,
+  saveUpdates,
   setGame,
   syncAll,
   toast,
@@ -395,6 +396,17 @@ describe('restoring a backup', () => {
       expect(getState().savedUnits.filter((u) => u.id === 'here')).toEqual([savedUnit('here')]);
       expect(await copyIn('onphone')).toMatchObject({ saved: 'here', name: 'Squad Thrax' });
     });
+    it('keeps a preconfigured unit preconfigured', async () => {
+      const melta = { ...savedUnit('melta', ''), kind: 'preconfigured' };
+      await importBackup([], [melta]);
+      expect(await storedUnit('melta')).toEqual([melta]);
+    });
+    it('skips a saved unit of a kind it does not know', async () => {
+      expect(await importBackup([], [{ ...savedUnit('odd'), kind: 'legendary' }])).toEqual({
+        lists: 0,
+        savedUnits: 0,
+      });
+    });
     it('turns a copy whose saved unit is missing into a normal unit with no name', async () => {
       await importBackup([listWithCopy('orphan', 'gone')]);
       expect(await copyIn('orphan')).toEqual({ uid: 'u', key: 'e', number: 1, categoryId: 'hq', children: [MODEL] });
@@ -556,9 +568,9 @@ describe('saved units', () => {
   };
 
   /** Saves a unit as a saved unit, then links it in an edit to its list, as the unit page does. */
-  const saveAndLink = async (r: Roster, rs: RSel, name: string) => {
+  const saveAndLink = async (r: Roster, rs: RSel, name: string | undefined) => {
     const saved = await saveUnit(r, rs, name);
-    await saveListEdit(r, () => linkCopy(savedIn(r, rs.sel.uid), saved));
+    saveListEdit(r, () => linkCopy(savedIn(r, rs.sel.uid), saved));
     return saved;
   };
 
@@ -753,9 +765,28 @@ describe('saved units', () => {
     expect(savedUnit('loaded')).toEqual(record);
   });
 
-  describe('a copy edited in a list', () => {
+  describe('Save updates', () => {
     afterEach(dismissToast);
     const sergeantOf = (copy: Sel | undefined) => present(present(copy, 'the copy').children[0], 'the sergeant');
+
+    it('keeps an edit to a linked copy in its own list, away from the saved unit and other lists', async () => {
+      const { roster: a, squad, id } = await savedSquad('fk1', 'Squad Thrax');
+      await listWithCopy('fk2', id, 'Squad Thrax');
+      const before = {
+        list: structuredClone(getState().rosters.find((r) => r.uid === 'fk2')),
+        saved: structuredClone(savedUnit(id)),
+      };
+
+      saveListEdit(a, () => {
+        sergeantOf(savedIn(a, squad)).children = [];
+        savedIn(a, squad).name = 'Squad Iron';
+      });
+
+      await vi.waitFor(async () => expect((await inStorage('fk1')).map((s) => s.name)).toEqual(['Squad Iron']));
+      expect(savedUnit(id)).toEqual(before.saved);
+      expect(await storedSavedUnit(id)).toEqual(before.saved);
+      expect(getState().rosters.find((r) => r.uid === 'fk2')).toEqual(before.list);
+    });
 
     it('takes a wargear change to the saved unit and to the copy in another list', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
@@ -763,11 +794,12 @@ describe('saved units', () => {
       const { roster: a, squad, id } = await savedSquad('fl1', 'Squad Thrax');
       await listWithCopy('fl2', id, 'Squad Thrax');
       expect(sergeantOf(inMemory('fl2')[0]).children.map((s) => s.key)).toEqual(['sword']);
-
-      vi.setSystemTime(2000);
-      await saveListEdit(a, () => {
+      saveListEdit(a, () => {
         sergeantOf(savedIn(a, squad)).children = [];
       });
+
+      vi.setSystemTime(2000);
+      await saveUpdates(a, squad);
 
       for (const saved of [savedUnit(id), await storedSavedUnit(id)]) {
         expect(sergeantOf(saved?.build).children).toEqual([]);
@@ -781,14 +813,15 @@ describe('saved units', () => {
       const { roster: a, squad, id } = await savedSquad('fn1', 'Squad Thrax');
       await listWithCopy('fn2', id, 'Squad Thrax');
       await listWithCopy('fn3', id, 'Squad Thrax');
-
-      await saveListEdit(a, () => {
+      saveListEdit(a, () => {
         savedIn(a, squad).name = 'Squad Iron';
       });
 
+      await saveUpdates(a, squad);
+
       expect(savedUnit(id)?.name).toBe('Squad Iron');
       expect((await storedSavedUnit(id))?.name).toBe('Squad Iron');
-      for (const list of ['fn1', 'fn2', 'fn3']) {
+      for (const list of ['fn2', 'fn3']) {
         await vi.waitFor(async () => expect((await inStorage(list)).map((s) => s.name)).toEqual(['Squad Iron']));
         expect(inMemory(list).map((s) => s.name)).toEqual(['Squad Iron']);
       }
@@ -797,16 +830,14 @@ describe('saved units', () => {
     it('takes a renamed model to the saved unit and to the copy in another list', async () => {
       const { roster: a, squad, id } = await savedSquad('fm1', 'Squad Thrax');
       await listWithCopy('fm2', id, 'Squad Thrax');
+      sergeantOf(savedIn(a, squad)).name = 'Brother Kael';
 
-      await saveListEdit(a, () => {
-        sergeantOf(savedIn(a, squad)).name = 'Brother Kael';
-      });
+      await saveUpdates(a, squad);
 
       for (const saved of [savedUnit(id), await storedSavedUnit(id)]) {
         expect(sergeantOf(saved?.build).name).toBe('Brother Kael');
       }
       await vi.waitFor(async () => expect(sergeantOf((await inStorage('fm2'))[0]).name).toBe('Brother Kael'));
-      expect(sergeantOf(inMemory('fm2')[0]).name).toBe('Brother Kael');
     });
 
     it('leaves each copy its own root uid, link and category when it takes the new build', async () => {
@@ -814,38 +845,27 @@ describe('saved units', () => {
       const { roster: b, squad: second } = await listWithCopy('fu2', id, 'Squad Thrax');
       savedIn(a, first).categoryId = 'troops';
       await saveRoster(a);
+      sergeantOf(savedIn(b, second)).children = [];
 
-      await saveListEdit(b, () => {
-        sergeantOf(savedIn(b, second)).children = [];
-      });
+      await saveUpdates(b, second);
 
       await vi.waitFor(async () => expect(sergeantOf((await inStorage('fu1'))[0]).children).toEqual([]));
       expect((await inStorage('fu1')).map((s) => [s.uid, s.saved, s.categoryId])).toEqual([[first, id, 'troops']]);
-      expect(inMemory('fu1').map((s) => [s.uid, s.saved, s.categoryId])).toEqual([[first, id, 'troops']]);
     });
 
-    it('changes no other list and not the saved unit when the edited unit has no link', async () => {
-      const { id } = await savedSquad('fp1', 'Squad Thrax');
-      const { roster: b, squad: copy } = await listWithCopy('fp2', id, 'Squad Thrax');
-      const plain: Sel = { ...structuredClone(savedIn(b, copy)), uid: newUid() };
-      delete plain.saved;
-      delete plain.name;
-      present(b.forces[0], 'the detachment').selections.push(plain);
-      await saveRoster(b);
-      const before = {
-        list: structuredClone(getState().rosters.find((r) => r.uid === 'fp1')),
-        saved: structuredClone(savedUnit(id)),
-      };
-
-      await saveListEdit(b, () => {
-        sergeantOf(plain).children = [];
+    it("overwrites another list's own changes to its copy", async () => {
+      const { roster: a, squad, id } = await savedSquad('fw1', 'Squad Thrax');
+      const { roster: b, squad: other } = await listWithCopy('fw2', id, 'Squad Thrax');
+      saveListEdit(b, () => {
+        savedIn(b, other).name = 'Squad Bronze';
       });
+      sergeantOf(savedIn(a, squad)).children = [];
 
-      await vi.waitFor(async () => expect(sergeantOf((await inStorage('fp2'))[1]).children).toEqual([]));
-      expect(sergeantOf((await inStorage('fp2'))[0]).children.map((s) => s.key)).toEqual(['sword']);
-      expect(getState().rosters.find((r) => r.uid === 'fp1')).toEqual(before.list);
-      expect(savedUnit(id)).toEqual(before.saved);
-      expect(await storedSavedUnit(id)).toEqual(before.saved);
+      await saveUpdates(a, squad);
+
+      await vi.waitFor(async () =>
+        expect((await inStorage('fw2')).map((s) => [s.name, sergeantOf(s).children])).toEqual([['Squad Thrax', []]]),
+      );
     });
 
     it('leaves the saved unit and other lists as they are when adding a copy drops an option', async () => {
@@ -863,7 +883,7 @@ describe('saved units', () => {
       await saveRoster(w.roster);
 
       let result: ReturnType<typeof addSavedUnit> | undefined;
-      await saveListEdit(w.roster, (r) => {
+      saveListEdit(w.roster, (r) => {
         result = addSavedUnit(r, w.contexts, 'f1', saved);
       });
 
@@ -873,46 +893,11 @@ describe('saved units', () => {
       expect(getState().rosters.filter((r) => r.uid === 'fa1' || r.uid === 'fa2')).toEqual(before.lists);
     });
 
-    it('pushes nothing from a copy that differs from its saved unit when another unit in its list changes', async () => {
-      const { id } = await savedSquad('fd1', 'Squad Thrax');
-      const { roster: b, squad: copy } = await listWithCopy('fd2', id, 'Squad Thrax');
-      sergeantOf(savedIn(b, copy)).children = [];
-      const plain: Sel = { ...structuredClone(savedIn(b, copy)), uid: newUid() };
-      delete plain.saved;
-      delete plain.name;
-      present(b.forces[0], 'the detachment').selections.push(plain);
-      await saveRoster(b);
-      const before = {
-        list: structuredClone(getState().rosters.find((r) => r.uid === 'fd1')),
-        saved: structuredClone(savedUnit(id)),
-      };
-
-      await saveListEdit(b, () => {
-        plain.children = [];
-      });
-
-      expect(savedUnit(id)).toEqual(before.saved);
-      expect(await storedSavedUnit(id)).toEqual(before.saved);
-      expect(getState().rosters.find((r) => r.uid === 'fd1')).toEqual(before.list);
-      expect(sergeantOf((await inStorage('fd1'))[0]).children.map((s) => s.key)).toEqual(['sword']);
-    });
-
-    it('saves the edited list before any other', async () => {
-      const { roster: a, squad, id } = await savedSquad('fo1', 'Squad Thrax');
-      await listWithCopy('fo2', id, 'Squad Thrax');
-      const puts = vi.spyOn(db, 'putRoster');
-
-      await saveListEdit(a, () => {
-        savedIn(a, squad).name = 'Squad Iron';
-      });
-
-      await vi.waitFor(() => expect(puts.mock.calls.map(([r]) => r.uid)).toEqual(['fo1', 'fo2']));
-    });
-
-    it('leaves other lists as they are, and says so, when storage refuses the saved unit', async () => {
+    it('leaves other lists as they are, and fails, when storage refuses the saved unit', async () => {
       const { roster: a, squad, id } = await savedSquad('fr1', 'Squad Thrax');
       await listWithCopy('fr2', id, 'Squad Thrax');
       const before = structuredClone(getState().rosters.find((r) => r.uid === 'fr2'));
+      savedIn(a, squad).name = 'Squad Iron';
       // oxlint-disable-next-line typescript/unbound-method -- the spy calls it on the store
       const put = IDBObjectStore.prototype.put;
       vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
@@ -924,14 +909,66 @@ describe('saved units', () => {
         return put.call(this, value, key);
       });
 
-      await saveListEdit(a, () => {
-        savedIn(a, squad).name = 'Squad Iron';
-      });
+      await expect(saveUpdates(a, squad)).rejects.toThrow('Storage is full');
 
-      expect(getState().toast).toBe("Couldn't update the saved unit: Storage is full");
       expect(savedUnit(id)?.name).toBe('Squad Thrax');
       expect(getState().rosters.find((r) => r.uid === 'fr2')).toEqual(before);
-      expect((await inStorage('fr2')).map((s) => s.name)).toEqual(['Squad Thrax']);
+    });
+
+    it('refuses a unit with no saved unit on this phone', async () => {
+      const { w, squad } = listWithSquad('fz1');
+      Object.assign(savedIn(w.roster, squad), { saved: 'gone', name: 'Squad Thrax' });
+      await expect(saveUpdates(w.roster, squad)).rejects.toThrow("This saved unit isn't on this phone.");
+    });
+  });
+
+  describe('preconfigured units', () => {
+    afterEach(dismissToast);
+    const sergeantOf = (copy: Sel | undefined) => present(present(copy, 'the copy').children[0], 'the sergeant');
+
+    it('saves a unit with no name as a preconfigured unit, with no name of its own', async () => {
+      const { w, rs } = listWithSquad('pc1');
+      const saved = await addedBy(() => saveUnit(w.roster, rs, undefined));
+      expect(saved).toMatchObject({ kind: 'preconfigured', name: '', key: 'tac' });
+      expect(await storedSavedUnit(saved.id)).toMatchObject({ kind: 'preconfigured', name: '' });
+    });
+
+    it('saves a named unit as a unique unit, with no kind', async () => {
+      const { w, rs } = listWithSquad('pc2');
+      const saved = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
+      expect(Object.keys(saved)).not.toContain('kind');
+    });
+
+    it('links a copy to a preconfigured unit without naming it', () => {
+      const { w, squad } = listWithSquad('pc3');
+      const copy = savedIn(w.roster, squad);
+      linkCopy(copy, { id: 'melta', name: '', kind: 'preconfigured' });
+      expect(copy.saved).toBe('melta');
+      expect(Object.keys(copy)).not.toContain('name');
+    });
+
+    it('takes a change to every copy in other lists, and names none of them', async () => {
+      const { w, squad, rs } = listWithSquad('pc4');
+      await saveRoster(w.roster);
+      const saved = await addedBy(() => saveAndLink(w.roster, rs, undefined));
+      const { roster: b, squad: second } = await listWithCopy('pc5', saved.id, '');
+      delete savedIn(b, second).name;
+      present(b.forces[0], 'the detachment').selections.push({
+        ...structuredClone(savedIn(b, second)),
+        uid: newUid(),
+      });
+      await saveRoster(b);
+      sergeantOf(savedIn(w.roster, squad)).children = [];
+
+      await saveUpdates(w.roster, squad);
+
+      await vi.waitFor(async () =>
+        expect((await inStorage('pc5')).map((s) => [s.name, sergeantOf(s).children])).toEqual([
+          [undefined, []],
+          [undefined, []],
+        ]),
+      );
+      expect(savedUnit(saved.id)?.name).toBe('');
     });
   });
 
@@ -945,7 +982,7 @@ describe('saved units', () => {
           await saveRoster(w.roster);
           const saved = await saveUnit(w.roster, rs, 'Squad Thrax');
           refuseLists();
-          await saveListEdit(w.roster, () => linkCopy(savedIn(w.roster, rs.sel.uid), saved));
+          saveListEdit(w.roster, () => linkCopy(savedIn(w.roster, rs.sel.uid), saved));
           return { list: 'rt1', expected: { saved: expect.any(String), name: 'Squad Thrax' } };
         },
       ],

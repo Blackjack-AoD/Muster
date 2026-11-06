@@ -610,7 +610,7 @@ describe('RosterView', () => {
       for (const u of units) await db.putSavedUnit(u);
       await openList(w, SAVED_UNITS, CATEGORIES);
     }
-    const savedSection = (sheet: HTMLElement) => within(sheet).getByRole('group', { name: 'Saved units' });
+    const savedSection = (sheet: HTMLElement) => within(sheet).getByRole('group', { name: 'Unique units' });
     const savedOffered = (sheet: HTMLElement) =>
       [...savedSection(sheet).querySelectorAll('.pick')].map((row) => [
         row.querySelector('b')?.textContent,
@@ -642,6 +642,13 @@ describe('RosterView', () => {
       ]);
 
       expect(savedOffered(await openAddSheet(button))).toEqual(rows);
+    });
+
+    it('lists unique units only, leaving preconfigured units out of the Unique units section', async () => {
+      const melta = saved('melta', '', sel('tac', [sel('sgt', [sel('fist')])]), { kind: 'preconfigured' });
+      await openWithSaved(world(SAVED_UNITS, CATEGORIES), [LORD, melta]);
+      const sheet = await openAddSheet('Add unit');
+      expect(savedOffered(sheet)).toEqual([['Lord Thrax', '100']]);
     });
 
     it('filters saved units by their name in the search', async () => {

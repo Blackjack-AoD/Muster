@@ -4,6 +4,9 @@ import type { Opt } from '../data/catalog';
 import {
   addModels,
   addSel,
+  applySaved,
+  isUnique,
+  matchesSaved,
   canNameModel,
   displayName,
   duplicateSel,
@@ -21,7 +24,7 @@ import {
 } from '../data/engine';
 import type { SavedUnit } from '../data/db';
 import type { Profile, Rule } from '../data/model';
-import { failureMessage, saveUnit, toast, type RosterCtl } from '../store';
+import { failureMessage, getState, saveUnit, saveUpdates, toast, useStore, type RosterCtl } from '../store';
 import { Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { onOffPair, pick } from '../data/setup';
@@ -32,7 +35,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
   const rs = ctl.ev.find(selUid);
   const [tab, setTab] = useState<'options' | 'stats' | 'rules'>('options');
   const [naming, setNaming] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const savedUnits = useStore((s) => s.savedUnits);
   if (!rs) {
     return (
       <div class="page">
@@ -52,6 +55,8 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
     (t) => t === 'options' || (t === 'stats' ? hasStats : hasRules),
   );
   const switches = switchesOnly(ctl, rs);
+  const linked = rs.sel.saved === undefined ? undefined : savedUnits.find((u) => u.id === rs.sel.saved);
+  const inStep = linked !== undefined && matchesSaved(rs.sel, linked);
 
   return (
     <div class="page unit-page">
@@ -71,10 +76,11 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         }
       />
       {naming && <NameSheet title="Unit" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
-      {saving && <SaveSheet ctl={ctl} rs={rs} onClose={() => setSaving(false)} />}
-      {rs.sel.saved !== undefined && (
+      {linked && (
         <div class="banner info" role="note">
-          Changes here apply to every list that holds this saved unit.
+          {!inStep
+            ? "This list has changes that other lists don't. Save updates shares them with every list that holds it."
+            : `${isUnique(linked) ? 'Unique' : 'Preconfigured'} unit. Changes here stay in this list until you tap Save updates.`}
         </div>
       )}
       {tabs.length > 1 && (
@@ -114,10 +120,10 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
               a Rite of War needs a Primarch, or a character with Master of the Legion).
             </p>
           )}
-          {!ctl.scratch && isRoot && unitLike && rs.sel.saved === undefined && (
+          {!ctl.scratch && isRoot && unitLike && !inStep && (
             <div class="unit-actions">
-              <button class="btn" onClick={() => setSaving(true)}>
-                Save as saved unit
+              <button class="btn" onClick={() => void saveChanges(ctl, rs, linked)}>
+                Save updates
               </button>
             </div>
           )}
@@ -607,36 +613,30 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
   );
 }
 
-/** Saves the unit as a saved unit under the name given, or the data name if that's empty. Closing saves nothing. */
-function SaveSheet({ ctl, rs, onClose }: { ctl: RosterCtl; rs: RSel; onClose: () => void }) {
-  const [name, setName] = useState(displayName(rs));
-  const save = async () => {
-    let saved: SavedUnit;
-    try {
-      saved = await saveUnit(ctl.roster, rs, name.trim() || rs.eff.name);
-    } catch (e) {
-      toast(failureMessage('save this unit', e));
+/**
+ * Save updates. A unit with no saved unit, or a named copy of a preconfigured one, becomes a new saved unit:
+ * unique when it has a name, preconfigured when not. A copy takes its changes to its saved unit and every copy.
+ */
+async function saveChanges(ctl: RosterCtl, rs: RSel, linked: SavedUnit | undefined) {
+  try {
+    if (!linked || (!isUnique(linked) && rs.sel.name !== undefined)) {
+      const saved = await saveUnit(ctl.roster, rs, rs.sel.name);
+      ctl.mutate((r) => {
+        const own = locate(r, rs.sel.uid)?.sel;
+        if (own) linkCopy(own, saved);
+      });
+      toast(isUnique(saved) ? 'Saved as a unique unit' : 'Saved as a preconfigured unit');
       return;
     }
+    const updated = await saveUpdates(ctl.roster, rs.sel.uid);
     ctl.mutate((r) => {
-      const own = locate(r, rs.sel.uid)?.sel;
-      if (own) linkCopy(own, saved);
+      for (const f of r.forces)
+        for (const s of f.selections) if (s.saved === updated.id && s.uid !== rs.sel.uid) applySaved(s, updated);
     });
-    onClose();
-  };
-  return (
-    <Sheet title="Save as saved unit" onClose={onClose}>
-      <div class="form">
-        <label>
-          Name
-          <input value={name} placeholder={rs.eff.name} onInput={(e) => setName(e.currentTarget.value)} />
-        </label>
-        <button class="btn primary" onClick={save}>
-          Save
-        </button>
-      </div>
-    </Sheet>
-  );
+    toast('Updates saved');
+  } catch (e) {
+    toast(failureMessage('save this unit', e));
+  }
 }
 
 /** same option tree and counts (ignoring uids) */
@@ -657,7 +657,8 @@ function splitOne(ctl: RosterCtl, rs: RSel) {
 
 /** Names a unit or model, or with undefined clears it, in one edit. A name left as it was saves nothing. */
 function rename(ctl: RosterCtl, rs: RSel, given: string | undefined) {
-  const name = nameToSet(rs, given);
+  const unit = getState().savedUnits.find((u) => u.id === rs.sel.saved);
+  const name = nameToSet(rs, given, unit !== undefined && isUnique(unit));
   if (name !== rs.sel.name) ctl.mutate((r) => nameSel(r, rs.sel.uid, name));
 }
 

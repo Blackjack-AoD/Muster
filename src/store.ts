@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState, type SavedUnit } from './data/db';
 import {
   Evaluator,
+  applySaved,
   holdsSaved,
   isRecord,
+  isUnique,
   locate,
   uid,
   unlinkCopy,
@@ -254,6 +256,7 @@ function isSavedUnit(u: unknown): u is SavedUnit {
     isRecord(u) &&
     typeof u.id === 'string' &&
     typeof u.name === 'string' &&
+    (u.kind === undefined || u.kind === 'preconfigured') &&
     typeof u.repo === 'string' &&
     typeof u.gameSystemId === 'string' &&
     typeof u.catalogueId === 'string' &&
@@ -274,6 +277,7 @@ function copySavedUnit(u: SavedUnit): SavedUnit {
   return {
     id: u.id,
     name: u.name,
+    ...(u.kind === undefined ? {} : { kind: u.kind }),
     repo: u.repo,
     gameSystemId: u.gameSystemId,
     catalogueId: u.catalogueId,
@@ -349,78 +353,45 @@ function saveEdit(r: Roster) {
   });
 }
 
-/** Same options and model names, whatever the uids. */
-const sameChildren = (a: readonly Sel[], b: readonly Sel[]): boolean =>
-  a.length === b.length &&
-  a.every((s, i) => {
-    const t = b[i];
-    return t !== undefined && sameSel(s, t);
-  });
-
-const sameSel = (a: Sel, b: Sel): boolean =>
-  a.key === b.key && a.number === b.number && a.name === b.name && sameChildren(a.children, b.children);
-
-/** Copies of a list's linked units, taken apart from the list, as the next edit changes it in place. */
-const linkedCopies = (r: Roster): Sel[] =>
-  r.forces.flatMap((f) => f.selections.filter((s) => s.saved !== undefined)).map((s) => structuredClone(s));
-
-/**
- * Applies `edit` to a list and saves it, then copies each linked unit's changes to its saved unit and to the
- * other lists. Only a copy the edit changed counts: one it added or left alone changes nothing else.
- */
-export function saveListEdit(r: Roster, edit: (r: Roster) => void): Promise<void> {
-  const before = linkedCopies(r);
+/** Applies `edit` to a list and saves it. Copies of saved units change only in this list, until Save updates. */
+export function saveListEdit(r: Roster, edit: (r: Roster) => void): void {
   edit(r);
   saveEdit(r);
-  const changed = linkedCopies(r).filter((copy) => {
-    const was = before.find((s) => s.uid === copy.uid);
-    return was !== undefined && !sameSel(was, copy);
-  });
-  return followCopies(r.uid, changed);
 }
 
-async function followCopies(listUid: string, copies: readonly Sel[]) {
-  for (const copy of copies) {
-    const saved = state.savedUnits.find((u) => u.id === copy.saved);
-    if (saved) await followCopy(listUid, saved, copy);
-  }
-}
-
-async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
-  const name = copy.name ?? saved.name;
-  const build = buildOf(copy);
-  const followed = { ...saved, name, build, updated: Date.now() };
-  try {
-    await db.putSavedUnit(followed);
-  } catch (e) {
-    toast(failureMessage('update the saved unit', e));
-    return;
-  }
-  set({ savedUnits: state.savedUnits.map((u) => (u.id === saved.id ? followed : u)) });
-  changeCopies(
-    saved.id,
-    (other) => {
-      other.key = build.key;
-      other.number = build.number;
-      other.children = structuredClone(build.children);
-      other.name = name;
-    },
-    listUid,
-  );
+/**
+ * Save updates: takes a linked copy's build, and a unique unit's name, to its saved unit, then to every copy in
+ * every other list, over any changes of their own. The caller updates other copies in this list.
+ */
+export async function saveUpdates(r: Roster, selUid: string): Promise<SavedUnit> {
+  const copy = locate(r, selUid)?.sel;
+  const saved = state.savedUnits.find((u) => u.id === copy?.saved);
+  if (!copy || !saved) throw new Error("This saved unit isn't on this phone.");
+  const updated: SavedUnit = {
+    ...saved,
+    name: isUnique(saved) ? (copy.name ?? saved.name) : '',
+    build: buildOf(structuredClone(copy)),
+    updated: Date.now(),
+  };
+  await db.putSavedUnit(updated);
+  set({ savedUnits: state.savedUnits.map((u) => (u.id === saved.id ? updated : u)) });
+  changeCopies(saved.id, (other) => applySaved(other, updated), r.uid);
+  return updated;
 }
 
 /**
  * Stores the saved unit and returns it. The unit page links the unit only after this,
  * so a refused write, which has no Retry, leaves the unit unlinked.
  */
-export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<SavedUnit> {
+export async function saveUnit(r: Roster, rs: RSel, name: string | undefined): Promise<SavedUnit> {
   const loc = locate(r, rs.sel.uid);
   if (!loc || loc.list !== loc.force.selections) throw new Error('Only a unit of this list can be saved.');
   const { force, sel } = loc;
   const now = Date.now();
   const saved: SavedUnit = {
     id: uid(),
-    name,
+    name: name ?? '',
+    ...(name ? {} : { kind: 'preconfigured' as const }),
     repo: r.repo,
     gameSystemId: r.gameSystemId,
     catalogueId: force.catalogueId,
@@ -519,7 +490,7 @@ export function useRosterCtl(
       scratch,
       mutate: (fn) => {
         if (scratch) fn(local);
-        else void saveListEdit(local, fn);
+        else saveListEdit(local, fn);
         setVersion((v) => v + 1);
       },
     },

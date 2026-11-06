@@ -607,10 +607,22 @@ describe('UnitEditor', () => {
 /** The text of the banner on the unit's page, if it shows one. */
 const banner = () => document.querySelector('.unit-page .banner')?.textContent;
 
-const saveButton = () => screen.queryByRole('button', { name: 'Save as saved unit' });
+const saveButton = () => screen.queryByRole('button', { name: 'Save updates' });
 
-/** Opens a squad holding Marine rows of these counts, as a copy of the saved unit Squad Thrax. */
-async function openLinked(counts: number[] = [], named: Record<number, string> = {}) {
+const UNIQUE_NOTE = 'Unique unit. Changes here stay in this list until you tap Save updates.';
+const PRECONFIGURED_NOTE = 'Preconfigured unit. Changes here stay in this list until you tap Save updates.';
+const CHANGED_NOTE =
+  "This list has changes that other lists don't. Save updates shares them with every list that holds it.";
+
+/**
+ * Opens a squad holding Marine rows of these counts, as a copy of a saved unit: the unique Squad Thrax,
+ * or with `preconfigured`, an unnamed preconfigured unit. `copies` puts more copies of it in the list.
+ */
+async function openLinked(
+  counts: number[] = [],
+  named: Record<number, string> = {},
+  { preconfigured = false, copies = 1 } = {},
+) {
   const w = world(SQUAD, { costLimit: 2000 });
   const tac = w.add('Tactical Squad');
   for (const n of counts) w.pick(tac, 'Marine', n);
@@ -622,7 +634,8 @@ async function openLinked(counts: number[] = [], named: Record<number, string> =
   });
   await db.putSavedUnit({
     id: 'thrax',
-    name: 'Squad Thrax',
+    name: preconfigured ? '' : 'Squad Thrax',
+    ...(preconfigured ? { kind: 'preconfigured' as const } : {}),
     repo: w.roster.repo,
     gameSystemId: w.roster.gameSystemId,
     catalogueId: force.catalogueId,
@@ -633,10 +646,12 @@ async function openLinked(counts: number[] = [], named: Record<number, string> =
     updated: 0,
   });
   root.saved = 'thrax';
-  root.name = 'Squad Thrax';
+  if (!preconfigured) root.name = 'Squad Thrax';
+  for (let i = 1; i < copies; i++) force.selections.push({ ...structuredClone(root), uid: `copy${i}` });
   openHash(`#/r/r/u/${tac}`);
   await renderScreen(<App />, { files: worldFiles(SQUAD), rosters: [w.roster] });
-  await screen.findByRole('heading', { name: 'Squad Thrax' });
+  await screen.findByRole('heading', { name: preconfigured ? 'Tactical Squad' : 'Squad Thrax' });
+  return { root, w };
 }
 
 describe('UnitEditor saved units', () => {
@@ -644,32 +659,22 @@ describe('UnitEditor saved units', () => {
     for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
   });
 
-  it('Save as saved unit, with a name, adds a saved unit and links the unit', async () => {
+  it('Save updates on an unnamed unit saves it as a preconfigured unit and links it', async () => {
     await openUnit();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
-    nameAndSave('Squad Thrax');
+    fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
 
     await waitFor(async () =>
-      expect((await db.savedUnits()).map((u) => [u.name, u.key])).toEqual([['Squad Thrax', 'tac']]),
+      expect((await db.savedUnits()).map((u) => [u.kind, u.name, u.key])).toEqual([['preconfigured', '', 'tac']]),
     );
     const [saved] = await db.savedUnits();
     await waitFor(async () => expect((await storedUnit())?.saved).toBe(saved?.id));
-    expect((await storedUnit())?.name).toBe('Squad Thrax');
-    await waitFor(() => expect(title()).toBe('Squad Thrax'));
-    expect(banner()).toBe('Changes here apply to every list that holds this saved unit.');
+    expect(await storedUnit()).not.toHaveProperty('name');
+    await waitFor(() => expect(banner()).toBe(PRECONFIGURED_NOTE));
     expect(saveButton()).toBeNull();
   });
 
-  it("the save sheet's name starts with the data name of an unnamed unit", async () => {
-    await openUnit();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
-
-    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Tactical Squad');
-  });
-
-  it("the save sheet's name starts with the custom name of a named unit", async () => {
+  it('Save updates on a named unit saves it as a unique unit and links it', async () => {
     const w = world(UNITS, { costLimit: 2000 });
     const tac = w.add('Tactical Squad');
     const root = w.roster.forces[0]?.selections[0];
@@ -678,40 +683,20 @@ describe('UnitEditor saved units', () => {
     await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [w.roster] });
     await screen.findByRole('heading', { name: 'Squad Thrax' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
 
-    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Squad Thrax');
-  });
-
-  it('saving with an empty name names the saved unit and the unit after the data', async () => {
-    await openUnit();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
-    nameAndSave('  ');
-
-    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
-    await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
-  });
-
-  it('closing the save sheet saves nothing and leaves the unit unlinked', async () => {
-    await openUnit();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
-    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Squad Thrax' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-    expect(await db.savedUnits()).toEqual([]);
-    expect(await storedUnit()).not.toHaveProperty('saved');
-    expect(banner()).toBeUndefined();
-    expect(saveButton()).not.toBeNull();
+    await waitFor(async () =>
+      expect((await db.savedUnits()).map((u) => [u.kind, u.name])).toEqual([[undefined, 'Squad Thrax']]),
+    );
+    await waitFor(() => expect(banner()).toBe(UNIQUE_NOTE));
+    expect((await storedUnit())?.name).toBe('Squad Thrax');
   });
 
   it('storage refusing the save tells the player and leaves the unit unlinked', async () => {
     await openUnit();
     const put = refuse('put');
     try {
-      fireEvent.click(screen.getByRole('button', { name: 'Save as saved unit' }));
-      nameAndSave('Squad Thrax');
+      fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
 
       await expectToast("Couldn't save this unit: Storage is full");
     } finally {
@@ -719,25 +704,80 @@ describe('UnitEditor saved units', () => {
     }
     expect(await db.savedUnits()).toEqual([]);
     expect(await storedUnit()).not.toHaveProperty('saved');
-    expect(title()).toBe('Tactical Squad');
     expect(banner()).toBeUndefined();
   });
 
-  it('a linked copy shows the banner and no Save as saved unit', async () => {
+  it('a linked copy that matches its saved unit says so, and offers no Save updates', async () => {
     await openLinked();
 
-    expect(banner()).toBe('Changes here apply to every list that holds this saved unit.');
+    expect(banner()).toBe(UNIQUE_NOTE);
     expect(saveButton()).toBeNull();
   });
 
-  it('a unit with no link shows no banner, and offers Save as saved unit', async () => {
-    await openUnit();
+  it('an edit to a linked copy stays in this list, and offers Save updates', async () => {
+    await openLinked();
 
-    expect(banner()).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('Squad Iron');
+
+    await waitFor(() => expect(banner()).toBe(CHANGED_NOTE));
     expect(saveButton()).not.toBeNull();
+    expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Squad Thrax']);
   });
 
-  it('offers Save as saved unit in a list, and none in a read-only preview', () => {
+  it('Save updates takes a linked copy’s change to its saved unit', async () => {
+    await openLinked();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('Squad Iron');
+    await waitFor(() => expect(saveButton()).not.toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
+
+    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Squad Iron']));
+    await waitFor(() => expect(banner()).toBe(UNIQUE_NOTE));
+    expect(saveButton()).toBeNull();
+  });
+
+  it('Save updates on a preconfigured copy takes the change to its other copies in this list', async () => {
+    const { root } = await openLinked([4, 1], {}, { preconfigured: true, copies: 2 });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    nameAs('Brother Kael');
+    await waitFor(() => expect(saveButton()).not.toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
+
+    await waitFor(async () =>
+      expect((await db.rosters())[0]?.forces[0]?.selections.map((s) => [s.uid, s.children.map((c) => c.name)])).toEqual(
+        [
+          [root.uid, [undefined, 'Brother Kael']],
+          ['copy1', [undefined, 'Brother Kael']],
+        ],
+      ),
+    );
+    expect((await db.savedUnits()).map((u) => [u.kind, u.name])).toEqual([['preconfigured', '']]);
+  });
+
+  it('naming a preconfigured copy and saving makes a new unique unit, and leaves the preconfigured one', async () => {
+    await openLinked([], {}, { preconfigured: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('Squad Thrax');
+    await waitFor(() => expect(saveButton()).not.toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
+
+    await waitFor(async () =>
+      expect((await db.savedUnits()).map((u) => [u.kind, u.name])).toEqual(
+        expect.arrayContaining([
+          ['preconfigured', ''],
+          [undefined, 'Squad Thrax'],
+        ]),
+      ),
+    );
+    const unique = (await db.savedUnits()).find((u) => u.name === 'Squad Thrax');
+    await waitFor(async () => expect((await storedUnit())?.saved).toBe(unique?.id));
+  });
+
+  it('offers Save updates in a list, and none in a read-only preview', () => {
     const w = world(UNITS);
     const tac = w.add('Tactical Squad');
     const page = (scratch: boolean) =>
@@ -757,25 +797,24 @@ describe('UnitEditor saved units', () => {
     expect(saveButton()).toBeNull();
   });
 
-  it('Clear on a linked copy names it and its saved unit after the data', async () => {
+  it('Clear on a unique copy names it after the data, in this list only until Save updates', async () => {
     await openLinked();
 
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
     await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
-    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
+    expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Squad Thrax']);
     expect(title()).toBe('Tactical Squad');
   });
 
-  it('emptying the name of a linked copy names it and its saved unit after the data', async () => {
+  it('emptying the name of a unique copy names it after the data', async () => {
     await openLinked();
 
     fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
     nameAs('');
 
     await waitFor(async () => expect((await storedUnit())?.name).toBe('Tactical Squad'));
-    await waitFor(async () => expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Tactical Squad']));
   });
 
   it('Clear on a model of a linked copy takes its name off', async () => {
@@ -787,9 +826,3 @@ describe('UnitEditor saved units', () => {
     await waitFor(async () => expect(await savedModels()).toEqual([[1, undefined]]));
   });
 });
-
-/** Types a name into the open save sheet and presses Save. */
-function nameAndSave(name: string) {
-  fireEvent.input(screen.getByLabelText('Name'), { target: { value: name } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-}

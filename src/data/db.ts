@@ -27,7 +27,10 @@ export interface RepoState {
 /** A named unit build kept for one army file, so any list for that army can add it. */
 export interface SavedUnit {
   id: string;
+  /** a unique unit's name; '' for a preconfigured unit, which has none */
   name: string;
+  /** absent for a unique unit, which a list holds at most once; a list holds a preconfigured unit any number of times */
+  kind?: 'preconfigured';
   repo: string;
   gameSystemId: string;
   catalogueId: string;

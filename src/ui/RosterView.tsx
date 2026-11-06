@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { go } from '../app';
 import {
+  isUnique,
   addSavedUnit,
   dataNameIfNamed,
   addSel,
@@ -566,7 +567,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
   const saved = useMemo(
     () =>
       savedUnits
-        .filter((u) => !cat || u.categoryId === cat)
+        .filter((u) => isUnique(u) && (!cat || u.categoryId === cat))
         .flatMap((unit) => {
           const tried = tryAddSaved(ctl.roster, ctl.contexts, rf.force.uid, unit);
           return tried ? [{ unit, tried }] : [];
@@ -618,8 +619,8 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
       </div>
       {savedShown.length > 0 && (
         <>
-          <div class="list-label">Saved</div>
-          <div class="pick-list" role="group" aria-label="Saved units">
+          <div class="list-label">Unique units</div>
+          <div class="pick-list" role="group" aria-label="Unique units">
             {savedShown.map(({ unit, tried }) =>
               tried.added ? (
                 <PickRow

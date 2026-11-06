@@ -397,6 +397,17 @@ describe('addSavedUnit', () => {
     expect(w.roster.forces.map((f) => f.selections.length)).toEqual([1, 0]);
   });
 
+  it('adds a preconfigured unit as often as asked, with no name on any copy', () => {
+    const w = world(SQUAD);
+    const melta: SavedUnit = { ...thrax(), name: '', kind: 'preconfigured' };
+    const first = addedUid(addSavedUnit(w.roster, w.contexts, 'f1', melta));
+    const second = addedUid(addSavedUnit(w.roster, w.contexts, 'f1', melta));
+    expect(w.roster.forces[0].selections.map((s) => [s.uid, s.saved, s.name])).toEqual([
+      [first, 'su1', undefined],
+      [second, 'su1', undefined],
+    ]);
+  });
+
   it('adds nothing when the list has no such detachment', () => {
     const w = world(SQUAD);
     expect(addSavedUnit(w.roster, w.contexts, 'nope', thrax())).toEqual({ added: false, reason: 'no-detachment' });
@@ -467,14 +478,20 @@ describe('naming and splitting models', () => {
 
   it('gives the name the player typed, or none when they cleared it', () => {
     const { w, tac } = squad([]);
-    expect(nameToSet(w.sel(tac), 'Squad Thrax')).toBe('Squad Thrax');
-    expect(nameToSet(w.sel(tac), undefined)).toBeUndefined();
+    expect(nameToSet(w.sel(tac), 'Squad Thrax', false)).toBe('Squad Thrax');
+    expect(nameToSet(w.sel(tac), undefined, false)).toBeUndefined();
   });
 
-  it('gives a linked copy the data name when the player clears its name, as a saved unit always has one', () => {
+  it('gives a copy of a unique unit the data name when the player clears its name, as a unique unit always has one', () => {
     const { w, tac, root } = squad([]);
     Object.assign(root, { saved: 'thrax', name: 'Squad Thrax' });
-    expect(nameToSet(w.sel(tac), undefined)).toBe('Tactical Squad');
+    expect(nameToSet(w.sel(tac), undefined, true)).toBe('Tactical Squad');
+  });
+
+  it('clears the name of a copy of a preconfigured unit', () => {
+    const { w, tac, root } = squad([]);
+    Object.assign(root, { saved: 'melta', name: 'Squad Thrax' });
+    expect(nameToSet(w.sel(tac), undefined, false)).toBeUndefined();
   });
 
   it('adds new models to an unnamed row, never a named one before it', () => {

@@ -985,9 +985,43 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
 }
 
 /** Links a root unit to a saved unit, which gives it the saved unit's name. */
-export function linkCopy(sel: Sel, unit: Pick<SavedUnit, 'id' | 'name'>): void {
+export function linkCopy(sel: Sel, unit: Pick<SavedUnit, 'id' | 'name' | 'kind'>): void {
   sel.saved = unit.id;
-  sel.name = unit.name;
+  if (isUnique(unit)) sel.name = unit.name;
+  else delete sel.name;
+}
+
+/** A unique unit has a name and sits in a list at most once; a preconfigured unit has neither limit. */
+export function isUnique(unit: Pick<SavedUnit, 'kind'>): boolean {
+  return unit.kind === undefined;
+}
+
+/** Gives a copy its saved unit's build and name, keeping the copy's own uid, link and category. */
+export function applySaved(copy: Sel, unit: SavedUnit): void {
+  copy.key = unit.build.key;
+  copy.number = unit.build.number;
+  copy.children = structuredClone(unit.build.children);
+  linkCopy(copy, unit);
+}
+
+/** Whether a copy still matches its saved unit: same options, counts and model names, and the same name. */
+export function matchesSaved(copy: Sel, unit: SavedUnit): boolean {
+  const name = isUnique(unit) ? unit.name : undefined;
+  return copy.name === name && sameSel({ ...copy, name: undefined }, unit.build);
+}
+
+/** Same options, counts and model names, whatever the uids. */
+export function sameSel(a: Sel, b: Sel): boolean {
+  return (
+    a.key === b.key &&
+    a.number === b.number &&
+    a.name === b.name &&
+    a.children.length === b.children.length &&
+    a.children.every((c, i) => {
+      const d = b.children[i];
+      return d !== undefined && sameSel(c, d);
+    })
+  );
 }
 
 /** Takes one model off a group of 2 or more, as a row of its own after it, and returns that row. */
@@ -1033,10 +1067,10 @@ export function canNameModel(rs: RSel): boolean {
 
 /**
  * The name to set when the player names a selection `given`, or undefined to clear it.
- * A saved unit always has a name, so clearing a linked copy's name gives it the data name.
+ * A unique unit always has a name, so clearing the name of a copy of one gives it the data name.
  */
-export function nameToSet(rs: RSel, given: string | undefined): string | undefined {
-  return given ?? (rs.sel.saved !== undefined ? rs.eff.name : undefined);
+export function nameToSet(rs: RSel, given: string | undefined, copyOfUnique: boolean): string | undefined {
+  return given ?? (copyOfUnique && !rs.parent ? rs.eff.name : undefined);
 }
 
 /** Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone. */
@@ -1143,7 +1177,7 @@ export type AddSavedResult =
 /**
  * Adds a copy of a saved unit to a detachment, rebuilt against the current data: it leaves out options the data
  * no longer has, counts them in `dropped`, and fills mandatory defaults.
- * A list holds a saved unit at most once.
+ * A list holds a unique unit at most once, and a preconfigured unit any number of times.
  */
 export function addSavedUnit(
   roster: Roster,
@@ -1154,7 +1188,7 @@ export function addSavedUnit(
   const force = roster.forces.find((f) => f.uid === forceUid);
   if (!force) return { added: false, reason: 'no-detachment' };
   if (!savedUnitIsFor(unit, roster.repo, force.catalogueId)) return { added: false, reason: 'other-army-file' };
-  if (holdsSaved(roster, unit.id)) return { added: false, reason: 'already-in-list' };
+  if (isUnique(unit) && holdsSaved(roster, unit.id)) return { added: false, reason: 'already-in-list' };
   const s = giveNewUids(structuredClone(unit.build));
   s.categoryId = unit.categoryId;
   linkCopy(s, unit);

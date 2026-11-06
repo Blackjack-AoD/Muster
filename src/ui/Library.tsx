@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { Context, Opt } from '../data/catalog';
-import { addSel, rootOptionsCached, savedUnitIsFor, uid, type Roster, type RSel } from '../data/engine';
+import { addSel, rootOptionsCached, isUnique, savedUnitIsFor, uid, type Roster, type RSel } from '../data/engine';
 import type { SavedUnit } from '../data/db';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
@@ -264,7 +264,7 @@ function useCtx(repoName: string, catId: string) {
 function UnitList({ repo, catId }: { repo: string; catId: string }) {
   const { ctx, err } = useCtx(repo, catId);
   const allSaved = useStore((s) => s.savedUnits);
-  const saved = allSaved.filter((u) => savedUnitIsFor(u, repo, catId));
+  const saved = allSaved.filter((u) => isUnique(u) && savedUnitIsFor(u, repo, catId));
   const [q, setQ] = useState('');
   const [naming, setNaming] = useState<SavedUnit>();
   const groups = useMemo(() => {
