@@ -1000,8 +1000,8 @@ export function nameToSet(rs: RSel, given: string | undefined): string | undefin
 export function nameSel(roster: Roster, selUid: string, name: string | undefined): void {
   const loc = locate(roster, selUid);
   if (!loc) return;
-  const model = loc.list !== loc.force.selections;
-  const target = name !== undefined && model ? (splitOff(roster, selUid) ?? loc.sel) : loc.sel;
+  const inUnit = loc.list !== loc.force.selections;
+  const target = name !== undefined && inUnit ? (splitOff(roster, selUid) ?? loc.sel) : loc.sel;
   if (name === undefined) delete target.name;
   else target.name = name;
 }
