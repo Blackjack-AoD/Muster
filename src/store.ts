@@ -345,7 +345,8 @@ const sameChildren = (a: readonly Sel[], b: readonly Sel[]): boolean =>
   });
 
 /** Saves an edited list, then takes each linked copy it changed to its saved unit and the other lists. */
-export async function saveListEdit(r: Roster): Promise<void> {
+export async function saveListEdit(r: Roster, edit: (r: Roster) => void): Promise<void> {
+  edit(r);
   saveEdit(r);
   // copied before the first wait, as the next edit changes `r` in place
   const copies = r.forces
@@ -498,9 +499,9 @@ export function useRosterCtl(
       ev,
       scratch,
       mutate: (fn) => {
-        fn(local);
+        if (scratch) fn(local);
+        else void saveListEdit(local, fn);
         setVersion((v) => v + 1);
-        if (!scratch) void saveListEdit(local);
       },
     },
   };
