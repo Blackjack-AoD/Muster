@@ -1,11 +1,11 @@
 ---
 name: write-the-epic
-description: Write a Muster epic as a GitHub issue. Interview the user until each decision is settled, check each decision against the code and real BattleScribe data, name the screens and stored formats that change, and file the epic in the repo's format (Goal, Decisions, Screens, Stored data, Child issues). Use when the user wants to plan a feature, write an epic, write a PRD or a spec, or says "write the epic". The next step is break-down-the-epic.
+description: Write a Muster epic as a GitHub issue. Interview the user until each decision is settled, check each decision against the code and real BattleScribe data, name the screens and stored formats that change, and file the epic in the repo's format (Goal, Decisions, Screens, Stored data, Child issues). Use when the user wants to plan a feature, write an epic, write a PRD or a spec, or says "write the epic". The next step is implement-epic.
 ---
 
 # Write the epic
 
-An epic says what to build and records each decision. It doesn't list tasks: `break-down-the-epic` does that. It holds no user stories and no file paths.
+An epic says what to build and records each decision. It doesn't list tasks: `implement-epic` does that. It holds no user stories and no file paths.
 
 This repo has no `adr/` folder, so the epic is where a decision is recorded.
 
@@ -72,4 +72,4 @@ gh issue create --title "<title>" --label epic --body-file <scratchpad file>
 
 ## 6. Report
 
-Give the epic's link and its decisions in one line each. The next step is `/break-down-the-epic <n>`.
+Give the epic's link and its decisions in one line each. The next step is `/implement-epic <n>`.

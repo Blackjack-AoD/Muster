@@ -1,11 +1,12 @@
 ---
 name: implement-issue
-description: Implement a GitHub issue end-to-end in Muster. Read the issue, check blockers, claim it, delegate each acceptance criterion to a subagent in its own worktree, read the diffs, land the work on local main, correct the docs the work made stale, and post a review-ready comment. Use when the user wants to work on a GitHub issue, says "implement issue", "let's work on issue 5" or "start building #12". Also handles a re-run on an implemented issue, reading BUG and MISSING feedback and addressing it.
+description: The procedure implement-epic follows for each child issue. Read the issue, check blockers, claim it, delegate each acceptance criterion to a subagent in its own worktree, read the diffs, land the work on local main, correct the docs the work made stale, and post a review-ready comment. Not for direct use. A change from a prompt goes through implement-this.
+user-invocable: false
 ---
 
 # Implement issue
 
-Takes an issue number, implements its acceptance criteria through subagents, and leaves them on local `main` for the user to review.
+`implement-epic` runs this for each child issue. It takes an issue number, implements its acceptance criteria through subagents, and leaves them on local `main` for the user to review.
 
 This is trunk-based development: no feature branches and no pull requests. Delegations work in their own worktrees and land on local `main` by fast-forward, one criterion at a time. **Pushing `main` deploys to players, so this skill never pushes.** `review-ok` does, once the user approves.
 
@@ -233,7 +234,7 @@ Decisions:
 - <question> → <answer>"
 ```
 
-Leave the decisions list out if there were none. This is the only comment on a normal run. The next step is `/codereview` and then `/review-ok <n>`.
+Leave the decisions list out if there were none. This is the only comment on a normal run. The next step is `/review-ok <n>`.
 
 ## Important notes
 

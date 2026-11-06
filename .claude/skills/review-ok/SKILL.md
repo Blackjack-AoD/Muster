@@ -1,6 +1,6 @@
 ---
 name: review-ok
-description: Finish a Muster issue after the user approves it. Push main (which deploys), confirm the deploy, close the issue, remove the "in progress" label, then delete that issue's worktrees and branches. Use when the user says "review ok", "review ok, push", "approved, close it" or "ship it and clean up" about an issue that implement-issue built.
+description: Finish a Muster change after the user approves it. Push main (which deploys), confirm the deploy, then, for an issue, close it, remove the "in progress" label and delete its worktrees and branches. Use when the user says "review ok", "review ok, push", "approved, close it" or "ship it and clean up" about an issue that implement-epic built, or "push" about a change that implement-this built.
 ---
 
 # Review OK
@@ -9,7 +9,7 @@ description: Finish a Muster issue after the user approves it. Push main (which 
 
 **This deploys.** Pushing `main` publishes the app to GitHub Pages, if the tests pass in the deploy workflow, and phones pick it up on their next update check.
 
-**Scope is one issue.** Take the number from the argument, or from the issue this session implemented. If neither names one issue, ask with `AskUserQuestion`.
+**Scope is one issue, or none.** Take the number from the argument, or from the issue this session implemented. After `implement-this` there is no issue: do steps 1 and 2, then report. If you can't tell which applies, ask with `AskUserQuestion`.
 
 **Remove only what this session's delegations for this issue created.** The agent results name the worktree paths. If you don't have them, list `git worktree list` and ask.
 

@@ -96,7 +96,7 @@ Under both conditions, run a **mutation check**: first confirm the test passes, 
 
 Your report is read beside the diff, not instead of it. Anything the diff shows is a second copy that can be wrong.
 
-Before you report, review your own diff against `.claude/skills/review-tests/SKILL.md`, and any other check your brief names.
+Before you report, read each test in your diff and ask whether it would still pass with the code broken. If it would, sharpen it.
 
 Include, in this order:
 
