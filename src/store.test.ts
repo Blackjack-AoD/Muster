@@ -1,7 +1,16 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from './data/db';
-import { Evaluator, addSavedUnit, addSel, displayName, uid as newUid, type Roster, type Sel } from './data/engine';
+import {
+  Evaluator,
+  addSavedUnit,
+  addSel,
+  displayName,
+  forceRootOptions,
+  uid as newUid,
+  type Roster,
+  type Sel,
+} from './data/engine';
 import { setUpForce } from './data/setup';
 import {
   deleteRoster,
@@ -21,7 +30,8 @@ import {
   syncAll,
   toast,
 } from './store';
-import { SWORD, children, present, sergeant, unit, world } from './test/fixture';
+import { Context } from './data/catalog';
+import { SWORD, catalogue, children, present, sergeant, unit, world } from './test/fixture';
 
 const roster = (uid: string, name = 'List') =>
   ({ uid, name, repo: 'r', gameSystemId: 'g', costLimit: 0, forces: [], created: 0, updated: 0 }) as Roster;
@@ -152,13 +162,13 @@ describe('restoring a backup', () => {
           forceEntryId: 'det',
           catalogueId: 'cat',
           selections: [
-            { uid: 'u', key: 'e', number: 1, categoryId: 'hq', name: 'Squad Thrax', saved: 'thrax', children: [model] },
+            { uid: 'u', key: 'e', number: 1, categoryId: 'hq', name: 'Squad Thrax', saved: 'kept', children: [model] },
           ],
         },
       ],
     };
     const thrax = {
-      id: 'thrax',
+      id: 'kept',
       name: 'Squad Thrax',
       repo: 'r',
       gameSystemId: 'g',
@@ -551,8 +561,20 @@ describe('saved units', () => {
     return { roster: w.roster, squad, id };
   };
 
-  it('saves a unit with its army file, key, category and build', async () => {
-    const { w, squad, rs } = listWithSquad('su1');
+  it('saves a unit with its army file, key, category and build, from a detachment of another army file', async () => {
+    const w = world(SQUAD);
+    w.roster.uid = 'su1';
+    const other = catalogue(`<selectionEntries>${SQUAD}</selectionEntries>`, 'cat2');
+    w.contexts.set(other.id, new Context(w.gst, other, []));
+    w.roster.forces.push({ uid: 'f2', forceEntryId: 'det', catalogueId: 'cat2', selections: [] });
+    const opt = present(
+      forceRootOptions(present(w.contexts.get('cat2'), 'the other army file'), w.ctx.forceEntries()[0]).find(
+        (o) => o.node.name === 'Tactical Squad',
+      ),
+      'the squad entry',
+    );
+    const squad = present(addSel(w.roster, w.contexts, 'f2', null, opt, 1, 'hq'), 'the squad');
+    const rs = w.sel(squad);
     const build = structuredClone(savedIn(w.roster, squad));
     const { id } = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
     const expected = {
@@ -560,7 +582,7 @@ describe('saved units', () => {
       name: 'Squad Thrax',
       repo: 'test/repo',
       gameSystemId: 'gst',
-      catalogueId: 'cat',
+      catalogueId: 'cat2',
       key: 'tac',
       categoryId: 'hq',
       build,
@@ -599,6 +621,14 @@ describe('saved units', () => {
     const squad = present(addSel(w.roster, w.contexts, 'f1', null, w.root('Tactical Squad')), 'the squad');
     const saved = await addedBy(() => saveUnit(w.roster, w.sel(squad), 'No Heading'));
     expect(saved.categoryId).toBe('troops');
+  });
+
+  it('saves a unit with no category under the empty category', async () => {
+    const w = world(unit('hero', 'Lone Hero', 50));
+    w.roster.uid = 'su7';
+    const hero = present(addSel(w.roster, w.contexts, 'f1', null, w.root('Lone Hero')), 'the hero');
+    const saved = await addedBy(() => saveUnit(w.roster, w.sel(hero), 'Brother Thrax'));
+    expect(saved.categoryId).toBe('');
   });
 
   it('refuses to save a model inside a unit, and adds nothing', async () => {
@@ -687,7 +717,7 @@ describe('saved units', () => {
   it('loads saved units from storage at start', async () => {
     const { w, squad } = listWithSquad('ld1');
     const record = {
-      id: 'thrax',
+      id: 'loaded',
       name: 'Squad Thrax',
       repo: 'test/repo',
       gameSystemId: 'gst',
@@ -700,7 +730,7 @@ describe('saved units', () => {
     };
     await db.putSavedUnit(record);
     await init();
-    expect(savedUnit('thrax')).toEqual(record);
+    expect(savedUnit('loaded')).toEqual(record);
   });
 
   describe('a copy edited in a list', () => {
@@ -742,6 +772,21 @@ describe('saved units', () => {
         await vi.waitFor(async () => expect((await inStorage(list)).map((s) => s.name)).toEqual(['Squad Iron']));
         expect(inMemory(list).map((s) => s.name)).toEqual(['Squad Iron']);
       }
+    });
+
+    it('takes a renamed model to the saved unit and to the copy in another list', async () => {
+      const { roster: a, squad, id } = await savedSquad('fm1', 'Squad Thrax');
+      await listWithCopy('fm2', id, 'Squad Thrax');
+
+      await saveListEdit(a, () => {
+        sergeantOf(savedIn(a, squad)).name = 'Brother Kael';
+      });
+
+      for (const saved of [savedUnit(id), await storedSavedUnit(id)]) {
+        expect(sergeantOf(saved?.build).name).toBe('Brother Kael');
+      }
+      await vi.waitFor(async () => expect(sergeantOf((await inStorage('fm2'))[0]).name).toBe('Brother Kael'));
+      expect(sergeantOf(inMemory('fm2')[0]).name).toBe('Brother Kael');
     });
 
     it('leaves each copy its own root uid, link and category when it takes the new build', async () => {
