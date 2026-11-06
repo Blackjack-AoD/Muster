@@ -4,11 +4,13 @@ import type { SavedUnit } from './db';
 import {
   addModels,
   addSavedUnit,
+  canNameModel,
   nameSel,
   nameToSet,
   splitOff,
   tryAddSaved,
   unavailableHere,
+  unsplit,
   type Sel,
 } from './engine';
 import { FORCE, SWORD, catalogue, children, cons, entry, group, mods, unit, world } from '../test/fixture';
@@ -494,6 +496,60 @@ describe('naming and splitting models', () => {
     ]);
   });
 
+  it("offers no name for the main row of the squad's bulk model, and one for a row split off it", () => {
+    const { w, tac } = squad([4, 1]);
+    expect(w.sel(tac).children.map(canNameModel)).toEqual([false, true]);
+  });
+
+  it('offers a name for a model other than the bulk, such as a sergeant', () => {
+    const sgt = entry('sgt', 'Sergeant', 20, children(entry('sword', 'Sword', 5)), 'type="model"');
+    const w = world(unit('tac', 'Tactical Squad', 100, children(sgt, MARINE)));
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Sergeant');
+    w.pick(tac, 'Marine', 4);
+    expect(w.sel(tac).children.map((c) => [c.node.name, canNameModel(c)])).toEqual([
+      ['Sergeant', true],
+      ['Marine', false],
+    ]);
+  });
+
+  it('offers a name for a named row, so it can be changed or cleared', () => {
+    const { w, tac } = squad([1, 3], { 0: 'Brother Kael' });
+    expect(w.sel(tac).children.map(canNameModel)).toEqual([true, false]);
+  });
+
+  it('offers a name for every model when two models tie for the most', () => {
+    const scout = entry('scout', 'Scout', 5, children(entry('knife', 'Knife', 1)), 'type="model"');
+    const w = world(unit('tac', 'Tactical Squad', 100, children(MARINE, scout)));
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Marine', 2);
+    w.pick(tac, 'Scout', 2);
+    expect(w.sel(tac).children.map(canNameModel)).toEqual([true, true]);
+  });
+
+  it('undoes a split: the row rejoins the first unnamed row of its model, taking its wargear', () => {
+    const { w, root, rows } = squad([2, 1]);
+    w.pick(root.children[1].uid, 'Frag Grenade');
+    expect(unsplit(w.roster, root.children[1].uid)).toBe(true);
+    expect(rows()).toEqual([[3, undefined]]);
+    expect(root.children[0].children).toEqual([]);
+  });
+
+  it('undoing the split of a named model drops its name', () => {
+    const { w, root, rows } = squad([2, 1], { 1: 'Brother Kael' });
+    unsplit(w.roster, root.children[1].uid);
+    expect(rows()).toEqual([[3, undefined]]);
+  });
+
+  it('undoes no split of a row with no unnamed row of its model before it', () => {
+    const { w, root, rows } = squad([1, 2], { 0: 'Brother Kael' });
+    expect(unsplit(w.roster, root.children[1].uid)).toBe(false);
+    expect(rows()).toEqual([
+      [1, 'Brother Kael'],
+      [2, undefined],
+    ]);
+  });
+
   it('adds new models as a new unnamed row when every row is named', () => {
     const { w, tac, rows } = squad([1], { 0: 'Brother Kael' });
     addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
@@ -545,5 +601,59 @@ describe('tryAddSaved', () => {
   it('offers nothing for a saved unit of another army file', () => {
     const w = world(SQUAD);
     expect(tryAddSaved(w.roster, w.contexts, 'f1', { ...saved(sel('sq')), catalogueId: 'other' })).toBeNull();
+  });
+});
+
+describe("rules on the list's points", () => {
+  const LORD = entry(
+    'lord',
+    'Lord',
+    10,
+    `<modifiers>
+      <modifier type="increment" field="lord-max" value="1">
+        <repeats>
+          <repeat field="pts" scope="roster" value="1000" repeats="1" childId="any"/>
+        </repeats>
+      </modifier>
+    </modifiers>
+    <constraints>
+      <constraint id="lord-max" type="max" field="selections" scope="roster" value="0"/>
+    </constraints>`,
+  );
+  const lords = (costLimit: number, n: number) => {
+    const w = world(LORD, { costLimit });
+    for (let i = 0; i < n; i++) w.add('Lord');
+    return w.errors();
+  };
+
+  it("counts a step per points in the list against the list's points limit", () => {
+    expect(lords(3000, 3)).toEqual([]);
+    expect(lords(3000, 4)).toEqual(['Lord: at most 3 allowed in the list (has 4)']);
+  });
+
+  it('counts the points in the list when it has no points limit', () => {
+    expect(lords(0, 1)).toEqual(['Lord: at most 0 allowed in the list (has 1)']);
+  });
+
+  it("checks a condition on the list's points against its points limit", () => {
+    const hero = entry(
+      'hero',
+      'Hero',
+      10,
+      `<modifiers>
+        <modifier type="set" field="hidden" value="true">
+          <conditions>
+            <condition type="lessThan" value="1000" field="pts" scope="roster" childId="any"/>
+          </conditions>
+        </modifier>
+      </modifiers>`,
+    );
+    const hidden = (costLimit: number) => {
+      const w = world(hero, { costLimit });
+      const ev = w.ev();
+      return ev.optionEff(w.root('Hero'), null, ev.forces[0]).hidden;
+    };
+    expect(hidden(2000)).toBe(false);
+    expect(hidden(0)).toBe(true);
   });
 });

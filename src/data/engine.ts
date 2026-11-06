@@ -988,6 +988,16 @@ export function splitOff(roster: Roster, selUid: string): Sel | null {
   return copy;
 }
 
+/** Puts a split-off row back into the first unnamed row of its model before it. False when there's none. */
+export function unsplit(_roster: Roster, _selUid: string): boolean {
+  return false;
+}
+
+/** Whether a model row can take a name: any row but the main row of the squad's bulk model, or one already named. */
+export function canNameModel(_rs: RSel): boolean {
+  return false;
+}
+
 /**
  * The name to set when the player names a selection `given`, or undefined to clear it.
  * A saved unit always has a name, so clearing a linked copy's name gives it the data name.

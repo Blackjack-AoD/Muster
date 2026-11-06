@@ -129,6 +129,40 @@ describe('UnitEditor', () => {
     expect(option('radio', /Melta Gun/).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('a pick-one group holding a group of its own offers each of its options as one choice', async () => {
+    const one = (id: string, type: 'min' | 'max') =>
+      `<constraint id="${id}-${type}" type="${type}" field="selections" scope="parent" value="1"/>`;
+    const guns = unit(
+      'tac',
+      'Tactical Squad',
+      100,
+      `<selectionEntryGroups>
+        <selectionEntryGroup id="gun" name="Bolter" defaultSelectionEntryId="bolter">
+          ${cons(one('gun', 'min'), one('gun', 'max'))}
+          <selectionEntryGroups>
+            <selectionEntryGroup id="special" name="Special Weapon">
+              ${cons(one('special', 'max'))}
+              ${children(entry('melta', 'Melta Gun', 15))}
+            </selectionEntryGroup>
+          </selectionEntryGroups>
+          ${children(entry('bolter', 'Bolter', 0), entry('shrapnel', 'Shrapnel Bolter', 2))}
+        </selectionEntryGroup>
+      </selectionEntryGroups>`,
+    );
+    await openUnit(guns);
+    expect(screen.queryByRole('button', { name: 'More Bolter' })).toBeNull();
+    expect(option('radio', /^Bolter/).getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(option('radio', /Melta Gun/));
+    await waitFor(() => expect(topPoints()).toBe('115pts'));
+    expect(option('radio', /^Bolter/).getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(option('radio', /Shrapnel Bolter/));
+    await waitFor(() => expect(topPoints()).toBe('102pts'));
+    expect(option('radio', /Melta Gun/).getAttribute('aria-checked')).toBe('false');
+    expect((await storedUnit())?.children.map((c) => c.key)).toEqual([expect.stringMatching(/shrapnel$/)]);
+  });
+
   it('taking another option in a full group drops the cheapest one taken', async () => {
     const only = (id: string, name: string, pts: number) =>
       entry(
@@ -332,9 +366,26 @@ describe('UnitEditor', () => {
     expect(await savedModels()).toEqual([[1, 'Brother Kael']]);
   });
 
-  it('naming one model of a group of 5 splits it off as a named row of 1', async () => {
-    await openSquad([5]);
+  it('naming one model of a group of 2 splits it off as a named row of 1', async () => {
+    await openSquad([5, 2]);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    nameAs('Brother Kael');
+
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [5, undefined],
+        [1, undefined],
+        [1, 'Brother Kael'],
+      ]),
+    );
+    expect(rows()).toEqual(['5× Marine', '1× Marine', '1× Brother Kael']);
+  });
+
+  it("offers no rename on the squad's main row of its bulk model, and one on a row split off it", async () => {
+    await openSquad([4, 1]);
+
+    expect(screen.getAllByRole('button', { name: 'Rename model' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
     nameAs('Brother Kael');
 
@@ -344,7 +395,20 @@ describe('UnitEditor', () => {
         [1, 'Brother Kael'],
       ]),
     );
-    expect(rows()).toEqual(['4× Marine', '1× Brother Kael']);
+  });
+
+  it('Undo split puts a split-off model back in the main row, with its wargear', async () => {
+    const w = world(SQUAD, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Marine', 2);
+    w.pick(w.pick(tac, 'Marine'), 'Frag Grenade');
+    await openPage(w, tac, SQUAD);
+    expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo split' }));
+
+    await waitFor(async () => expect(await savedModels()).toEqual([[3, undefined]]));
+    expect((await storedUnit())?.children[0]?.children).toEqual([]);
   });
 
   it('a named model offers no Merge into its twin', async () => {
@@ -444,12 +508,17 @@ describe('UnitEditor', () => {
   });
 
   it('trims the spaces around a name', async () => {
-    await openSquad([1]);
+    await openSquad([1, 1]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
     nameAs('  Brother Kael  ');
 
-    await waitFor(async () => expect(await savedModels()).toEqual([[1, 'Brother Kael']]));
+    await waitFor(async () =>
+      expect(await savedModels()).toEqual([
+        [1, undefined],
+        [1, 'Brother Kael'],
+      ]),
+    );
   });
 
   it('a name of only spaces takes the name off a unit with no saved unit', async () => {
@@ -473,6 +542,7 @@ describe('UnitEditor', () => {
     const w = world(unit('tac', 'Tactical Squad', 100, children(MARINE, banner)));
     const tac = w.add('Tactical Squad');
     w.pick(tac, 'Marine', 2);
+    w.pick(tac, 'Marine');
     w.pick(tac, 'Banner');
     render(
       <UnitEditor
@@ -482,7 +552,7 @@ describe('UnitEditor', () => {
       />,
     );
 
-    expect(rows()).toEqual(['2× Marine', 'Banner']);
+    expect(rows()).toEqual(['2× Marine', '1× Marine', 'Banner']);
     expect(screen.queryAllByRole('button', { name: /^Rename/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
       'Rename unit',
       'Rename model',
@@ -493,6 +563,7 @@ describe('UnitEditor', () => {
     const w = world(SQUAD);
     const tac = w.add('Tactical Squad');
     w.pick(tac, 'Marine', 2);
+    w.pick(tac, 'Marine');
     const page = (scratch: boolean) =>
       render(
         <UnitEditor
