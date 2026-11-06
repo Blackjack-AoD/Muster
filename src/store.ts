@@ -293,20 +293,28 @@ function relinkCopy(s: Sel, ids: ReadonlyMap<string, string>) {
   else unlinkCopy(s);
 }
 
+/**
+ * Stores a backup's saved units, each under a new id when its own is taken.
+ * Returns, by the id a restored copy holds, the id of its saved unit on this phone.
+ */
+async function restoreSavedUnits(units: readonly SavedUnit[]): Promise<ReadonlyMap<string, string>> {
+  const ids = new Map(state.savedUnits.map((u) => [u.id, u.id]));
+  for (const u of units) {
+    const copy = copySavedUnit(u);
+    if (state.savedUnits.some((x) => x.id === copy.id)) copy.id = uid();
+    ids.set(u.id, copy.id);
+    await db.putSavedUnit(copy);
+  }
+  return ids;
+}
+
 /** Returns how many lists and saved units it restored. Anything that isn't one is skipped. */
 export async function importBackup(
   list: readonly unknown[],
   units: readonly unknown[] = [],
 ): Promise<{ lists: number; savedUnits: number }> {
   const savedUnits = units.filter(isSavedUnit);
-  // a backup's saved-unit id, to its id on this phone
-  const ids = new Map(state.savedUnits.map((u) => [u.id, u.id]));
-  for (const u of savedUnits) {
-    const copy = copySavedUnit(u);
-    if (state.savedUnits.some((x) => x.id === copy.id)) copy.id = uid();
-    ids.set(u.id, copy.id);
-    await db.putSavedUnit(copy);
-  }
+  const ids = await restoreSavedUnits(savedUnits);
   const lists = list.filter(isRoster);
   for (const r of lists) {
     const copy = copyRoster(r);
