@@ -361,7 +361,7 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
     const saved = structuredClone(loc.sel);
     const forceUid = loc.force.uid;
     ctl.mutate((r) => removeSel(r, u.sel.uid));
-    toast(`Removed ${u.eff.name}`, {
+    toast(`Removed ${displayName(u)}`, {
       label: 'Undo',
       run: () =>
         ctl.mutate((r) => {
@@ -493,6 +493,7 @@ function PickRow({
   pts,
   refused,
   added,
+  swipeLabel,
   onTap,
   onSwipe,
 }: {
@@ -501,6 +502,7 @@ function PickRow({
   /** why it can't be added, shown in place of the price */
   refused?: string;
   added: number;
+  swipeLabel: string;
   onTap: () => void;
   onSwipe: () => void;
 }) {
@@ -508,7 +510,7 @@ function PickRow({
   return (
     <div class={'pick-swipe' + (dx ? ' active' : '')}>
       <div class={'ps-bg' + (dx >= SWIPE ? ' armed' : '')} aria-hidden="true">
-        <Icon name="plus" size={18} /> Add with standard options
+        <Icon name="plus" size={18} /> {swipeLabel}
       </div>
       <button
         class={'pick' + (dx ? ' dragging' : '')}
@@ -609,6 +611,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
                   name={unit.name}
                   pts={tried.pts}
                   added={0}
+                  swipeLabel="Add saved build"
                   onTap={() => openSaved(unit)}
                   onSwipe={() => addSaved(unit)}
                 />
@@ -619,6 +622,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
                   pts={0}
                   refused={tried.refused}
                   added={0}
+                  swipeLabel="Add saved build"
                   onTap={() => {}}
                   onSwipe={() => {}}
                 />
@@ -629,9 +633,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
       )}
       {!shown.length && !savedShown.length && <p class="muted pad">Nothing available{q ? ' matching that' : ''}.</p>}
       {shown.length + savedShown.length > 0 && (
-        <p class="muted small pad-x pick-hint">
-          Tap to add and open a unit. Swipe right to add it with its standard options.
-        </p>
+        <p class="muted small pad-x pick-hint">Tap to add and open a unit. Swipe right to add it and stay here.</p>
       )}
       {[...groups].map(([c, items]) => (
         <div key={c}>
@@ -643,6 +645,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
                 name={eff.name}
                 pts={startPts(rf, o, eff, pt)}
                 added={quick[o.key] ?? 0}
+                swipeLabel="Add with standard options"
                 onTap={() => add(o, oc)}
                 onSwipe={() => quickAdd(o, oc)}
               />
