@@ -41,6 +41,7 @@ import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
+import { PreconfiguredView } from './Preconfigured';
 import { rosterText, shareText } from './exporter';
 
 export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
@@ -98,6 +99,7 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
   const { roster, ev } = ctl;
   const repos = useStore((s) => s.repos);
   const [sheet, setSheet] = useState<null | 'menu' | 'issues' | 'force' | { forceUid: string; cat?: string }>(null);
+  const [view, setView] = useState<'foc' | 'preconfigured'>('foc');
   const errors = ev.issues.filter((i) => i.level === 'error');
   const warns = ev.issues.filter((i) => i.level === 'warn');
   const pct = roster.costLimit > 0 ? Math.min(100, (ev.total / roster.costLimit) * 100) : 0;
@@ -120,6 +122,9 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
       <div class="sum-bar">
         <div class="sum-row">
           <Pts v={ev.total} limit={roster.costLimit} />
+          <button class="view-toggle" onClick={() => setView(view === 'foc' ? 'preconfigured' : 'foc')}>
+            {view === 'foc' ? 'Preconfigured' : 'FoC'}
+          </button>
           <button
             class={'chip ' + (errors.length ? 'bad' : warns.length ? 'warn' : 'good')}
             onClick={() => setSheet('issues')}
@@ -139,15 +144,25 @@ function RosterBody({ ctl }: { ctl: RosterCtl }) {
         )}
       </div>
 
-      {ev.forces.map((rf) => (
-        <ForceBlock key={rf.force.uid} ctl={ctl} rf={rf} onAdd={(cat) => setSheet({ forceUid: rf.force.uid, cat })} />
-      ))}
-
-      <div class="pad">
-        <button class="btn ghost wide" onClick={() => setSheet('force')}>
-          <Icon name="plus" /> Add detachment
-        </button>
-      </div>
+      {view === 'preconfigured' ? (
+        <PreconfiguredView ctl={ctl} />
+      ) : (
+        <>
+          {ev.forces.map((rf) => (
+            <ForceBlock
+              key={rf.force.uid}
+              ctl={ctl}
+              rf={rf}
+              onAdd={(cat) => setSheet({ forceUid: rf.force.uid, cat })}
+            />
+          ))}
+          <div class="pad">
+            <button class="btn ghost wide" onClick={() => setSheet('force')}>
+              <Icon name="plus" /> Add detachment
+            </button>
+          </div>
+        </>
+      )}
 
       {sheet === 'issues' && <IssuesSheet issues={ev.issues} ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'menu' && <MenuSheet ctl={ctl} onClose={() => setSheet(null)} />}
@@ -300,7 +315,7 @@ export function unitSummary(u: RSel): string {
     .join(' · ');
 }
 
-const isUnitLike = (o: Opt) => o.node.type === 'unit' || o.node.type === 'model';
+export const isUnitLike = (o: Opt) => o.node.type === 'unit' || o.node.type === 'model';
 
 function visibleOpts(ev: Evaluator, rs: RSel) {
   return rs.force.ctx.options(rs.node).filter((o) => {
@@ -315,7 +330,7 @@ function silentSetup(_ev: Evaluator, rs: RSel) {
 }
 
 /** room for another of this root option in the force (its own max, ignoring category limits) */
-function roomFor(ev: Evaluator, o: Opt, rf: RForce) {
+export function roomFor(ev: Evaluator, o: Opt, rf: RForce) {
   const e = ev.optionEff(o, null, rf);
   if (e.hidden || unavailable(e)) return false;
   const have = rf.roots.filter((r) => r.opt.key === o.key).reduce((t, r) => t + r.sel.number, 0);
@@ -485,18 +500,18 @@ function UnitRow({ ctl, u }: { ctl: RosterCtl; u: RSel }) {
 }
 
 /** price shown before adding: the unit with its standard models and gear (own cost after modifiers) */
-function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: string) {
+export function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: string) {
   const base = o.node.costs.find((c) => c.typeId === pt)?.value ?? 0;
   return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
 }
 
 /** What a saved row shows in place of its points when the list refuses it. */
-const REFUSED = { 'already-in-list': 'Added', 'unit-gone': 'No longer in the data' } as const;
+export const REFUSED = { 'already-in-list': 'Added', 'unit-gone': 'No longer in the data' } as const;
 
-const droppedMessage = (n: number) =>
+export const droppedMessage = (n: number) =>
   n === 1 ? '1 option is no longer in the data' : `${n} options are no longer in the data`;
 
-function PickRow({
+export function PickRow({
   name,
   sub,
   pts,
@@ -568,7 +583,8 @@ function RefusedRow({ name, reason }: { name: string; reason: string }) {
 }
 
 /** The uid of the first copy of saved unit `id` in a list, if it holds one. */
-const heldCopy = (r: Roster, id: string) => r.forces.flatMap((f) => f.selections).find((s) => s.saved === id)?.uid;
+export const heldCopy = (r: Roster, id: string) =>
+  r.forces.flatMap((f) => f.selections).find((s) => s.saved === id)?.uid;
 
 function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; cat?: string; onClose: () => void }) {
   const [q, setQ] = useState('');

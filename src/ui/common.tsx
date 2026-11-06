@@ -134,7 +134,12 @@ export function Sheet({
   }, []);
   return (
     <div class="sheet-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div class={'sheet' + (full ? ' full' : '')} role="dialog" aria-modal="true">
+      <div
+        class={'sheet' + (full ? ' full' : '')}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+      >
         <div class="sheet-head">
           <h2>{title}</h2>
           <button class="icon-btn" aria-label="Close" onClick={onClose}>

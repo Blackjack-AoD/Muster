@@ -12,6 +12,7 @@ import {
   SWORD,
   children,
   entry,
+  present,
   sergeant,
   unit,
   world,
@@ -787,6 +788,109 @@ describe('RosterView', () => {
         ['Squad Iron', 'Tactical Squad'],
         ['Tactical Squad', undefined],
       ]);
+    });
+
+    describe('army-wide Preconfigured page', () => {
+      const MELTA = saved('melta', '', sel('tac', [sel('sgt', [sel('fist')])]), { kind: 'preconfigured' });
+      /** CATEGORIES with at most 1 HQ in a detachment. */
+      const ONE_HQ = {
+        gst: CATEGORIES.gst.replace(
+          '<categoryLink id="det-hq" name="HQ" targetId="hq" primary="false"/>',
+          `<categoryLink id="det-hq" name="HQ" targetId="hq" primary="false">
+            <constraints><constraint id="hq-max" type="max" field="selections" scope="force" value="1"/></constraints>
+          </categoryLink>`,
+        ),
+      };
+      const toggle = () => screen.getByRole('button', { name: /^(Preconfigured|FoC)$/ });
+      const pageRows = () =>
+        [...screen.getByRole('group', { name: 'Saved units' }).querySelectorAll('.pick')].map((row) => [
+          row.querySelector('b')?.textContent,
+          row.querySelector('.pick-pts')?.textContent,
+        ]);
+      const pageRow = (name: RegExp) =>
+        within(screen.getByRole('group', { name: 'Saved units' })).getByRole('button', { name });
+      const openPage = async (w: ReturnType<typeof world>, units: readonly SavedUnit[], data = CATEGORIES) => {
+        for (const u of units) await db.putSavedUnit(u);
+        await openList(w, SAVED_UNITS, data);
+        fireEvent.click(toggle());
+      };
+
+      it('switches between the force org and the saved units, and its button names the other view', async () => {
+        await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
+        expect(toggle().textContent).toBe('FoC');
+        expect(screen.queryByRole('button', { name: 'Add detachment' })).toBeNull();
+
+        fireEvent.click(toggle());
+
+        expect(toggle().textContent).toBe('Preconfigured');
+        expect(screen.getByRole('button', { name: 'Add detachment' })).not.toBeNull();
+      });
+
+      it("lists every saved unit of the list's army, by name, with how many copies the list holds", async () => {
+        const w = world(SAVED_UNITS, CATEGORIES);
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', MELTA)).toMatchObject({ added: true });
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', MELTA)).toMatchObject({ added: true });
+        const other = saved('far', 'Lord Far Away', sel('captain'), { catalogueId: 'other' });
+        await openPage(w, [SQUAD, LORD, MELTA, other]);
+
+        expect(pageRows()).toEqual([
+          ['Lord Thrax', '100'],
+          ['Squad Iron', '135'],
+          ['Tactical Squad', '135 ×2'],
+        ]);
+      });
+
+      it('adds a unit to the only detachment with room on a tap, and opens it', async () => {
+        await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
+
+        fireEvent.click(pageRow(/Lord Thrax/));
+
+        await waitFor(async () => expect((await storedRoots()).map((s) => s.saved)).toEqual(['lord']));
+        const [copy] = await storedRoots();
+        expect(location.hash).toBe(`#/r/r/u/${copy?.uid}`);
+      });
+
+      it('asks which detachment when more than 1 has room, and adds it to the one picked', async () => {
+        const w = world(SAVED_UNITS, CATEGORIES);
+        w.addForce('f2');
+        await openPage(w, [MELTA]);
+
+        drag(pageRow(/Tactical Squad/), [[SWIPE, 0]]);
+        const picker = await screen.findByRole('dialog', { name: 'Add to which detachment?' });
+        const choices = within(picker).getAllByRole('button', { name: /^Detachment/ });
+        expect(choices).toHaveLength(2);
+        fireEvent.click(present(choices[1], 'the second detachment'));
+
+        await waitFor(async () =>
+          expect((await db.rosters())[0]?.forces.map((f) => f.selections.map((s) => s.saved))).toEqual([[], ['melta']]),
+        );
+      });
+
+      it('greys out a unit with no room in any detachment, and adds nothing', async () => {
+        const w = world(SAVED_UNITS, CATEGORIES);
+        w.add('Captain');
+        await openPage(w, [LORD], ONE_HQ);
+
+        expect(pageRows()).toEqual([['Lord Thrax', 'No room']]);
+        fireEvent.click(pageRow(/Lord Thrax/));
+
+        expect((await storedRoots()).map((s) => s.saved)).toEqual([undefined]);
+      });
+
+      it('adds any unit of the data from its + button, found by searching', async () => {
+        await openPage(world(SAVED_UNITS, CATEGORIES), []);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Add a unit' }));
+        const sheet = await screen.findByRole('dialog', { name: 'Add unit' });
+        fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'tact' } });
+        expect(offered(sheet)).toEqual(['Tactical Squad']);
+        fireEvent.click(within(sheet).getByRole('button', { name: /Tactical Squad/ }));
+
+        await waitFor(async () => expect((await storedRoots()).map((s) => s.key)).toEqual(['tac']));
+        const [added] = await storedRoots();
+        expect(added?.categoryId).toBe('troops');
+        expect(location.hash).toBe(`#/r/r/u/${added?.uid}`);
+      });
     });
 
     describe('Preconfigured tab', () => {
