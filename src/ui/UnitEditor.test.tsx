@@ -375,15 +375,15 @@ describe('UnitEditor', () => {
   });
 
   it('More adds a model to the biggest unnamed row', async () => {
-    await openSquad([1, 3, 1], { 0: 'Brother Kael' });
+    await openSquad([1, 1, 3], { 0: 'Brother Kael' });
 
     fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
 
     await waitFor(async () =>
       expect(await savedModels()).toEqual([
         [1, 'Brother Kael'],
-        [4, undefined],
         [1, undefined],
+        [4, undefined],
       ]),
     );
   });
@@ -441,6 +441,52 @@ describe('UnitEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fewer Marine' }));
 
     await waitFor(async () => expect(await savedModels()).toEqual([[3, undefined]]));
+  });
+
+  it('trims the spaces around a name', async () => {
+    await openSquad([1]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    nameAs('  Brother Kael  ');
+
+    await waitFor(async () => expect(await savedModels()).toEqual([[1, 'Brother Kael']]));
+  });
+
+  it('a name of only spaces takes the name off a unit with no saved unit', async () => {
+    const w = world(UNITS, { costLimit: 2000 });
+    const tac = w.add('Tactical Squad');
+    const root = w.roster.forces[0]?.selections[0];
+    if (root) root.name = 'Squad Thrax';
+    openHash(`#/r/r/u/${tac}`);
+    await renderScreen(<App />, { files: worldFiles(UNITS), rosters: [w.roster] });
+    await screen.findByRole('heading', { name: 'Squad Thrax' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    nameAs('   ');
+
+    await waitFor(async () => expect(await savedUnit()).not.toHaveProperty('name'));
+    expect(title()).toBe('Tactical Squad');
+  });
+
+  it('offers no rename on a row that is not a model', () => {
+    const banner = entry('banner', 'Banner', 5, children(GRENADE));
+    const w = world(unit('tac', 'Tactical Squad', 100, children(MARINE, banner)));
+    const tac = w.add('Tactical Squad');
+    w.pick(tac, 'Marine', 2);
+    w.pick(tac, 'Banner');
+    render(
+      <UnitEditor
+        ctl={{ roster: w.roster, contexts: w.contexts, ev: w.ev(), mutate: () => {}, scratch: false }}
+        selUid={tac}
+        backTo="/"
+      />,
+    );
+
+    expect(rows()).toEqual(['2× Marine', 'Banner']);
+    expect(screen.queryAllByRole('button', { name: /^Rename/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Rename unit',
+      'Rename model',
+    ]);
   });
 
   it('offers renaming in a list, and none in a read-only preview', () => {

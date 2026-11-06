@@ -651,6 +651,9 @@ describe('RosterView', () => {
       fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'iron' } });
 
       expect(savedOffered(sheet)).toEqual([['Squad Iron', '135']]);
+      expect(offered(sheet)).toEqual(['Squad Iron']);
+      expect(within(sheet).queryByText(/Nothing available/)).toBeNull();
+      expect(sheet.querySelector('.pick-hint')).not.toBeNull();
     });
 
     it('adds a saved unit on a tap and opens its unit page', async () => {
