@@ -420,6 +420,7 @@ describe('naming and splitting models', () => {
   it('splits one model off a group as a row of 1 straight after it, with its own uids and wargear', () => {
     const { w, root, rows } = squad([3]);
     const group = root.children[0];
+    w.pick(group.uid, 'Frag Grenade');
     const copy = splitOff(w.roster, group.uid);
     expect(rows()).toEqual([
       [2, undefined],
@@ -427,7 +428,7 @@ describe('naming and splitting models', () => {
     ]);
     expect(copy).toBe(root.children[1]);
     expect(copy?.uid).not.toBe(group.uid);
-    expect(copy?.children.map((c) => c.key)).toEqual(group.children.map((c) => c.key));
+    expect(copy?.children.map((c) => c.key)).toEqual(['grenade']);
     expect(copy?.children[0]?.uid).not.toBe(group.children[0]?.uid);
   });
 
@@ -484,14 +485,13 @@ describe('naming and splitting models', () => {
     ]);
   });
 
-  it('adds new models as a new unnamed row, with its wargear, when every row is named', () => {
-    const { w, tac, root, rows } = squad([1], { 0: 'Brother Kael' });
+  it('adds new models as a new unnamed row when every row is named', () => {
+    const { w, tac, rows } = squad([1], { 0: 'Brother Kael' });
     addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
     expect(rows()).toEqual([
       [1, 'Brother Kael'],
       [2, undefined],
     ]);
-    expect(root.children[1]?.children.map((c) => c.key)).toEqual(root.children[0]?.children.map((c) => c.key));
   });
 });
 

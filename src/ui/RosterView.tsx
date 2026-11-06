@@ -11,6 +11,7 @@ import {
   issuesOn,
   locate,
   removeSel,
+  tryAddSaved,
   uid,
   unavailable,
   type AddSavedResult,
@@ -466,26 +467,8 @@ function startPts(rf: RForce, o: Opt, eff: { costs: Map<string, number> }, pt: s
   return rf.ctx.startCost(o.node, pt) - base + (eff.costs.get(pt) ?? 0);
 }
 
-/**
- * What adding a saved unit to this detachment would do, tried on a copy of the list:
- * its price, why its row can't add it, or null when it isn't offered here at all.
- */
-function trySaved(ctl: RosterCtl, rf: RForce, unit: SavedUnit): { pts: number } | { refused: string } | null {
-  const copy = structuredClone(ctl.roster);
-  const res = addSavedUnit(copy, ctl.contexts, rf.force.uid, unit);
-  if (res.added) return { pts: new Evaluator(copy, ctl.contexts).find(res.uid)?.total ?? 0 };
-  switch (res.reason) {
-    case 'already-in-list':
-      return { refused: 'Added' };
-    case 'unit-gone':
-      return { refused: 'No longer in the data' };
-    case 'no-detachment':
-    case 'other-army-file':
-      return null;
-    default:
-      return res.reason satisfies never;
-  }
-}
+/** What a saved row shows in place of its points when the list refuses it. */
+const REFUSED = { 'already-in-list': 'Added', 'unit-gone': 'No longer in the data' } as const;
 
 const droppedMessage = (n: number) =>
   n === 1 ? '1 option is no longer in the data' : `${n} options are no longer in the data`;
@@ -554,7 +537,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
       savedUnits
         .filter((u) => !cat || u.categoryId === cat)
         .flatMap((unit) => {
-          const tried = trySaved(ctl, rf, unit);
+          const tried = tryAddSaved(ctl.roster, ctl.contexts, rf.force.uid, unit);
           return tried ? [{ unit, tried }] : [];
         }),
     [savedUnits, rf, cat, ctl.ev],
@@ -607,7 +590,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
           <div class="list-label">Saved</div>
           <div class="pick-list" role="group" aria-label="Saved units">
             {savedShown.map(({ unit, tried }) =>
-              'pts' in tried ? (
+              tried.added ? (
                 <PickRow
                   key={unit.id}
                   name={unit.name}
@@ -622,7 +605,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
                   key={unit.id}
                   name={unit.name}
                   pts={0}
-                  refused={tried.refused}
+                  refused={REFUSED[tried.reason]}
                   added={0}
                   swipeLabel="Add saved build"
                   onTap={() => {}}

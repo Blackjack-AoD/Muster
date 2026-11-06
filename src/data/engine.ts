@@ -979,29 +979,67 @@ export function linkCopy(sel: Sel, unit: Pick<SavedUnit, 'id' | 'name'>): void {
 }
 
 /** Takes one model off a group of 2 or more, as a row of its own after it, and returns that row. */
-export function splitOff(_roster: Roster, _selUid: string): Sel | null {
-  return null;
+export function splitOff(roster: Roster, selUid: string): Sel | null {
+  const loc = locate(roster, selUid);
+  if (!loc || loc.sel.number < 2) return null;
+  loc.sel.number--;
+  const copy = duplicateSel(roster, selUid);
+  if (copy) copy.number = 1;
+  return copy;
 }
 
-/** The name to set when the player names a selection `given`, or undefined to clear it. */
-export function nameToSet(_rs: RSel, _given: string | undefined): string | undefined {
-  return undefined;
+/**
+ * The name to set when the player names a selection `given`, or undefined to clear it.
+ * A saved unit always has a name, so clearing a linked copy's name gives it the data name.
+ */
+export function nameToSet(rs: RSel, given: string | undefined): string | undefined {
+  return given ?? (rs.sel.saved !== undefined ? rs.eff.name : undefined);
 }
 
-/** Sets or, with undefined, clears a unit's or model's name. */
-export function nameSel(_roster: Roster, _selUid: string, _name: string | undefined): void {}
+/** Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone. */
+export function nameSel(roster: Roster, selUid: string, name: string | undefined): void {
+  const loc = locate(roster, selUid);
+  if (!loc) return;
+  const model = loc.list !== loc.force.selections;
+  const target = name !== undefined && model ? (splitOff(roster, selUid) ?? loc.sel) : loc.sel;
+  if (name === undefined) delete target.name;
+  else target.name = name;
+}
 
-/** Adds n models of option `o` under a unit. */
-export function addModels(_roster: Roster, _contexts: Map<string, Context>, _rs: RSel, _o: Opt, _n: number): void {}
+/**
+ * Adds n models of option `o` under unit `rs`. New models join the biggest unnamed row, copying its wargear.
+ * With no unnamed row, they get a new one, as a named row holds 1.
+ */
+export function addModels(roster: Roster, contexts: Map<string, Context>, rs: RSel, o: Opt, n: number): void {
+  const rows = locate(roster, rs.sel.uid)?.sel.children.filter((c) => c.key === o.key && c.name === undefined) ?? [];
+  const biggest = rows.reduce<Sel | undefined>((a, c) => (a && a.number >= c.number ? a : c), undefined);
+  if (biggest) biggest.number += n;
+  else addSel(roster, contexts, rs.force.force.uid, rs.sel.uid, o, n);
+}
 
-/** What adding a saved unit to a detachment would do, tried on a copy of the list. */
+/** What adding a saved unit would do: its points, why the list refuses it, or null when the detachment doesn't offer it. */
+export type SavedTry = { added: true; pts: number } | { added: false; reason: 'already-in-list' | 'unit-gone' } | null;
+
+/** Tries adding a saved unit to a detachment on a copy of the list, which it leaves as it is. */
 export function tryAddSaved(
-  _roster: Roster,
-  _contexts: Map<string, Context>,
-  _forceUid: string,
-  _unit: SavedUnit,
-): { added: true; pts: number } | { added: false; reason: 'already-in-list' | 'unit-gone' } | null {
-  return null;
+  roster: Roster,
+  contexts: Map<string, Context>,
+  forceUid: string,
+  unit: SavedUnit,
+): SavedTry {
+  const copy = structuredClone(roster);
+  const res = addSavedUnit(copy, contexts, forceUid, unit);
+  if (res.added) return { added: true, pts: new Evaluator(copy, contexts).find(res.uid)?.total ?? 0 };
+  switch (res.reason) {
+    case 'already-in-list':
+    case 'unit-gone':
+      return { added: false, reason: res.reason };
+    case 'no-detachment':
+    case 'other-army-file':
+      return null;
+    default:
+      return res.reason satisfies never;
+  }
 }
 
 /** Makes a copy of a saved unit a normal unit: it keeps its build and loses the link and the name. */

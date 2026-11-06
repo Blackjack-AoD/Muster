@@ -2,15 +2,18 @@ import { useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
 import {
+  addModels,
   addSel,
   displayName,
   duplicateSel,
   issuesOn,
   linkCopy,
   locate,
+  nameSel,
+  nameToSet,
   removeSel,
+  splitOff,
   unavailable,
-  type Roster,
   type RSel,
   type Sel,
 } from '../data/engine';
@@ -335,16 +338,9 @@ function swapIn(ctl: RosterCtl, rs: RSel, o: Opt, newCount: number) {
     if (v.number > 1) v.number--;
     else parent.children = parent.children.filter((c) => c !== v);
     const mine = parent.children.filter((c) => c.key === o.key);
-    if (mine.length) addModels(r, ctl, rs, o, mine, 1);
+    if (mine.length) addModels(r, ctl.contexts, rs, o, 1);
     else addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, newCount);
   });
-}
-
-/** New models join the biggest unnamed row, copying its wargear. A named row holds 1, so with none they get a new row. */
-function addModels(r: Roster, ctl: RosterCtl, rs: RSel, o: Opt, mine: Sel[], n: number) {
-  const unnamed = mine.filter((c) => c.name === undefined);
-  if (unnamed.length) unnamed.reduce((a, c) => (c.number > a.number ? c : a)).number += n;
-  else addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, n);
 }
 
 function costLabel(v: number | undefined, each = false) {
@@ -370,7 +366,7 @@ function setCount(ctl: RosterCtl, rs: RSel, o: Opt, n: number) {
     if (mine.length) {
       let diff = n - mine.reduce((t, c) => t + c.number, 0);
       if (diff > 0) {
-        addModels(r, ctl, rs, o, mine, diff);
+        addModels(r, ctl.contexts, rs, o, diff);
         return;
       }
       // fewer: take from split-off rows first (the latest), then the main group
@@ -551,7 +547,7 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
     <Sheet
       title={title}
       onClose={() => {
-        nameSel(ctl, rs, name.trim() || undefined);
+        rename(ctl, rs, name.trim() || undefined);
         onClose();
       }}
     >
@@ -564,7 +560,7 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
       <div class="menu">
         <button
           onClick={() => {
-            nameSel(ctl, rs, undefined);
+            rename(ctl, rs, undefined);
             onClose();
           }}
         >
@@ -623,30 +619,10 @@ function splitOne(ctl: RosterCtl, rs: RSel) {
   ctl.mutate((r) => splitOff(r, rs.sel.uid));
 }
 
-/** Takes one model off a group of 2 or more, as a row of its own after it, and returns that row. */
-function splitOff(r: Roster, selUid: string): Sel | null {
-  const loc = locate(r, selUid);
-  if (!loc || loc.sel.number < 2) return null;
-  loc.sel.number--;
-  const copy = duplicateSel(r, selUid);
-  if (copy) copy.number = 1;
-  return copy;
-}
-
-/**
- * Sets or, with undefined, clears a unit's or model's name. A model in a group is split off first and named alone.
- * A saved unit always has a name, so clearing a linked copy's gives it the data name.
- */
-function nameSel(ctl: RosterCtl, rs: RSel, given: string | undefined) {
-  const name = given ?? (rs.sel.saved !== undefined ? rs.eff.name : undefined);
-  if (name === rs.sel.name) return;
-  ctl.mutate((r) => {
-    const own = locate(r, rs.sel.uid)?.sel;
-    const target = name !== undefined && rs.parent ? (splitOff(r, rs.sel.uid) ?? own) : own;
-    if (!target) return;
-    if (name === undefined) delete target.name;
-    else target.name = name;
-  });
+/** Names a unit or model, or with undefined clears it, in one edit. A name left as it was saves nothing. */
+function rename(ctl: RosterCtl, rs: RSel, given: string | undefined) {
+  const name = nameToSet(rs, given);
+  if (name !== rs.sel.name) ctl.mutate((r) => nameSel(r, rs.sel.uid, name));
 }
 
 function mergeInto(ctl: RosterCtl, rs: RSel, into: RSel) {
