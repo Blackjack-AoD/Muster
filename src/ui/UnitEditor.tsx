@@ -4,6 +4,7 @@ import type { Opt } from '../data/catalog';
 import {
   addModels,
   addSel,
+  canNameModel,
   displayName,
   duplicateSel,
   issuesOn,
@@ -14,6 +15,7 @@ import {
   removeSel,
   splitOff,
   unavailable,
+  unsplit,
   type RSel,
   type Sel,
 } from '../data/engine';
@@ -243,7 +245,22 @@ export function limitText(min: number, max: number) {
   return '';
 }
 
-function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; depth: number }) {
+/** A pick-one group, and whether a choice in it is required: every option inside it, at any depth, is one choice. */
+type PickOne = { g: Opt; required: boolean };
+
+function GroupBlock({
+  ctl,
+  rs,
+  g,
+  depth,
+  pickOne,
+}: {
+  ctl: RosterCtl;
+  rs: RSel;
+  g: Opt;
+  depth: number;
+  pickOne?: PickOne;
+}) {
   const { ev } = ctl;
   const eff = ev.optionEff(g, rs, rs.force);
   const chosen = ev.selected(g, rs, rs.force);
@@ -261,7 +278,7 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
     }),
   );
   if (pair) return <ToggleRow ctl={ctl} rs={rs} g={g} pair={pair} />;
-  const radio = max === 1 && g.members.every((m) => m.kind === 'entry');
+  const oneOf = pickOne ?? (max === 1 ? { g, required: min >= 1 } : undefined);
   // a group of On/Off switches needs no "· n" count
   const allSwitches = g.members.length > 0 && g.members.every((m) => m.kind === 'group' && onOffPair(m.members));
   const bad = (min > 0 && n < min) || (max >= 0 && n > max);
@@ -277,11 +294,15 @@ function GroupBlock({ ctl, rs, g, depth }: { ctl: RosterCtl; rs: RSel; g: Opt; d
         <Icon name={open ? 'down' : 'chev'} size={16} />
       </button>
       {open &&
-        (radio ? (
+        (oneOf ? (
           <div class="opts">
-            {g.members.map((m) => (
-              <RadioRow key={m.key} ctl={ctl} rs={rs} g={g} o={m} required={min >= 1} depth={depth} />
-            ))}
+            {g.members.map((m) =>
+              m.kind === 'group' ? (
+                <GroupBlock key={m.key} ctl={ctl} rs={rs} g={m} depth={depth} pickOne={oneOf} />
+              ) : (
+                <RadioRow key={m.key} ctl={ctl} rs={rs} g={oneOf.g} o={m} required={oneOf.required} depth={depth} />
+              ),
+            )}
           </div>
         ) : (
           <OptList ctl={ctl} rs={rs} opts={g.members} depth={depth} />
@@ -502,6 +523,8 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
     rs.sel.name === undefined
       ? siblings.slice(0, siblings.indexOf(rs)).find((c) => c.sel.name === undefined && sameGear(c.sel, rs.sel))
       : undefined;
+  // a split-off row whose wargear differs can go back into the main row, taking that row's wargear
+  const undoable = !twin && siblings.slice(0, siblings.indexOf(rs)).some((c) => c.sel.name === undefined);
   const n = rs.sel.number;
   return (
     <div class="subopts">
@@ -514,7 +537,7 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
           </span>
           {rs.total ? <span class="o-pts">{fmtN(rs.total)}</span> : null}
         </button>
-        {rs.node.type === 'model' && !ctl.scratch && (
+        {canNameModel(rs) && !ctl.scratch && (
           <button class="icon-btn sm" aria-label="Rename model" onClick={() => setNaming(true)}>
             <Icon name="edit" size={16} />
           </button>
@@ -531,6 +554,15 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
             onClick={() => mergeInto(ctl, rs, twin)}
           >
             Merge
+          </button>
+        )}
+        {undoable && !ctl.scratch && (
+          <button
+            class="mini"
+            title="Put this model back in the main group, with its wargear"
+            onClick={() => ctl.mutate((r) => unsplit(r, rs.sel.uid))}
+          >
+            Undo split
           </button>
         )}
       </div>

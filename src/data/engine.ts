@@ -359,6 +359,7 @@ export class Evaluator {
       const detachments = inScope.filter((f) => f.force.forceEntryId === c.childId).length;
       if (detachments) return detachments;
     }
+    if (this.countsListPoints(c)) return this.roster.costLimit;
     const containers = this.scopeContainers(c.scope, w);
     const deep =
       c.includeChildSelections || c.scope === 'force' || c.scope === 'roster' ? c.includeChildSelections : false;
@@ -370,6 +371,17 @@ export class Evaluator {
       return all ? (total / all) * 100 : 0;
     }
     return total;
+  }
+
+  /** Rules on the points in the whole list are about the game's size, so a list with a points limit counts that. */
+  private countsListPoints(c: Condition | Repeat): boolean {
+    return (
+      this.roster.costLimit > 0 &&
+      c.scope === 'roster' &&
+      c.childId === 'any' &&
+      c.field === this.pointsTypeId &&
+      !c.percentValue
+    );
   }
 
   private scopeContainers(scope: string, w: Where): RSel[][] {
@@ -988,14 +1000,35 @@ export function splitOff(roster: Roster, selUid: string): Sel | null {
   return copy;
 }
 
-/** Puts a split-off row back into the first unnamed row of its model before it. False when there's none. */
-export function unsplit(_roster: Roster, _selUid: string): boolean {
-  return false;
+/** Puts a split-off row back into the first unnamed row of its model before it, which keeps its own wargear. */
+export function unsplit(roster: Roster, selUid: string): boolean {
+  const loc = locate(roster, selUid);
+  if (!loc) return false;
+  const before = loc.list.slice(0, loc.list.indexOf(loc.sel));
+  const main = before.find((s) => s.key === loc.sel.key && s.name === undefined);
+  if (!main) return false;
+  main.number += loc.sel.number;
+  loc.list.splice(loc.list.indexOf(loc.sel), 1);
+  return true;
+}
+
+/** The model holding most of a unit's models, as its option key; undefined when two models tie for the most. */
+function bulkModelKey(unit: RSel): string | undefined {
+  const counts = new Map<string, number>();
+  for (const c of unit.children) {
+    if (c.node.type === 'model') counts.set(c.opt.key, (counts.get(c.opt.key) ?? 0) + c.sel.number);
+  }
+  const most = Math.max(...counts.values());
+  const top = [...counts].filter(([, n]) => n === most);
+  return top.length === 1 ? top[0][0] : undefined;
 }
 
 /** Whether a model row can take a name: any row but the main row of the squad's bulk model, or one already named. */
-export function canNameModel(_rs: RSel): boolean {
-  return false;
+export function canNameModel(rs: RSel): boolean {
+  if (rs.node.type !== 'model') return false;
+  if (rs.sel.name !== undefined || !rs.parent) return true;
+  const bulk = bulkModelKey(rs.parent);
+  return rs.parent.children.find((c) => c.opt.key === bulk && c.sel.name === undefined) !== rs;
 }
 
 /**
