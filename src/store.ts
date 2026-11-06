@@ -402,7 +402,7 @@ async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
 }
 
 /** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
-export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void> {
+export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<SavedUnit> {
   const loc = locate(r, rs.sel.uid);
   if (!loc || loc.list !== loc.force.selections) throw new Error('Only a unit of this list can be saved.');
   const { force, sel } = loc;
@@ -425,6 +425,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   sel.saved = saved.id;
   sel.name = name;
   saveEdit(r);
+  return saved;
 }
 
 /** Changes every copy of saved unit `id` in every list but `skip`, and saves each list that holds one as an edit. */

@@ -972,6 +972,9 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
   return copy;
 }
 
+/** Links a root unit to a saved unit, which gives it the saved unit's name. */
+export function linkCopy(_sel: Sel, _unit: Pick<SavedUnit, 'id' | 'name'>): void {}
+
 /** Makes a copy of a saved unit a normal unit: it keeps its build and loses the link and the name. */
 export function unlinkCopy(sel: Sel): void {
   delete sel.saved;

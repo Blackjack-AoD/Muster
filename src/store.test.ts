@@ -7,7 +7,9 @@ import {
   addSel,
   displayName,
   forceRootOptions,
+  linkCopy,
   uid as newUid,
+  type RSel,
   type Roster,
   type Sel,
 } from './data/engine';
@@ -545,7 +547,7 @@ describe('saved units', () => {
   };
 
   /** Runs `save` and returns the one saved unit it added. */
-  const addedBy = async (save: () => Promise<void>) => {
+  const addedBy = async (save: () => Promise<unknown>) => {
     const before = new Set(getState().savedUnits.map((u) => u.id));
     await save();
     const added = getState().savedUnits.filter((u) => !before.has(u.id));
@@ -553,11 +555,18 @@ describe('saved units', () => {
     return present(added[0], 'the saved unit');
   };
 
-  /** Saves the Tactical Squad of a new stored list, and returns the saved unit's id. */
+  /** Saves a unit as a saved unit, then links it in an edit to its list, as the unit page does. */
+  const saveAndLink = async (r: Roster, rs: RSel, name: string) => {
+    const saved = await saveUnit(r, rs, name);
+    await saveListEdit(r, () => linkCopy(savedIn(r, rs.sel.uid), saved));
+    return saved;
+  };
+
+  /** Saves the Tactical Squad of a new stored list, links it, and returns the saved unit's id. */
   const savedSquad = async (listUid: string, name: string) => {
     const { w, squad, rs } = listWithSquad(listUid);
     await saveRoster(w.roster);
-    const { id } = await addedBy(() => saveUnit(w.roster, rs, name));
+    const { id } = await addedBy(() => saveAndLink(w.roster, rs, name));
     return { roster: w.roster, squad, id };
   };
 
@@ -591,13 +600,24 @@ describe('saved units', () => {
     expect(await storedSavedUnit(id)).toMatchObject(expected);
   });
 
-  it('links the unit to its saved unit by id and name, in memory and storage', async () => {
+  it('returns the saved unit it stored, and leaves linking the unit to its caller', async () => {
     const { w, squad, rs } = listWithSquad('su2');
-    const { id } = await addedBy(() => saveUnit(w.roster, rs, 'Squad Thrax'));
-    const link = { uid: squad, saved: id, name: 'Squad Thrax' };
-    expect(savedIn(w.roster, squad)).toMatchObject(link);
-    expect(inMemory('su2')).toEqual([expect.objectContaining(link)]);
-    expect(await inStorage('su2')).toEqual([expect.objectContaining(link)]);
+    await saveRoster(w.roster);
+    const before = structuredClone(savedIn(w.roster, squad));
+
+    const saved = await saveUnit(w.roster, rs, 'Squad Thrax');
+
+    expect(saved).toEqual(savedUnit(saved.id));
+    expect(saved).toEqual(await storedSavedUnit(saved.id));
+    expect(savedIn(w.roster, squad)).toEqual(before);
+    expect(inMemory('su2')).toEqual([before]);
+  });
+
+  it('links a copy to its saved unit by id and name', () => {
+    const { w, squad } = listWithSquad('su8');
+    const copy = savedIn(w.roster, squad);
+    linkCopy(copy, { id: 'thrax', name: 'Squad Thrax' });
+    expect(copy).toMatchObject({ saved: 'thrax', name: 'Squad Thrax' });
   });
 
   it("keeps no name or link on the root of a saved unit's build, and keeps model names", async () => {
@@ -832,7 +852,7 @@ describe('saved units', () => {
       const { w: first, squad, rs } = listWithSquad('fa1');
       savedIn(first.roster, squad).children.push({ uid: newUid(), key: 'gone-banner', number: 1, children: [] });
       await saveRoster(first.roster);
-      const saved = await addedBy(() => saveUnit(first.roster, rs, 'Squad Thrax'));
+      const saved = await addedBy(() => saveAndLink(first.roster, rs, 'Squad Thrax'));
       await listWithCopy('fa2', saved.id, 'Squad Thrax');
       const before = {
         lists: structuredClone(getState().rosters.filter((r) => r.uid === 'fa1' || r.uid === 'fa2')),
@@ -923,8 +943,9 @@ describe('saved units', () => {
         async () => {
           const { w, rs } = listWithSquad('rt1');
           await saveRoster(w.roster);
+          const saved = await saveUnit(w.roster, rs, 'Squad Thrax');
           refuseLists();
-          await saveUnit(w.roster, rs, 'Squad Thrax');
+          await saveListEdit(w.roster, () => linkCopy(savedIn(w.roster, rs.sel.uid), saved));
           return { list: 'rt1', expected: { saved: expect.any(String), name: 'Squad Thrax' } };
         },
       ],
