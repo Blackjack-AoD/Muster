@@ -255,8 +255,11 @@ function isSavedUnit(u: unknown): u is SavedUnit {
 }
 
 /** A saved unit's build never holds a name or a link of its own: the copies in lists do. */
+function buildOf({ name: _name, saved: _saved, ...build }: Sel): Sel {
+  return build;
+}
+
 function copySavedUnit(u: SavedUnit): SavedUnit {
-  const { name: _name, saved: _saved, ...build } = copySel(u.build);
   return {
     id: u.id,
     name: u.name,
@@ -265,7 +268,7 @@ function copySavedUnit(u: SavedUnit): SavedUnit {
     catalogueId: u.catalogueId,
     key: u.key,
     categoryId: u.categoryId,
-    build,
+    build: buildOf(copySel(u.build)),
     created: u.created,
     updated: u.updated,
   };
@@ -369,7 +372,7 @@ async function followCopies(listUid: string, copies: readonly Sel[]) {
 
 async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
   const name = copy.name ?? saved.name;
-  const { name: _name, saved: _saved, ...build } = copy;
+  const build = buildOf(copy);
   const followed = { ...saved, name, build, updated: Date.now() };
   try {
     await db.putSavedUnit(followed);
@@ -396,7 +399,6 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
   const sel = force?.selections.find((s) => s.uid === rs.sel.uid);
   if (!force || !sel) throw new Error('Only a unit of this list can be saved.');
   const now = Date.now();
-  const { name: _name, saved: _saved, ...build } = structuredClone(sel);
   const saved: SavedUnit = {
     id: uid(),
     name,
@@ -406,7 +408,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
     key: sel.key,
     // as the Add unit sheet groups a unit with no category
     categoryId: rs.eff.primary ?? '',
-    build,
+    build: buildOf(structuredClone(sel)),
     created: now,
     updated: now,
   };
