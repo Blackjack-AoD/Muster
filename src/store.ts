@@ -5,6 +5,7 @@ import {
   Evaluator,
   holdsSaved,
   isRecord,
+  locate,
   uid,
   unlinkCopy,
   type Force,
@@ -402,9 +403,9 @@ async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
 
 /** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void> {
-  const force = r.forces.find((f) => f.uid === rs.force.force.uid);
-  const sel = force?.selections.find((s) => s.uid === rs.sel.uid);
-  if (!force || !sel) throw new Error('Only a unit of this list can be saved.');
+  const loc = locate(r, rs.sel.uid);
+  if (!loc || loc.list !== loc.force.selections) throw new Error('Only a unit of this list can be saved.');
+  const { force, sel } = loc;
   const now = Date.now();
   const saved: SavedUnit = {
     id: uid(),
