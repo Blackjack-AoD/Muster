@@ -1,7 +1,17 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState, type SavedUnit } from './data/db';
-import { Evaluator, isRecord, uid, unlinkCopy, type Force, type RSel, type Roster, type Sel } from './data/engine';
+import {
+  Evaluator,
+  holdsSaved,
+  isRecord,
+  uid,
+  unlinkCopy,
+  type Force,
+  type RSel,
+  type Roster,
+  type Sel,
+} from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
 import { DEFAULT_REPOS, failureReason, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
@@ -418,8 +428,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<void>
 
 /** Changes every copy of saved unit `id` in every list but `skip`, and saves each list that holds one as an edit. */
 function changeCopies(id: string, change: (copy: Sel) => void, skip?: string) {
-  const holds = (r: Roster) => r.uid !== skip && r.forces.some((f) => f.selections.some((s) => s.saved === id));
-  for (const held of state.rosters.filter(holds)) {
+  for (const held of state.rosters.filter((r) => r.uid !== skip && holdsSaved(r, id))) {
     const r = structuredClone(held);
     for (const f of r.forces) for (const s of f.selections) if (s.saved === id) change(s);
     saveEdit(r);

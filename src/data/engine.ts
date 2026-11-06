@@ -978,6 +978,11 @@ export function unlinkCopy(sel: Sel): void {
   delete sel.name;
 }
 
+/** Whether a list holds a copy of saved unit `id`, in any detachment. */
+export function holdsSaved(roster: Roster, id: string): boolean {
+  return roster.forces.some((f) => f.selections.some((s) => s.saved === id));
+}
+
 /** The name to show for a selection: the player's name for it, else the data's. */
 export function displayName(rs: RSel): string {
   return rs.sel.name ?? rs.eff.name;
@@ -1027,8 +1032,7 @@ export function addSavedUnit(
   if (!force) return { added: false, reason: 'no-detachment' };
   if (roster.repo !== unit.repo || force.catalogueId !== unit.catalogueId)
     return { added: false, reason: 'other-army-file' };
-  if (roster.forces.some((f) => f.selections.some((s) => s.saved === unit.id)))
-    return { added: false, reason: 'already-in-list' };
+  if (holdsSaved(roster, unit.id)) return { added: false, reason: 'already-in-list' };
   const s = giveNewUids(structuredClone(unit.build));
   s.categoryId = unit.categoryId;
   s.name = unit.name;
