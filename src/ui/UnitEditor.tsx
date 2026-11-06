@@ -6,6 +6,7 @@ import {
   displayName,
   duplicateSel,
   issuesOn,
+  linkCopy,
   locate,
   removeSel,
   unavailable,
@@ -13,6 +14,7 @@ import {
   type RSel,
   type Sel,
 } from '../data/engine';
+import type { SavedUnit } from '../data/db';
 import type { Profile, Rule } from '../data/model';
 import { failureMessage, saveUnit, toast, type RosterCtl } from '../store';
 import { Pts, Sheet, TopBar, fmtN } from './common';
@@ -577,13 +579,17 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
 function SaveSheet({ ctl, rs, onClose }: { ctl: RosterCtl; rs: RSel; onClose: () => void }) {
   const [name, setName] = useState(displayName(rs));
   const save = async () => {
+    let saved: SavedUnit;
     try {
-      await saveUnit(ctl.roster, rs, name.trim() || rs.eff.name);
+      saved = await saveUnit(ctl.roster, rs, name.trim() || rs.eff.name);
     } catch (e) {
       toast(failureMessage('save this unit', e));
       return;
     }
-    // saveUnit links the unit outside ctl.mutate: closing the sheet re-renders the page to show it
+    ctl.mutate((r) => {
+      const own = locate(r, rs.sel.uid)?.sel;
+      if (own) linkCopy(own, saved);
+    });
     onClose();
   };
   return (

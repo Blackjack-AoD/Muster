@@ -401,7 +401,7 @@ async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
   );
 }
 
-/** Storage first, as a saved unit that storage refuses has no Retry, so the unit stays unlinked. */
+/** Stores the saved unit and returns it for the unit page to link the unit, so a refused write, which has no Retry, leaves the unit unlinked. */
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<SavedUnit> {
   const loc = locate(r, rs.sel.uid);
   if (!loc || loc.list !== loc.force.selections) throw new Error('Only a unit of this list can be saved.');
@@ -422,9 +422,6 @@ export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<Saved
   };
   await db.putSavedUnit(saved);
   set({ savedUnits: [...state.savedUnits, saved] });
-  sel.saved = saved.id;
-  sel.name = name;
-  saveEdit(r);
   return saved;
 }
 

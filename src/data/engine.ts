@@ -973,7 +973,10 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
 }
 
 /** Links a root unit to a saved unit, which gives it the saved unit's name. */
-export function linkCopy(_sel: Sel, _unit: Pick<SavedUnit, 'id' | 'name'>): void {}
+export function linkCopy(sel: Sel, unit: Pick<SavedUnit, 'id' | 'name'>): void {
+  sel.saved = unit.id;
+  sel.name = unit.name;
+}
 
 /** Makes a copy of a saved unit a normal unit: it keeps its build and loses the link and the name. */
 export function unlinkCopy(sel: Sel): void {
@@ -1047,8 +1050,7 @@ export function addSavedUnit(
   if (holdsSaved(roster, unit.id)) return { added: false, reason: 'already-in-list' };
   const s = giveNewUids(structuredClone(unit.build));
   s.categoryId = unit.categoryId;
-  s.name = unit.name;
-  s.saved = unit.id;
+  linkCopy(s, unit);
   force.selections.push(s);
   const ev = new Evaluator(roster, contexts);
   if (ev.forces.some((rf) => rf.broken.includes(s))) {
