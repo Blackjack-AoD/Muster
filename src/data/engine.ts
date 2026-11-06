@@ -978,6 +978,32 @@ export function linkCopy(sel: Sel, unit: Pick<SavedUnit, 'id' | 'name'>): void {
   sel.name = unit.name;
 }
 
+/** Takes one model off a group of 2 or more, as a row of its own after it, and returns that row. */
+export function splitOff(_roster: Roster, _selUid: string): Sel | null {
+  return null;
+}
+
+/** The name to set when the player names a selection `given`, or undefined to clear it. */
+export function nameToSet(_rs: RSel, _given: string | undefined): string | undefined {
+  return undefined;
+}
+
+/** Sets or, with undefined, clears a unit's or model's name. */
+export function nameSel(_roster: Roster, _selUid: string, _name: string | undefined): void {}
+
+/** Adds n models of option `o` under a unit. */
+export function addModels(_roster: Roster, _contexts: Map<string, Context>, _rs: RSel, _o: Opt, _n: number): void {}
+
+/** What adding a saved unit to a detachment would do, tried on a copy of the list. */
+export function tryAddSaved(
+  _roster: Roster,
+  _contexts: Map<string, Context>,
+  _forceUid: string,
+  _unit: SavedUnit,
+): { added: true; pts: number } | { added: false; reason: 'already-in-list' | 'unit-gone' } | null {
+  return null;
+}
+
 /** Makes a copy of a saved unit a normal unit: it keeps its build and loses the link and the name. */
 export function unlinkCopy(sel: Sel): void {
   delete sel.saved;

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { Context } from './catalog';
 import type { SavedUnit } from './db';
-import { addSavedUnit, unavailableHere, type Sel } from './engine';
+import {
+  addModels,
+  addSavedUnit,
+  nameSel,
+  nameToSet,
+  splitOff,
+  tryAddSaved,
+  unavailableHere,
+  type Sel,
+} from './engine';
 import { FORCE, SWORD, catalogue, children, cons, entry, group, mods, unit, world } from '../test/fixture';
 
 const rules = (...names: string[]) =>
@@ -390,5 +399,142 @@ describe('addSavedUnit', () => {
     const w = world(SQUAD);
     expect(addSavedUnit(w.roster, w.contexts, 'nope', thrax())).toEqual({ added: false, reason: 'no-detachment' });
     expect(w.roster.forces[0].selections).toEqual([]);
+  });
+});
+
+describe('naming and splitting models', () => {
+  const MARINE = entry('marine', 'Marine', 10, children(entry('grenade', 'Frag Grenade', 5)), 'type="model"');
+  /** A squad holding Marine rows of these counts, where `named` gives the name of each row by its index. */
+  function squad(counts: number[], named: Record<number, string> = {}) {
+    const w = world(unit('tac', 'Tactical Squad', 100, children(MARINE)));
+    const tac = w.add('Tactical Squad');
+    for (const n of counts) w.pick(tac, 'Marine', n);
+    const root = w.roster.forces[0].selections[0];
+    root.children.forEach((c, i) => {
+      if (named[i]) c.name = named[i];
+    });
+    const rows = () => root.children.map((c) => [c.number, c.name]);
+    return { w, tac, root, rows };
+  }
+
+  it('splits one model off a group as a row of 1 straight after it, with its own uids and wargear', () => {
+    const { w, root, rows } = squad([3]);
+    const group = root.children[0];
+    const copy = splitOff(w.roster, group.uid);
+    expect(rows()).toEqual([
+      [2, undefined],
+      [1, undefined],
+    ]);
+    expect(copy).toBe(root.children[1]);
+    expect(copy?.uid).not.toBe(group.uid);
+    expect(copy?.children.map((c) => c.key)).toEqual(group.children.map((c) => c.key));
+    expect(copy?.children[0]?.uid).not.toBe(group.children[0]?.uid);
+  });
+
+  it('splits nothing off a row of 1', () => {
+    const { w, root, rows } = squad([1]);
+    expect(splitOff(w.roster, root.children[0].uid)).toBeNull();
+    expect(rows()).toEqual([[1, undefined]]);
+  });
+
+  it('names a unit, and clears its name', () => {
+    const { w, tac, root } = squad([]);
+    nameSel(w.roster, tac, 'Squad Thrax');
+    expect(root.name).toBe('Squad Thrax');
+    nameSel(w.roster, tac, undefined);
+    expect(Object.keys(root)).not.toContain('name');
+  });
+
+  it('names one model of a group of 5 as a row of its own', () => {
+    const { w, root, rows } = squad([5]);
+    nameSel(w.roster, root.children[0].uid, 'Brother Kael');
+    expect(rows()).toEqual([
+      [4, undefined],
+      [1, 'Brother Kael'],
+    ]);
+  });
+
+  it('names a model on a row of 1 where it is, and clears it there', () => {
+    const { w, root, rows } = squad([1], { 0: 'Brother Kael' });
+    nameSel(w.roster, root.children[0].uid, 'Brother Vorr');
+    expect(rows()).toEqual([[1, 'Brother Vorr']]);
+    nameSel(w.roster, root.children[0].uid, undefined);
+    expect(rows()).toEqual([[1, undefined]]);
+  });
+
+  it('gives the name the player typed, or none when they cleared it', () => {
+    const { w, tac } = squad([]);
+    expect(nameToSet(w.sel(tac), 'Squad Thrax')).toBe('Squad Thrax');
+    expect(nameToSet(w.sel(tac), undefined)).toBeUndefined();
+  });
+
+  it('gives a linked copy the data name when the player clears its name, as a saved unit always has one', () => {
+    const { w, tac, root } = squad([]);
+    Object.assign(root, { saved: 'thrax', name: 'Squad Thrax' });
+    expect(nameToSet(w.sel(tac), undefined)).toBe('Tactical Squad');
+  });
+
+  it('adds new models to the biggest unnamed row, never a named one', () => {
+    const { w, tac, rows } = squad([1, 1, 3], { 0: 'Brother Kael' });
+    addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
+    expect(rows()).toEqual([
+      [1, 'Brother Kael'],
+      [1, undefined],
+      [5, undefined],
+    ]);
+  });
+
+  it('adds new models as a new unnamed row, with its wargear, when every row is named', () => {
+    const { w, tac, root, rows } = squad([1], { 0: 'Brother Kael' });
+    addModels(w.roster, w.contexts, w.sel(tac), w.beneath(tac, 'Marine'), 2);
+    expect(rows()).toEqual([
+      [1, 'Brother Kael'],
+      [2, undefined],
+    ]);
+    expect(root.children[1]?.children.map((c) => c.key)).toEqual(root.children[0]?.children.map((c) => c.key));
+  });
+});
+
+describe('tryAddSaved', () => {
+  const SQUAD = unit('sq', 'Breacher Squad', 50, children(entry('mar', 'Marine', 10)));
+  const saved = (build: Sel, id = 'su1'): SavedUnit => ({
+    id,
+    name: 'Squad Thrax',
+    repo: 'test/repo',
+    gameSystemId: 'gst',
+    catalogueId: 'cat',
+    key: build.key,
+    categoryId: '',
+    build,
+    created: 0,
+    updated: 0,
+  });
+  const sel = (key: string, number = 1, kids: Sel[] = []): Sel => ({ uid: `old-${key}`, key, number, children: kids });
+
+  it("gives the points of the saved build against today's data, and leaves the list as it is", () => {
+    const w = world(SQUAD);
+    const before = structuredClone(w.roster);
+    expect(tryAddSaved(w.roster, w.contexts, 'f1', saved(sel('sq', 1, [sel('mar', 4), sel('gone')])))).toEqual({
+      added: true,
+      pts: 90,
+    });
+    expect(w.roster).toEqual(before);
+  });
+
+  it('refuses a saved unit the list already holds', () => {
+    const w = world(SQUAD);
+    const unit = saved(sel('sq'));
+    addSavedUnit(w.roster, w.contexts, 'f1', unit);
+    expect(tryAddSaved(w.roster, w.contexts, 'f1', unit)).toEqual({ added: false, reason: 'already-in-list' });
+  });
+
+  it('refuses a saved unit whose unit is gone from the data', () => {
+    const w = world(SQUAD);
+    expect(tryAddSaved(w.roster, w.contexts, 'f1', saved(sel('gone')))).toEqual({ added: false, reason: 'unit-gone' });
+  });
+
+  it('offers nothing for a saved unit of another army file', () => {
+    const w = world(SQUAD);
+    expect(tryAddSaved(w.roster, w.contexts, 'f1', { ...saved(sel('sq')), catalogueId: 'other' })).toBeNull();
   });
 });
