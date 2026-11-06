@@ -1018,6 +1018,11 @@ export function addSel(
   return s.uid;
 }
 
+/** Whether a saved unit belongs to this army file of this repo, as only its detachments offer it. */
+export function savedUnitIsFor(unit: SavedUnit, repo: string, catalogueId: string): boolean {
+  return unit.repo === repo && unit.catalogueId === catalogueId;
+}
+
 export type AddSavedResult =
   | { added: true; uid: string; dropped: number }
   | { added: false; reason: 'no-detachment' | 'other-army-file' | 'already-in-list' | 'unit-gone' };
@@ -1035,8 +1040,7 @@ export function addSavedUnit(
 ): AddSavedResult {
   const force = roster.forces.find((f) => f.uid === forceUid);
   if (!force) return { added: false, reason: 'no-detachment' };
-  if (roster.repo !== unit.repo || force.catalogueId !== unit.catalogueId)
-    return { added: false, reason: 'other-army-file' };
+  if (!savedUnitIsFor(unit, roster.repo, force.catalogueId)) return { added: false, reason: 'other-army-file' };
   if (holdsSaved(roster, unit.id)) return { added: false, reason: 'already-in-list' };
   const s = giveNewUids(structuredClone(unit.build));
   s.categoryId = unit.categoryId;
