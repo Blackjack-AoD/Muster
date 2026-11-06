@@ -294,8 +294,8 @@ function relinkCopy(s: Sel, ids: ReadonlyMap<string, string>) {
 }
 
 /**
- * Stores a backup's saved units, each under a new id when its own is taken.
- * Returns, by the id a restored copy holds, the id of its saved unit on this phone.
+ * Stores a backup's saved units, each under a new id when its own is taken. Returns a map from the
+ * saved-unit id a restored copy holds to that saved unit's id on this phone.
  */
 async function restoreSavedUnits(units: readonly SavedUnit[]): Promise<ReadonlyMap<string, string>> {
   const ids = new Map(state.savedUnits.map((u) => [u.id, u.id]));
@@ -410,7 +410,7 @@ async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
 }
 
 /**
- * Stores the saved unit and returns it for the unit page to link the unit,
+ * Stores the saved unit and returns it. The unit page links the unit only after this,
  * so a refused write, which has no Retry, leaves the unit unlinked.
  */
 export async function saveUnit(r: Roster, rs: RSel, name: string): Promise<SavedUnit> {
