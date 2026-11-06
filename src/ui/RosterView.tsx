@@ -476,7 +476,6 @@ const droppedMessage = (n: number) =>
 function PickRow({
   name,
   pts,
-  refused,
   added,
   swipeLabel,
   onTap,
@@ -484,8 +483,6 @@ function PickRow({
 }: {
   name: string;
   pts: number;
-  /** why it can't be added, shown in place of the price */
-  refused?: string;
   added: number;
   swipeLabel: string;
   onTap: () => void;
@@ -507,7 +504,7 @@ function PickRow({
           <b>{name}</b>
         </span>
         <span class="pick-pts">
-          {refused ?? fmtN(pts)}
+          {fmtN(pts)}
           {added > 0 && (
             <small class="pick-added" aria-label={`${added} added`}>
               {' '}
@@ -515,6 +512,20 @@ function PickRow({
             </small>
           )}
         </span>
+      </button>
+    </div>
+  );
+}
+
+/** A saved unit the list refuses, with the reason in place of its points. Tapping or swiping it adds nothing. */
+function RefusedRow({ name, reason }: { name: string; reason: string }) {
+  return (
+    <div class="pick-swipe">
+      <button class="pick">
+        <span>
+          <b>{name}</b>
+        </span>
+        <span class="pick-pts">{reason}</span>
       </button>
     </div>
   );
@@ -601,16 +612,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
                   onSwipe={() => addSaved(unit)}
                 />
               ) : (
-                <PickRow
-                  key={unit.id}
-                  name={unit.name}
-                  pts={0}
-                  refused={REFUSED[tried.reason]}
-                  added={0}
-                  swipeLabel="Add saved build"
-                  onTap={() => {}}
-                  onSwipe={() => {}}
-                />
+                <RefusedRow key={unit.id} name={unit.name} reason={REFUSED[tried.reason]} />
               ),
             )}
           </div>
