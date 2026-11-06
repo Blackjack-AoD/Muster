@@ -158,6 +158,15 @@ function catLimits(ctl: RosterCtl, rf: RForce, catId: string) {
   return ctl.ev.categoryLimits(rf, catId);
 }
 
+/** Asks, then takes the detachment and every unit in it out of the list. Returns whether it did. */
+function deleteForce(ctl: RosterCtl, rf: RForce): boolean {
+  if (!confirm(`Delete ${rf.entry.name} and its ${rf.roots.length} unit(s)?`)) return false;
+  ctl.mutate((r) => {
+    r.forces = r.forces.filter((f) => f.uid !== rf.force.uid);
+  });
+  return true;
+}
+
 function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (cat?: string) => void }) {
   const repos = useStore((s) => s.repos);
   const [open, setOpen] = useState(true);
@@ -178,14 +187,25 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
 
   return (
     <section class="force">
-      <button class="force-head" onClick={() => setOpen(!open)}>
-        <div>
-          <div class="force-name">{rf.entry.name.replace(/^\d+\.\s*/, '')}</div>
-          <div class="force-sub">{catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}</div>
-        </div>
-        <span class="force-pts">{fmtN(rf.total)}</span>
-        <Icon name={open ? 'down' : 'chev'} size={18} />
-      </button>
+      <div class="force-bar">
+        <button class="force-head" onClick={() => setOpen(!open)}>
+          <div>
+            <div class="force-name">{rf.entry.name.replace(/^\d+\.\s*/, '')}</div>
+            <div class="force-sub">{catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}</div>
+          </div>
+          <span class="force-pts">{fmtN(rf.total)}</span>
+          <Icon name={open ? 'down' : 'chev'} size={18} />
+        </button>
+        {ctl.roster.forces.length > 1 && (
+          <button
+            class="icon-btn sm force-del"
+            aria-label={`Delete ${rf.entry.name}`}
+            onClick={() => deleteForce(ctl, rf)}
+          >
+            <Icon name="trash" size={18} />
+          </button>
+        )}
+      </div>
       {open && (
         <div class="cats">
           {cats.map((c) => {
@@ -883,11 +903,7 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
               <button
                 class="danger"
                 onClick={() => {
-                  if (!confirm(`Remove ${rf.entry.name} and its ${rf.roots.length} unit(s)?`)) return;
-                  ctl.mutate((r) => {
-                    r.forces = r.forces.filter((f) => f.uid !== rf.force.uid);
-                  });
-                  onClose();
+                  if (deleteForce(ctl, rf)) onClose();
                 }}
               >
                 <Icon name="trash" /> {rf.entry.name} · {catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}

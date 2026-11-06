@@ -601,6 +601,20 @@ input:focus {
 .form .row {
   margin-top: 8px;
 }
+.name-field {
+  position: relative;
+}
+.name-field input {
+  width: 100%;
+  padding-right: 52px;
+}
+.name-field .icon-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--brass2);
+}
 
 .menu {
   display: grid;
@@ -713,6 +727,15 @@ input:focus {
   border-radius: var(--radius);
   overflow: hidden;
 }
+.force-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.force-bar .force-del {
+  margin-right: 10px;
+  color: var(--muted);
+}
 .force-head {
   display: flex;
   align-items: center;
@@ -722,7 +745,6 @@ input:focus {
   background: none;
   border: 0;
   text-align: left;
-  border-bottom: 1px solid var(--line);
 }
 .force-head > div {
   flex: 1;

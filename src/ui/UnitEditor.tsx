@@ -572,23 +572,27 @@ function Sub({ ctl, rs, depth }: { ctl: RosterCtl; rs: RSel; depth: number }) {
   );
 }
 
-/** Names a unit or model when it closes; an empty name clears it. */
+/** Names a unit or model when its tick is pressed; an empty name clears it. Closing keeps the old name. */
 function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl; rs: RSel; onClose: () => void }) {
   const [name, setName] = useState(rs.sel.name ?? '');
+  const save = (e: Event) => {
+    e.preventDefault();
+    rename(ctl, rs, name.trim() || undefined);
+    onClose();
+  };
   return (
-    <Sheet
-      title={title}
-      onClose={() => {
-        rename(ctl, rs, name.trim() || undefined);
-        onClose();
-      }}
-    >
-      <div class="form">
+    <Sheet title={title} onClose={onClose}>
+      <form class="form" onSubmit={save}>
         <label>
           Name
-          <input value={name} placeholder={rs.eff.name} onInput={(e) => setName(e.currentTarget.value)} />
+          <div class="name-field">
+            <input value={name} placeholder={rs.eff.name} onInput={(e) => setName(e.currentTarget.value)} />
+            <button type="submit" class="icon-btn" aria-label="Save name">
+              <Icon name="check" />
+            </button>
+          </div>
         </label>
-      </div>
+      </form>
       <div class="menu">
         <button
           onClick={() => {

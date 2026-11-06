@@ -71,10 +71,10 @@ const storedUnit = async () => (await db.rosters())[0]?.forces[0]?.selections[0]
 /** The model rows of the stored unit, as count and name. */
 const savedModels = async () => (await storedUnit())?.children.map((c: Sel) => [c.number, c.name]);
 
-/** Types a name into the open name sheet and closes it. */
+/** Types a name into the open name sheet and presses its tick. */
 function nameAs(name: string) {
   fireEvent.input(screen.getByLabelText('Name'), { target: { value: name } });
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
 }
 
 /** Opens a squad holding Marine rows of these counts, where `named` gives the name of each row by its index. */
@@ -364,6 +364,27 @@ describe('UnitEditor', () => {
 
     expect(rows()).toEqual(['Brother Kael']);
     expect(await savedModels()).toEqual([[1, 'Brother Kael']]);
+  });
+
+  it('closing the name sheet after typing keeps the old name', async () => {
+    await openSquad([1], { 0: 'Brother Kael' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename model' }));
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Brother Vane' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(rows()).toEqual(['Brother Kael']);
+    expect(await savedModels()).toEqual([[1, 'Brother Kael']]);
+  });
+
+  it('Enter in the name field saves the name, as the tick does', async () => {
+    await openUnit();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Squad Thrax' } });
+    fireEvent.submit(screen.getByLabelText('Name'));
+
+    await waitFor(async () => expect((await storedUnit())?.name).toBe('Squad Thrax'));
   });
 
   it('naming one model of a group of 2 splits it off as a named row of 1', async () => {
