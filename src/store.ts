@@ -330,41 +330,45 @@ function saveEdit(r: Roster) {
   });
 }
 
-/** Same options and model names, whatever the uids: each copy of a saved unit has its own. */
+/** Same options and model names, whatever the uids. */
 const sameChildren = (a: readonly Sel[], b: readonly Sel[]): boolean =>
   a.length === b.length &&
   a.every((s, i) => {
     const t = b[i];
-    return (
-      t !== undefined &&
-      s.key === t.key &&
-      s.number === t.number &&
-      s.name === t.name &&
-      sameChildren(s.children, t.children)
-    );
+    return t !== undefined && sameSel(s, t);
   });
 
-/** Saves an edited list, then takes each linked copy it changed to its saved unit and the other lists. */
-export async function saveListEdit(r: Roster, edit: (r: Roster) => void): Promise<void> {
+const sameSel = (a: Sel, b: Sel): boolean =>
+  a.key === b.key && a.number === b.number && a.name === b.name && sameChildren(a.children, b.children);
+
+/** Copies of a list's linked units, taken apart from the list, as the next edit changes it in place. */
+const linkedCopies = (r: Roster): Sel[] =>
+  r.forces.flatMap((f) => f.selections.filter((s) => s.saved !== undefined)).map((s) => structuredClone(s));
+
+/**
+ * Applies `edit` to a list and saves it, then copies each linked unit the edit changed to its saved unit
+ * and to the other lists. A copy the edit added, or left alone, changes nothing else.
+ */
+export function saveListEdit(r: Roster, edit: (r: Roster) => void): Promise<void> {
+  const before = linkedCopies(r);
   edit(r);
   saveEdit(r);
-  // copied before the first wait, as the next edit changes `r` in place
-  const copies = r.forces
-    .flatMap((f) => f.selections.filter((s) => s.saved !== undefined))
-    .map((s) => structuredClone(s));
+  const changed = linkedCopies(r).filter((copy) => {
+    const was = before.find((s) => s.uid === copy.uid);
+    return was !== undefined && !sameSel(was, copy);
+  });
+  return followCopies(r.uid, changed);
+}
+
+async function followCopies(listUid: string, copies: readonly Sel[]) {
   for (const copy of copies) {
     const saved = state.savedUnits.find((u) => u.id === copy.saved);
-    if (saved) await followCopy(r.uid, saved, copy);
+    if (saved) await followCopy(listUid, saved, copy);
   }
 }
 
 async function followCopy(listUid: string, saved: SavedUnit, copy: Sel) {
   const name = copy.name ?? saved.name;
-  const same =
-    copy.key === saved.build.key &&
-    copy.number === saved.build.number &&
-    sameChildren(copy.children, saved.build.children);
-  if (same && name === saved.name) return;
   const { name: _name, saved: _saved, ...build } = copy;
   const followed = { ...saved, name, build, updated: Date.now() };
   try {
