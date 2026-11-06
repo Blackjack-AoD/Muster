@@ -967,12 +967,15 @@ export function duplicateSel(roster: Roster, selUid: string): Sel | null {
   const loc = locate(roster, selUid);
   if (!loc) return null;
   const copy = giveNewUids(structuredClone(loc.sel));
-  if (loc.list === loc.force.selections) {
-    delete copy.name;
-    delete copy.saved;
-  }
+  if (loc.list === loc.force.selections) unlinkCopy(copy);
   loc.list.splice(loc.list.indexOf(loc.sel) + 1, 0, copy);
   return copy;
+}
+
+/** Makes a copy of a saved unit a normal unit: it keeps its build and loses the link and the name. */
+export function unlinkCopy(sel: Sel): void {
+  delete sel.saved;
+  delete sel.name;
 }
 
 /** The name to show for a selection: the player's name for it, else the data's. */

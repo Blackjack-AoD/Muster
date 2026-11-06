@@ -1,7 +1,7 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { db, persistStorage, type RepoState, type SavedUnit } from './data/db';
-import { Evaluator, isRecord, uid, type Force, type RSel, type Roster, type Sel } from './data/engine';
+import { Evaluator, isRecord, uid, unlinkCopy, type Force, type RSel, type Roster, type Sel } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
 import { DEFAULT_REPOS, failureReason, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
@@ -279,10 +279,7 @@ function relinkCopy(s: Sel, ids: ReadonlyMap<string, string>) {
   if (s.saved === undefined) return;
   const id = ids.get(s.saved);
   if (id !== undefined) s.saved = id;
-  else {
-    delete s.saved;
-    delete s.name;
-  }
+  else unlinkCopy(s);
 }
 
 /** Returns how many lists and saved units it restored. Anything that isn't one is skipped. */
@@ -444,10 +441,7 @@ export async function renameSavedUnit(id: string, name: string): Promise<void> {
 export async function deleteSavedUnit(id: string): Promise<void> {
   await db.delSavedUnit(id);
   set({ savedUnits: state.savedUnits.filter((u) => u.id !== id) });
-  changeCopies(id, (copy) => {
-    delete copy.saved;
-    delete copy.name;
-  });
+  changeCopies(id, unlinkCopy);
 }
 
 // ---------- roster controller ----------
