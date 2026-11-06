@@ -264,7 +264,8 @@ function useCtx(repoName: string, catId: string) {
 function UnitList({ repo, catId }: { repo: string; catId: string }) {
   const { ctx, err } = useCtx(repo, catId);
   const allSaved = useStore((s) => s.savedUnits);
-  const saved = allSaved.filter((u) => isUnique(u) && savedUnitIsFor(u, repo, catId));
+  const ours = allSaved.filter((u) => savedUnitIsFor(u, repo, catId));
+  const saved = ours.filter(isUnique);
   const [q, setQ] = useState('');
   const [naming, setNaming] = useState<SavedUnit>();
   const groups = useMemo(() => {
@@ -300,6 +301,13 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
     );
   const ql = q.toLowerCase();
   const savedShown = saved.filter((u) => u.name.toLowerCase().includes(ql));
+  // a preconfigured unit has no name of its own: it goes by the data's name for its unit
+  const dataName = (u: SavedUnit) => rootOptionsCached(ctx).find((o) => o.key === u.key)?.node.name ?? 'Unit';
+  const preconfigured = ours
+    .filter((u) => !isUnique(u))
+    .map((u) => ({ u, name: dataName(u) }))
+    .filter(({ name }) => name.toLowerCase().includes(ql))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div class="page">
       <TopBar title={title} sub={ctx.gst.name} backTo="/lib" />
@@ -309,8 +317,8 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
       </div>
       {savedShown.length > 0 && (
         <>
-          <div class="list-label">Saved units</div>
-          <div class="pick-list" role="group" aria-label="Saved units">
+          <div class="list-label">Unique units</div>
+          <div class="pick-list" role="group" aria-label="Unique units">
             {savedShown.map((u) => (
               <div class="pick" key={u.id}>
                 <span>
@@ -319,7 +327,24 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
                 <button class="icon-btn sm" aria-label={`Rename ${u.name}`} onClick={() => setNaming(u)}>
                   <Icon name="edit" size={16} />
                 </button>
-                <button class="icon-btn sm" aria-label={`Delete ${u.name}`} onClick={() => deleteSaved(u)}>
+                <button class="icon-btn sm" aria-label={`Delete ${u.name}`} onClick={() => deleteSaved(u, u.name)}>
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {preconfigured.length > 0 && (
+        <>
+          <div class="list-label">Preconfigured units</div>
+          <div class="pick-list" role="group" aria-label="Preconfigured units">
+            {preconfigured.map(({ u, name }) => (
+              <div class="pick" key={u.id}>
+                <span>
+                  <b>{name}</b>
+                </span>
+                <button class="icon-btn sm" aria-label={`Delete ${name}`} onClick={() => deleteSaved(u, name)}>
                   <Icon name="trash" size={16} />
                 </button>
               </div>
@@ -351,28 +376,37 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
   );
 }
 
-function deleteSaved(unit: SavedUnit) {
-  if (!confirm(`Delete "${unit.name}"? Lists that hold it keep it as a normal unit, without the name.`)) return;
+function deleteSaved(unit: SavedUnit, name: string) {
+  const question = isUnique(unit)
+    ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
+    : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
+  if (!confirm(question)) return;
   deleteSavedUnit(unit.id).catch((e: unknown) => toast(failureMessage('delete this saved unit', e)));
 }
 
 function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
   const [name, setName] = useState(unit.name);
-  const close = () => {
-    // a saved unit always has a name, so an empty one keeps the old
+  const save = (e: Event) => {
+    e.preventDefault();
+    // a unique unit always has a name, so an empty one keeps the old
     const named = name.trim();
     if (named)
       renameSavedUnit(unit.id, named).catch((e: unknown) => toast(failureMessage('rename this saved unit', e)));
     onClose();
   };
   return (
-    <Sheet title="Rename saved unit" onClose={close}>
-      <div class="form">
+    <Sheet title="Rename unique unit" onClose={onClose}>
+      <form class="form" onSubmit={save}>
         <label>
           Name
-          <input value={name} placeholder={unit.name} onInput={(e) => setName(e.currentTarget.value)} />
+          <div class="name-field">
+            <input value={name} placeholder={unit.name} onInput={(e) => setName(e.currentTarget.value)} />
+            <button type="submit" class="icon-btn" aria-label="Save name">
+              <Icon name="check" />
+            </button>
+          </div>
         </label>
-      </div>
+      </form>
     </Sheet>
   );
 }

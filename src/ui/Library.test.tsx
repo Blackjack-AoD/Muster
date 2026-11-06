@@ -149,7 +149,7 @@ describe('Library', () => {
     }
 
     const savedNames = () =>
-      [...(screen.queryByRole('group', { name: 'Saved units' })?.querySelectorAll('b') ?? [])].map(
+      [...(screen.queryByRole('group', { name: 'Unique units' })?.querySelectorAll('b') ?? [])].map(
         (b) => b.textContent,
       );
 
@@ -161,14 +161,17 @@ describe('Library', () => {
       ]);
 
       expect(savedNames()).toEqual(['Squad Thrax']);
-      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual(['Saved units', 'Other']);
+      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual([
+        'Unique units',
+        'Other',
+      ]);
     });
 
-    it('shows no Saved units section for an army with no saved units', async () => {
+    it('shows no Unique units section for an army with no saved units', async () => {
       await openArmy([saved('orks', 'Da Boyz', { catalogueId: 'orks' })]);
 
-      expect(screen.queryByRole('group', { name: 'Saved units' })).toBeNull();
-      expect(screen.queryByText('Saved units')).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Unique units' })).toBeNull();
+      expect(screen.queryByText('Unique units')).toBeNull();
     });
 
     it('searching units narrows the saved units by name', async () => {
@@ -179,14 +182,45 @@ describe('Library', () => {
       expect(savedNames()).toEqual(['Squad Iron']);
     });
 
-    /** Opens the rename sheet of saved unit `name`, types `typed` and closes it. */
+    /** Opens the rename sheet of saved unit `name`, types `typed` and presses the tick. */
     function rename(name: string, typed: string) {
       fireEvent.click(screen.getByRole('button', { name: `Rename ${name}` }));
       fireEvent.input(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Name' }), {
         target: { value: typed },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     }
+
+    it('closing the rename sheet keeps the old name', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax')]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Rename Squad Thrax' }));
+      fireEvent.input(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Name' }), {
+        target: { value: 'Squad Iron' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+      expect(savedNames()).toEqual(['Squad Thrax']);
+      expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Squad Thrax']);
+    });
+
+    it('lists preconfigured units by the data name, under their own heading, with delete and no rename', async () => {
+      await openArmy([saved('thrax', 'Squad Thrax'), saved('melta', '', { kind: 'preconfigured' })]);
+
+      const group = screen.getByRole('group', { name: 'Preconfigured units' });
+      expect([...group.querySelectorAll('b')].map((b) => b.textContent)).toEqual(['Tactical Squad']);
+      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual([
+        'Unique units',
+        'Preconfigured units',
+        'Other',
+      ]);
+      expect(within(group).queryByRole('button', { name: /^Rename/ })).toBeNull();
+
+      vi.stubGlobal('confirm', () => true);
+      fireEvent.click(within(group).getByRole('button', { name: 'Delete Tactical Squad' }));
+      await waitFor(async () => expect((await db.savedUnits()).map((u) => u.id)).toEqual(['thrax']));
+      vi.unstubAllGlobals();
+    });
     const storedName = async (id: string) => (await db.savedUnits()).find((u) => u.id === id)?.name;
 
     it('renames a saved unit from its rename button', async () => {
