@@ -1,6 +1,6 @@
 {
   "name": "muster",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Offline army list builder for BattleScribe / New Recruit data",
   "scripts": {
     "dev": "vite",
