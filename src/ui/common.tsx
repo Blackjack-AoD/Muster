@@ -115,11 +115,14 @@ export function Sheet({
   onClose,
   children,
   full,
+  footer,
 }: {
   title: ComponentChildren;
   onClose: () => void;
   children: ComponentChildren;
   full?: boolean;
+  /** Stays on screen below the body, however far the body scrolls. */
+  footer?: ComponentChildren;
 }) {
   const close = useLatest(onClose);
   useSheetHistory(onClose);
@@ -147,6 +150,7 @@ export function Sheet({
           </button>
         </div>
         <div class="sheet-body">{children}</div>
+        {footer && <div class="sheet-foot">{footer}</div>}
       </div>
     </div>
   );
