@@ -317,7 +317,15 @@ function SectionBox({
         <span class={'section-picks' + (picks ? '' : ' none')}>{picks || (missing ? 'Not chosen' : 'None')}</span>
       </button>
       {open && (
-        <Sheet title={name} onClose={close}>
+        <Sheet
+          title={name}
+          onClose={close}
+          footer={
+            <button class="btn primary wide" onClick={close}>
+              Done
+            </button>
+          }
+        >
           <OpenSection.Provider value={{ g, close }}>
             <p class="section-limit">{limit}</p>
             {children}

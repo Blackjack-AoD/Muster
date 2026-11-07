@@ -691,6 +691,18 @@ describe('UnitEditor sections', () => {
     expect(option('radio', /Flamer/)).not.toBeNull();
   });
 
+  it('Done closes the sheet and keeps what was chosen', async () => {
+    await openUnit(squad(groupOf('kit', 'Kit', children(FLAMER))));
+    openSection('Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'More Flamer' }));
+    await waitFor(() => expect(topPoints()).toBe('110pts'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    await waitFor(() => expect(sectionSheet('Kit')).toBeNull());
+    expect(section('Kit').textContent).toContain('Flamer');
+  });
+
   it('closes a pick-one sheet on a choice, and the box shows it', async () => {
     await openUnit();
     openSection('Special Weapon');

@@ -536,6 +536,7 @@ input:focus {
 .sheet {
   width: 100%;
   max-width: 760px;
+  max-height: 88vh;
   max-height: 88dvh;
   display: flex;
   flex-direction: column;
@@ -561,9 +562,16 @@ input:focus {
   color: var(--brass2);
 }
 .sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   padding: 4px 16px 24px;
   -webkit-overflow-scrolling: touch;
+}
+.sheet-foot {
+  flex: none;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--line);
 }
 .sheet .search {
   margin: 0 0 12px;
