@@ -87,7 +87,7 @@ Two contracts sit behind the skills:
 - Data files can sit in subfolders and can be zipped (`.gstz` / `.catz`). The Data tab can also import a whole repo `.zip` (GitHub's Download ZIP).
 - A model group ("5× Veteran") shares its wargear, and that wargear counts once per model for points and limits. **Split 1** separates a model to give it different gear; **Merge** puts it back when its gear matches again, and **Undo split** puts it back with the main group's gear. A named model is always a row of 1 and never merges.
 - Mandatory picks are filled in one at a time and re-checked, because limits often change once a default is taken. Without a usable default, the cheapest option (after modifiers) is picked.
-- Options follow the data's `sortIndex` where it's set.
+- Options follow the data's `sortIndex` where it's set. Without one, options numbered in their names, like `2) Melee Options`, go in number order among the places they hold, and the rest stay in file order.
 - Rule and profile links honour their own hidden flags and modifiers (e.g. Legion-specific rules, "Duellist's Edge (1)").
 - Percentage limits (e.g. "no more than 25% of the army's points") are checked against the current total.
 - A rule on the points in the whole list, such as one Lord of War point per 4 points or one Master of the Legion per 1,000 points, counts the list's points limit. A list with no limit counts its current total.

@@ -17,6 +17,33 @@ export interface Opt {
   groupIds: string[];
 }
 
+/** The place an author gives a name by numbering it, as in "1.5) Bayonets" or "1.1a) Lasguns". */
+function numberInName(name: string) {
+  const m = /^\s*(\d+(?:\.\d+)*)([a-z]?)\)/i.exec(name);
+  return m ? { parts: m[1].split('.').map(Number), letter: m[2].toLowerCase() } : null;
+}
+
+type NameNumber = NonNullable<ReturnType<typeof numberInName>>;
+
+function compareNumbers(a: NameNumber, b: NameNumber) {
+  for (let i = 0; i < Math.max(a.parts.length, b.parts.length); i++) {
+    const d = (a.parts[i] ?? -1) - (b.parts[i] ?? -1);
+    if (d) return d;
+  }
+  return a.letter.localeCompare(b.letter);
+}
+
+/** Sort options numbered in their names among the places they hold. A sortIndex wins, and the rest stay put. */
+function inNumberOrder(opts: Opt[]): Opt[] {
+  const places = opts.flatMap((o, at) => {
+    const number = o.node.sortIndex == null ? numberInName(o.node.name) : null;
+    return number ? [{ o, at, number }] : [];
+  });
+  const out = [...opts];
+  [...places].sort((x, y) => compareNumbers(x.number, y.number)).forEach(({ o }, i) => (out[places[i].at] = o));
+  return out;
+}
+
 export class Context {
   readonly gst: DataFile;
   readonly cat: DataFile;
@@ -137,7 +164,7 @@ export class Context {
       const rank = (o: Opt) => o.node.sortIndex ?? Infinity;
       out.sort((x, y) => (rank(x) === rank(y) ? 0 : rank(x) - rank(y)));
     }
-    return out;
+    return inNumberOrder(out);
   }
 
   /** Find an option by key beneath a node (searches inside groups). */
