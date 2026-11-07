@@ -8,9 +8,9 @@ sources = ["package.json", "package-lock.json"]
 outputs = ["node_modules/.package-lock.json"]
 
 [tasks.dev]
-description = "Start the local dev server"
+description = "Start the dev server, open to other machines"
 depends = ["install"]
-run = "npm run dev"
+run = "npm run dev -- --host 0.0.0.0"
 
 [tasks.typecheck]
 description = "Type-check src/ and the journeys"
