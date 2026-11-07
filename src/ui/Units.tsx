@@ -6,7 +6,7 @@ import type { SavedUnit } from '../data/db';
 import { Evaluator, isUnique, matchesSaved, rootOptionsCached, type RSel, type Roster } from '../data/engine';
 import { activeSystems, gameKey, getContext, systemsOf, type SystemInfo } from '../data/library';
 import { failureReason } from '../data/sync';
-import { newListLimit, newSavedUnit, savedFrom, unitList, type UnitList } from '../data/units';
+import { newSavedUnit, savedFrom, unitList, type UnitList } from '../data/units';
 import {
   addSavedUnitToStore,
   deleteSavedUnit,
@@ -120,10 +120,9 @@ function ArmyUnits({ name, units, q }: { name: string; units: SavedUnit[]; q: st
   const { ctx, contexts, err } = useArmy(first?.repo ?? '', first?.catalogueId ?? '');
   const rows = useMemo(() => {
     if (!ctx || !contexts) return [];
-    const limit = newListLimit(ctx);
     return units
       .flatMap((unit): Row[] => {
-        const list = unitList(unit, contexts, name, limit);
+        const list = unitList(unit, contexts, name);
         const rs = new Evaluator(list.roster, contexts).find(list.unitUid);
         if (!rs) return [];
         return [
@@ -287,7 +286,7 @@ function PickDataUnit({ repo, catId }: { repo: string; catId: string }) {
   }, [ctx]);
   const make = async (o: Opt) => {
     if (!ctx || !contexts) return;
-    const place = { repo, catalogueId: catId, armyName, costLimit: newListLimit(ctx) };
+    const place = { repo, catalogueId: catId, armyName };
     const unit = newSavedUnit(contexts, place, o, Date.now());
     if (!unit) {
       toast("Couldn't set up this unit");
@@ -357,9 +356,7 @@ export function SavedUnitPage({ id, setUpUid }: { id: string; setUpUid?: string 
   // built once: after that the page's own list holds every edit
   const list = useMemo<UnitList | undefined>(
     () =>
-      unit && ctx && contexts
-        ? unitList(unit, contexts, catalogueName(repos, unit.repo, unit.catalogueId), newListLimit(ctx))
-        : undefined,
+      unit && ctx && contexts ? unitList(unit, contexts, catalogueName(repos, unit.repo, unit.catalogueId)) : undefined,
     [id, contexts],
   );
   const keep = (r: Roster) => {

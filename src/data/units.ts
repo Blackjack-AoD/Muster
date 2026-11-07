@@ -24,6 +24,9 @@ export interface UnitList {
 
 const UNIT_FORCE = 'unit';
 
+/** A saved unit's list counts as a game of any size, so a rule on the game's size never holds the unit back. */
+const ANY_SIZE = Number.POSITIVE_INFINITY;
+
 /** A saved unit's build never holds a name or a link of its own: the copies in lists do. */
 export function buildOf({ name: _name, saved: _saved, ...build }: Sel): Sel {
   return build;
@@ -40,7 +43,7 @@ function forceEntryFor(ctx: Context, categoryId: string): string {
 /** An empty one-detachment list of this army, with a new list's set-up unless `setUp` gives the saved one. */
 function armyList(
   contexts: Map<string, Context>,
-  place: { repo: string; catalogueId: string; armyName: string; costLimit: number },
+  place: { repo: string; catalogueId: string; armyName: string },
   forceEntryId: string,
   setUp: Sel[] | undefined,
 ): Roster {
@@ -50,7 +53,7 @@ function armyList(
     name: place.armyName,
     repo: place.repo,
     gameSystemId: ctx?.gst.id ?? '',
-    costLimit: place.costLimit,
+    costLimit: ANY_SIZE,
     forces: [
       {
         uid: UNIT_FORCE,
@@ -67,15 +70,10 @@ function armyList(
 }
 
 /** The list a saved unit is built in: its set-up, or a new list's when it has none, and the unit. */
-export function unitList(
-  unit: SavedUnit,
-  contexts: Map<string, Context>,
-  armyName: string,
-  costLimit: number,
-): UnitList {
+export function unitList(unit: SavedUnit, contexts: Map<string, Context>, armyName: string): UnitList {
   const ctx = contexts.get(unit.catalogueId);
   const forceEntryId = unit.setUp?.forceEntryId ?? (ctx ? forceEntryFor(ctx, unit.categoryId) : '');
-  const roster = armyList(contexts, { ...unit, armyName, costLimit }, forceEntryId, unit.setUp?.selections);
+  const roster = armyList(contexts, { ...unit, armyName }, forceEntryId, unit.setUp?.selections);
   const sel = structuredClone(unit.build);
   sel.categoryId = unit.categoryId;
   if (isUnique(unit)) sel.name = unit.name;
@@ -105,7 +103,7 @@ export function savedFrom(unit: SavedUnit, list: UnitList, now: number): SavedUn
 /** A new preconfigured unit of the data's unit `opt`, with its mandatory picks and a new list's set-up. */
 export function newSavedUnit(
   contexts: Map<string, Context>,
-  place: { repo: string; catalogueId: string; armyName: string; costLimit: number },
+  place: { repo: string; catalogueId: string; armyName: string },
   opt: Opt,
   now: number,
 ): SavedUnit | null {

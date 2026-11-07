@@ -452,7 +452,9 @@ export class Evaluator {
     for (const c of e.constraints) {
       if (c.field !== 'selections' || c.scope !== 'parent') continue;
       if (c.type === 'min') min = Math.max(min, c.value);
-      if (c.type === 'max' && c.value >= 0) max = max < 0 ? c.value : Math.min(max, c.value);
+      // a cap that grows with the game's size has no end in a list of any size
+      if (c.type === 'max' && c.value >= 0 && Number.isFinite(c.value))
+        max = max < 0 ? c.value : Math.min(max, c.value);
     }
     return { min, max };
   }

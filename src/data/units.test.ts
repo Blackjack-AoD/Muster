@@ -50,7 +50,7 @@ const saved = (build: Sel, extra: Partial<SavedUnit> = {}): SavedUnit => ({
 
 /** The names of the roots of a unit's own list, and the side its Allegiance picked. */
 function look(w: ReturnType<typeof world>, u: SavedUnit, army = 'Iron Warriors') {
-  const list = unitList(u, w.contexts, army, 3000);
+  const list = unitList(u, w.contexts, army);
   const ev = new Evaluator(list.roster, w.contexts);
   const roots = ev.forces[0].roots;
   return {
@@ -68,7 +68,7 @@ describe('unitList', () => {
     const { roots, side, list } = look(w, saved(sel('tac')));
     expect(roots).toEqual(['Allegiance', 'Tactical Squad']);
     expect(side).toEqual(['Traitor']);
-    expect(list.roster.costLimit).toBe(3000);
+    expect(list.roster.costLimit).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('builds the set-up the unit was saved with', () => {
@@ -122,7 +122,7 @@ describe('newSavedUnit', () => {
     const w = world(DATA);
     const u = newSavedUnit(
       w.contexts,
-      { repo: 'test/repo', catalogueId: 'cat', armyName: 'Ultramarines', costLimit: 3000 },
+      { repo: 'test/repo', catalogueId: 'cat', armyName: 'Ultramarines' },
       w.root('Tactical Squad'),
       7,
     );

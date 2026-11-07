@@ -648,6 +648,29 @@ describe("rules on the list's points", () => {
     expect(lords(3000, 4)).toEqual(['Lord: at most 3 allowed in the list (has 4)']);
   });
 
+  it('allows any number, and shows no cap, in a list of any size', () => {
+    expect(lords(Number.POSITIVE_INFINITY, 12)).toEqual([]);
+    const perGame = entry(
+      'banner',
+      'Banner',
+      5,
+      `<modifiers>
+        <modifier type="increment" field="banner-max" value="1">
+          <repeats>
+            <repeat field="pts" scope="roster" value="1000" repeats="1" childId="any"/>
+          </repeats>
+        </modifier>
+      </modifiers>
+      <constraints>
+        <constraint id="banner-max" type="max" field="selections" scope="parent" value="0"/>
+      </constraints>`,
+    );
+    const w = world(unit('sq', 'Squad', 50, children(perGame)), { costLimit: Number.POSITIVE_INFINITY });
+    const sq = w.add('Squad');
+    const ev = w.ev();
+    expect(ev.limits(w.beneath(sq, 'Banner'), w.sel(sq), ev.forces[0])).toEqual({ min: 0, max: -1 });
+  });
+
   it('counts the points in the list when it has no points limit', () => {
     expect(lords(0, 1)).toEqual(['Lord: at most 0 allowed in the list (has 1)']);
   });
