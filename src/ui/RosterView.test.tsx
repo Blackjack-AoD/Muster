@@ -581,7 +581,21 @@ describe('RosterView', () => {
         'captain',
         'Captain',
         100,
-        '<categoryLinks><categoryLink id="capt-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>',
+        '<categoryLinks><categoryLink id="capt-hq" name="HQ" targetId="hq" primary="true"/></categoryLinks>' +
+          children(
+            entry(
+              'blade',
+              'Warp Blade',
+              10,
+              `<modifiers>
+                <modifier type="set" field="hidden" value="true">
+                  <conditions>
+                    <condition type="equalTo" value="0" field="selections" scope="roster" childId="traitor"/>
+                  </conditions>
+                </modifier>
+              </modifiers>`,
+            ),
+          ),
       ) +
       unit(
         'tac',
@@ -900,18 +914,27 @@ describe('RosterView', () => {
         vi.unstubAllGlobals();
       });
 
-      it('deletes a saved unit the list holds no copy of on a swipe left, after asking', async () => {
+      it('keeps a saved unit the list holds no copy of on a swipe left, as saved units are deleted on Units', async () => {
         const ask = vi.fn(() => true);
         vi.stubGlobal('confirm', ask);
         await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
 
         drag(pageRow(/Lord Thrax/), [[-SWIPE, 0]]);
 
-        expect(ask).toHaveBeenCalledWith(
-          'Delete "Lord Thrax"? Lists that hold it keep it as a normal unit, without the name.',
-        );
-        await waitFor(async () => expect(await db.savedUnits()).toEqual([]));
+        expect(ask).not.toHaveBeenCalled();
+        expect((await db.savedUnits()).map((u) => u.id)).toEqual(['lord']);
         vi.unstubAllGlobals();
+      });
+
+      it("greys out a saved unit with an option this list doesn't allow, says which, and adds nothing", async () => {
+        const traitorLord = saved('tlord', 'Lord Vex', sel('captain', [sel('blade')]));
+        await openPage(world(SAVED_UNITS, CATEGORIES), [traitorLord]);
+
+        expect(pageRows()).toEqual([['Lord Vex', 'Not allowed']]);
+        expect(screen.getByText("Warp Blade isn't allowed in this list")).not.toBeNull();
+        fireEvent.click(pageRow(/Lord Vex/));
+
+        expect(await storedRoots()).toEqual([]);
       });
 
       it('shows a unique unit the list holds with its points and a count of 1', async () => {
@@ -926,78 +949,13 @@ describe('RosterView', () => {
         expect(location.hash).toBe('#/r/r/pre');
       });
 
-      const dataRows = () =>
-        [...(screen.queryByRole('group', { name: 'From the data' })?.querySelectorAll('.pick b') ?? [])].map(
-          (b) => b.textContent,
-        );
-
-      it('searches the data for plain units to set up, once the player types', async () => {
+      it('offers no search of the data for new units: they are set up on Units', async () => {
         await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
-        expect(dataRows()).toEqual([]);
-
         fireEvent.input(screen.getByPlaceholderText('Search units'), { target: { value: 'tac' } });
-
-        expect(dataRows()).toEqual(['Tactical Squad']);
-        fireEvent.click(within(screen.getByRole('group', { name: 'From the data' })).getByRole('button'));
-        expect(location.hash).toBe('#/r/r/new/f1/tac');
+        expect(screen.queryByRole('group', { name: 'From the data' })).toBeNull();
       });
     });
 
-    describe('setting up a new saved unit from the data', () => {
-      const openDraft = async () => {
-        await openList(world(SAVED_UNITS, CATEGORIES), SAVED_UNITS, CATEGORIES);
-        openHash('#/r/r/new/f1/tac');
-        dispatchEvent(new HashChangeEvent('hashchange'));
-        await screen.findByRole('heading', { name: 'Tactical Squad' });
-      };
-
-      it('saves it as a preconfigured unit, and leaves the list as it was', async () => {
-        await openDraft();
-        expect(screen.queryByRole('button', { name: /Duplicate/ })).toBeNull();
-        expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
-
-        await waitFor(async () =>
-          expect((await db.savedUnits()).map((u) => [u.kind, u.name, u.key, u.categoryId])).toEqual([
-            ['preconfigured', '', 'tac', 'troops'],
-          ]),
-        );
-        expect(await storedRoots()).toEqual([]);
-        await expectToast('Saved as a preconfigured unit');
-      });
-
-      it('saves it as a unique unit once named', async () => {
-        await openDraft();
-        fireEvent.click(screen.getByRole('button', { name: 'Rename unit' }));
-        fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Squad Thrax' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-        await screen.findByRole('heading', { name: 'Squad Thrax' });
-
-        fireEvent.click(screen.getByRole('button', { name: 'Save updates' }));
-
-        await waitFor(async () =>
-          expect((await db.savedUnits()).map((u) => [u.kind, u.name])).toEqual([[undefined, 'Squad Thrax']]),
-        );
-        expect(await storedRoots()).toEqual([]);
-      });
-    });
-
-    describe('Preconfigured tab search', () => {
-      it("finds plain units of the sheet's category only", async () => {
-        await openWithSaved(world(SAVED_UNITS, CATEGORIES), []);
-        const sheet = await openAddSheet('Add Troops');
-        fireEvent.click(within(sheet).getByRole('tab', { name: 'Preconfigured' }));
-
-        fireEvent.input(within(sheet).getByPlaceholderText('Search units'), { target: { value: 'a' } });
-
-        expect(
-          [...(within(sheet).queryByRole('group', { name: 'From the data' })?.querySelectorAll('.pick b') ?? [])].map(
-            (b) => b.textContent,
-          ),
-        ).toEqual(['Tactical Squad']);
-      });
-    });
     describe('Preconfigured tab', () => {
       const MELTA = saved('melta', '', sel('tac', [sel('sgt', [sel('fist')])]), { kind: 'preconfigured' });
       const tab = (sheet: HTMLElement, name: string) => within(sheet).getByRole('tab', { name });
@@ -1068,7 +1026,7 @@ describe('RosterView', () => {
         expect(tabRows(sheet)).toEqual([['Squad Iron', 'Sergeant · Power Fist', '135 ×1']]);
       });
 
-      it('deletes a saved unit on a swipe left, after asking', async () => {
+      it('never deletes a saved unit on a swipe left', async () => {
         const ask = vi.fn(() => true);
         vi.stubGlobal('confirm', ask);
         await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
@@ -1076,23 +1034,17 @@ describe('RosterView', () => {
 
         drag(tabRow(sheet, /Tactical Squad/), [[-SWIPE, 0]]);
 
-        expect(ask).toHaveBeenCalledWith(
-          'Delete this preconfigured Tactical Squad? Lists that hold it keep it as a normal unit.',
-        );
-        await waitFor(async () => expect(await db.savedUnits()).toEqual([]));
-        expect(await storedRoots()).toEqual([]);
+        expect(ask).not.toHaveBeenCalled();
+        expect((await db.savedUnits()).map((u) => u.id)).toEqual(['melta']);
         vi.unstubAllGlobals();
       });
 
-      it('keeps the saved unit when the player says no', async () => {
-        vi.stubGlobal('confirm', () => false);
-        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [MELTA]);
-        const sheet = await openTab('Add Troops');
-
-        drag(tabRow(sheet, /Tactical Squad/), [[-SWIPE, 0]]);
-
-        expect((await db.savedUnits()).map((u) => u.id)).toEqual(['melta']);
-        vi.unstubAllGlobals();
+      it("greys out a unique unit with an option this list doesn't allow in the category tab", async () => {
+        await openWithSaved(world(SAVED_UNITS, CATEGORIES), [
+          saved('tlord', 'Lord Vex', sel('captain', [sel('blade')])),
+        ]);
+        const sheet = await openAddSheet('Add HQ');
+        expect(savedOffered(sheet)).toEqual([['Lord Vex', 'Not allowed']]);
       });
     });
   });

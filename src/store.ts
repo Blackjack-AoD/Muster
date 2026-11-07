@@ -1,12 +1,10 @@
 // Global app state + small hooks.
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { db, persistStorage, type RepoState, type SavedUnit } from './data/db';
+import { db, persistStorage, type RepoState, type SavedUnit, type SetUp } from './data/db';
 import {
   Evaluator,
-  applySaved,
   holdsSaved,
   isRecord,
-  isUnique,
   locate,
   uid,
   unlinkCopy,
@@ -16,6 +14,7 @@ import {
   type Sel,
 } from './data/engine';
 import { clearCaches, contextsFor } from './data/library';
+import { buildOf, duplicateSaved, follow, setUpOf } from './data/units';
 import { DEFAULT_REPOS, failureReason, syncRepo, type SyncProgress } from './data/sync';
 import type { Context } from './data/catalog';
 
@@ -251,6 +250,12 @@ const copyRoster = (r: Roster): Roster => ({
   updated: r.updated,
 });
 
+const isSetUp = (s: unknown) =>
+  isRecord(s) &&
+  typeof s.forceEntryId === 'string' &&
+  Array.isArray(s.selections) &&
+  s.selections.every((x) => isSel(x, 1));
+
 function isSavedUnit(u: unknown): u is SavedUnit {
   return (
     isRecord(u) &&
@@ -263,15 +268,13 @@ function isSavedUnit(u: unknown): u is SavedUnit {
     typeof u.key === 'string' &&
     typeof u.categoryId === 'string' &&
     isSel(u.build, 1) &&
+    (u.setUp === undefined || isSetUp(u.setUp)) &&
     typeof u.created === 'number' &&
     typeof u.updated === 'number'
   );
 }
 
-/** A saved unit's build never holds a name or a link of its own: the copies in lists do. */
-function buildOf({ name: _name, saved: _saved, ...build }: Sel): Sel {
-  return build;
-}
+const copySetUp = (s: SetUp): SetUp => ({ forceEntryId: s.forceEntryId, selections: s.selections.map(copySel) });
 
 function copySavedUnit(u: SavedUnit): SavedUnit {
   return {
@@ -284,6 +287,7 @@ function copySavedUnit(u: SavedUnit): SavedUnit {
     key: u.key,
     categoryId: u.categoryId,
     build: buildOf(copySel(u.build)),
+    ...(u.setUp === undefined ? {} : { setUp: copySetUp(u.setUp) }),
     created: u.created,
     updated: u.updated,
   };
@@ -353,30 +357,48 @@ function saveEdit(r: Roster) {
   });
 }
 
-/** Applies `edit` to a list and saves it. Copies of saved units change only in this list, until Save updates. */
+/** Applies `edit` to a list and saves it. Copies of saved units change only in this list. */
 export function saveListEdit(r: Roster, edit: (r: Roster) => void): void {
   edit(r);
   saveEdit(r);
 }
 
 /**
- * Save updates: takes a linked copy's build, and a unique unit's name, to its saved unit, then to every copy in
- * every other list, over any changes of their own. The caller updates other copies in this list.
+ * Keeps a changed saved unit. Every copy in every list but `skip` that still matched it follows; a copy changed in
+ * its list keeps its build and takes the name. The caller changes the copies in `skip`.
  */
-export async function saveUpdates(r: Roster, selUid: string): Promise<SavedUnit> {
+export async function keepSavedUnit(before: SavedUnit, after: SavedUnit, skip?: string): Promise<void> {
+  await db.putSavedUnit(after);
+  set({ savedUnits: state.savedUnits.map((u) => (u.id === after.id ? after : u)) });
+  changeCopies(after.id, (copy) => follow(copy, before, after), skip);
+}
+
+/** Stores a new saved unit. */
+export async function addSavedUnitToStore(unit: SavedUnit): Promise<void> {
+  await db.putSavedUnit(unit);
+  set({ savedUnits: [...state.savedUnits, unit] });
+}
+
+/** Stores a second saved unit built the same way as `id`, and returns it. */
+export async function duplicateSavedUnit(id: string): Promise<SavedUnit> {
+  const unit = state.savedUnits.find((u) => u.id === id);
+  if (!unit) throw new Error("This saved unit isn't on this phone.");
+  const copy = duplicateSaved(unit, Date.now());
+  await addSavedUnitToStore(copy);
+  return copy;
+}
+
+/**
+ * Takes a copy's build in list `r` to its saved unit, keeping the saved unit's name and set-up, and returns it.
+ * The caller changes the other copies in `r`.
+ */
+export async function updateFromCopy(r: Roster, selUid: string): Promise<{ before: SavedUnit; after: SavedUnit }> {
   const copy = locate(r, selUid)?.sel;
-  const saved = state.savedUnits.find((u) => u.id === copy?.saved);
-  if (!copy || !saved) throw new Error("This saved unit isn't on this phone.");
-  const updated: SavedUnit = {
-    ...saved,
-    name: isUnique(saved) ? (copy.name ?? saved.name) : '',
-    build: buildOf(structuredClone(copy)),
-    updated: Date.now(),
-  };
-  await db.putSavedUnit(updated);
-  set({ savedUnits: state.savedUnits.map((u) => (u.id === saved.id ? updated : u)) });
-  changeCopies(saved.id, (other) => applySaved(other, updated), r.uid);
-  return updated;
+  const before = state.savedUnits.find((u) => u.id === copy?.saved);
+  if (!copy || !before) throw new Error("This saved unit isn't on this phone.");
+  const after: SavedUnit = { ...before, build: buildOf(structuredClone(copy)), updated: Date.now() };
+  await keepSavedUnit(before, after, r.uid);
+  return { before, after };
 }
 
 /**
@@ -399,6 +421,7 @@ export async function saveUnit(r: Roster, rs: RSel, name: string | undefined): P
     // '' for a unit with no primary category, as the Add unit sheet groups it
     categoryId: rs.eff.primary ?? '',
     build: buildOf(structuredClone(sel)),
+    setUp: { forceEntryId: force.forceEntryId, selections: setUpOf(rs.force.roots) },
     created: now,
     updated: now,
   };
@@ -416,17 +439,6 @@ function changeCopies(id: string, change: (copy: Sel) => void, skip?: string) {
   }
 }
 
-export async function renameSavedUnit(id: string, name: string): Promise<void> {
-  const saved = state.savedUnits.find((u) => u.id === id);
-  if (!saved) throw new Error("This saved unit isn't on this phone.");
-  const renamed = { ...saved, name, updated: Date.now() };
-  await db.putSavedUnit(renamed);
-  set({ savedUnits: state.savedUnits.map((u) => (u.id === id ? renamed : u)) });
-  changeCopies(id, (copy) => {
-    copy.name = name;
-  });
-}
-
 /** Its copies become normal units: each list keeps the build and loses the link and the name. */
 export async function deleteSavedUnit(id: string): Promise<void> {
   await db.delSavedUnit(id);
@@ -442,15 +454,18 @@ export interface RosterCtl {
   mutate: (fn: (r: Roster) => void) => void;
   /** edits stay in memory: the list isn't saved */
   scratch: boolean;
-  /** a scratch list holding a unit being set up as a new saved unit, which can be named and saved */
-  draft?: boolean;
+  /** a saved unit's own list on the Units tab, where every edit keeps the saved unit */
+  unitTab?: boolean;
 }
 
-/** Load contexts for a roster and keep an evaluator in sync with edits. */
+/**
+ * Load contexts for a roster and keep an evaluator in sync with edits. With `onEdit`, the list is a saved unit's
+ * own list: edits stay in memory and `onEdit` keeps each one.
+ */
 export function useRosterCtl(
   source: Roster | undefined,
   scratch = false,
-  draft = false,
+  onEdit?: (r: Roster) => void,
 ): { ctl?: RosterCtl; error?: string; loading: boolean } {
   const repos = useStore((s) => s.repos);
   const [contexts, setContexts] = useState<Map<string, Context>>();
@@ -491,10 +506,13 @@ export function useRosterCtl(
       roster: local,
       contexts,
       ev,
-      scratch: scratch || draft,
-      draft,
+      scratch: scratch || onEdit !== undefined,
+      unitTab: onEdit !== undefined,
       mutate: (fn) => {
-        if (scratch || draft) fn(local);
+        if (onEdit) {
+          fn(local);
+          onEdit(local);
+        } else if (scratch) fn(local);
         else saveListEdit(local, fn);
         setVersion((v) => v + 1);
       },

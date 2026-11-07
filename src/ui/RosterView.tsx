@@ -39,7 +39,8 @@ import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
-import { DataUnits, PreconfiguredView, copiesOf, takeOffOrForget } from './Preconfigured';
+import { NO_SAVED_UNITS, PreconfiguredView, copiesOf, takeOff } from './Preconfigured';
+import { clashOf } from '../data/units';
 import { rosterText, shareText } from './exporter';
 
 export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
@@ -326,7 +327,7 @@ function visibleOpts(ev: Evaluator, rs: RSel) {
 }
 
 /** a set-up entry (not a unit) with no choices in it at all, e.g. the Legion picked when the list was made */
-function silentSetup(_ev: Evaluator, rs: RSel) {
+export function silentSetup(_ev: Evaluator, rs: RSel) {
   return !isUnitLike(rs.opt) && !rs.total && rs.force.ctx.options(rs.node).length === 0;
 }
 
@@ -346,7 +347,7 @@ export function roomFor(ev: Evaluator, o: Opt, rf: RForce) {
  * A set-up entry that is just "pick one of a few" (e.g. Allegiance: Loyalist / Traitor) is shown as buttons
  * right on the list, instead of a row that opens a page.
  */
-function inlineChoice(ev: Evaluator, rs: RSel): { g: Opt; members: Opt[] } | null {
+export function inlineChoice(ev: Evaluator, rs: RSel): { g: Opt; members: Opt[] } | null {
   if (isUnitLike(rs.opt) || rs.total) return null;
   const opts = visibleOpts(ev, rs);
   if (opts.length !== 1 || opts[0].kind !== 'group') return null;
@@ -361,7 +362,7 @@ function inlineChoice(ev: Evaluator, rs: RSel): { g: Opt; members: Opt[] } | nul
   return { g, members };
 }
 
-function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: Opt; members: Opt[] } }) {
+export function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: Opt; members: Opt[] } }) {
   return (
     <div class="choice-row" role="radiogroup" aria-label={u.eff.name}>
       {choice.members.map((m) => {
@@ -569,13 +570,14 @@ export function PickRow({
   );
 }
 
-/** A saved unit the list refuses, with the reason in place of its points. Tapping or swiping it adds nothing. */
-function RefusedRow({ name, reason }: { name: string; reason: string }) {
+/** A saved unit the list refuses, greyed, with the reason in place of its points. Tapping or swiping it adds nothing. */
+export function RefusedRow({ name, sub, reason }: { name: string; sub?: string; reason: string }) {
   return (
-    <div class="pick-swipe">
-      <button class="pick">
+    <div class="pick-swipe refused">
+      <button class="pick" aria-disabled="true">
         <span>
           <b>{name}</b>
+          {sub && <small class="pick-sub">{sub}</small>}
         </span>
         <span class="pick-pts">{reason}</span>
       </button>
@@ -606,7 +608,7 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
         .filter((u) => isUnique(u) && (!cat || u.categoryId === cat))
         .flatMap((unit) => {
           const tried = tryAddSaved(ctl.roster, ctl.contexts, rf.force.uid, unit);
-          return tried ? [{ unit, tried }] : [];
+          return tried ? [{ unit, tried, clash: tried.added ? clashOf(tried.rs) : undefined }] : [];
         }),
     [savedUnits, rf, cat, ctl.ev],
   );
@@ -622,8 +624,16 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
           // a unique unit the list holds can't be tried again: its copy in the list shows its wargear
           const rs = tried.added ? tried.rs : ctl.ev.find(heldCopy(ctl.roster, unit.id) ?? '');
           const name = isUnique(unit) ? unit.name : (rs?.eff.name ?? 'Preconfigured unit');
+          const clash = tried.added ? clashOf(tried.rs) : undefined;
           return [
-            { unit, tried, name, sub: rs ? unitSummary(rs) : undefined, heldPts: tried.added ? 0 : (rs?.total ?? 0) },
+            {
+              unit,
+              tried,
+              name,
+              sub: rs ? unitSummary(rs) : undefined,
+              heldPts: tried.added ? 0 : (rs?.total ?? 0),
+              clash,
+            },
           ];
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
@@ -681,48 +691,47 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
       </div>
       {tab === 'preconfigured' && (
         <>
-          {!configuredShown.length && (
-            <p class="muted pad">
-              {q
-                ? 'No saved units matching that.'
-                : "No preconfigured units yet. Search for a unit to set one up, or tap Save updates on a unit's page."}
-            </p>
-          )}
+          {!configuredShown.length && <p class="muted pad">{q ? 'No saved units matching that.' : NO_SAVED_UNITS}</p>}
           {configuredShown.length > 0 && (
             <p class="muted small pad-x pick-hint">
-              Tap to add and open a unit. Swipe right to add it and stay here, or left to delete it.
+              Tap to add and open a unit. Swipe right to add it and stay here, or left to take one out of the list.
             </p>
           )}
           <div class="pick-list" role="group" aria-label="Preconfigured units">
-            {configuredShown.map(({ unit, tried, name, sub, heldPts }) => (
-              <PickRow
-                key={unit.id}
-                name={name}
-                sub={sub}
-                pts={
-                  tried.added
-                    ? tried.pts
-                    : tried.reason === 'already-in-list' && heldPts
-                      ? heldPts
-                      : REFUSED[tried.reason]
-                }
-                added={copiesOf(ctl.roster, unit.id)}
-                swipeLabel="Add saved build"
-                onTap={() => tried.added && openSaved(unit)}
-                onSwipe={() => tried.added && addSaved(unit)}
-                onSwipeLeft={() => void takeOffOrForget(ctl, unit, name)}
-              />
-            ))}
+            {configuredShown.map(({ unit, tried, name, sub, heldPts, clash }) =>
+              clash ? (
+                <RefusedRow key={unit.id} name={name} sub={clash} reason="Not allowed" />
+              ) : (
+                <PickRow
+                  key={unit.id}
+                  name={name}
+                  sub={sub}
+                  pts={
+                    tried.added
+                      ? tried.pts
+                      : tried.reason === 'already-in-list' && heldPts
+                        ? heldPts
+                        : REFUSED[tried.reason]
+                  }
+                  added={copiesOf(ctl.roster, unit.id)}
+                  swipeLabel="Add saved build"
+                  onTap={() => tried.added && openSaved(unit)}
+                  onSwipe={() => tried.added && addSaved(unit)}
+                  onSwipeLeft={() => takeOff(ctl, name, unit)}
+                />
+              ),
+            )}
           </div>
-          <DataUnits ctl={ctl} forces={[rf]} cat={cat ?? undefined} q={q} />
         </>
       )}
       {tab === 'units' && savedShown.length > 0 && (
         <>
           <div class="list-label">Unique units</div>
           <div class="pick-list" role="group" aria-label="Unique units">
-            {savedShown.map(({ unit, tried }) =>
-              tried.added ? (
+            {savedShown.map(({ unit, tried, clash }) =>
+              clash ? (
+                <RefusedRow key={unit.id} name={unit.name} sub={clash} reason="Not allowed" />
+              ) : tried.added ? (
                 <PickRow
                   key={unit.id}
                   name={unit.name}

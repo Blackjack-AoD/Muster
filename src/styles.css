@@ -1933,3 +1933,36 @@ input:focus {
   text-transform: uppercase;
   color: var(--brass);
 }
+
+/* a saved unit a list refuses: greyed, nothing happens on tap */
+.pick-swipe.refused .pick {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Units tab */
+.army-head {
+  margin: 18px 16px 0;
+  font-family: Cinzel, serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--brass2);
+}
+.unit-setup {
+  margin: 8px 12px 0;
+  padding: 2px 6px 6px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  background: var(--card);
+}
+.unit-setup .g-lim {
+  margin-left: auto;
+}
+.setup-pick > .o-name {
+  display: block;
+  padding: 8px 10px 4px;
+  font-weight: 600;
+}
+.held-in {
+  margin-bottom: 24px;
+}

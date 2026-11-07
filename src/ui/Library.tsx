@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { Context, Opt } from '../data/catalog';
-import { addSel, rootOptionsCached, isUnique, savedUnitIsFor, uid, type Roster, type RSel } from '../data/engine';
-import type { SavedUnit } from '../data/db';
+import { addSel, rootOptionsCached, uid, type Roster, type RSel } from '../data/engine';
 import { activeSystems, gameKey, getContext } from '../data/library';
 import { compendium, type CompRule } from '../data/rules';
 import { failureReason } from '../data/sync';
-import { deleteSavedUnit, failureMessage, renameSavedUnit, toast, useRosterCtl, useStore } from '../store';
-import { Empty, Link, Loading, Pts, Sheet, TopBar, fmtN } from './common';
+import { useRosterCtl, useStore } from '../store';
+import { Empty, Link, Loading, Pts, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { cleanCat } from './RosterView';
 import { Rules } from './UnitEditor';
@@ -263,11 +262,7 @@ function useCtx(repoName: string, catId: string) {
 
 function UnitList({ repo, catId }: { repo: string; catId: string }) {
   const { ctx, err } = useCtx(repo, catId);
-  const allSaved = useStore((s) => s.savedUnits);
-  const ours = allSaved.filter((u) => savedUnitIsFor(u, repo, catId));
-  const saved = ours.filter(isUnique);
   const [q, setQ] = useState('');
-  const [naming, setNaming] = useState<SavedUnit>();
   const groups = useMemo(() => {
     if (!ctx) return [];
     const pts = ctx.pointsType()?.id ?? '';
@@ -300,14 +295,6 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
       </div>
     );
   const ql = q.toLowerCase();
-  const savedShown = saved.filter((u) => u.name.toLowerCase().includes(ql));
-  // a preconfigured unit has no name of its own: it goes by the data's name for its unit
-  const dataName = (u: SavedUnit) => rootOptionsCached(ctx).find((o) => o.key === u.key)?.node.name ?? 'Unit';
-  const preconfigured = ours
-    .filter((u) => !isUnique(u))
-    .map((u) => ({ u, name: dataName(u) }))
-    .filter(({ name }) => name.toLowerCase().includes(ql))
-    .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div class="page">
       <TopBar title={title} sub={ctx.gst.name} backTo="/lib" />
@@ -315,44 +302,6 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
         <Icon name="search" size={18} />
         <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      {savedShown.length > 0 && (
-        <>
-          <div class="list-label">Unique units</div>
-          <div class="pick-list" role="group" aria-label="Unique units">
-            {savedShown.map((u) => (
-              <div class="pick" key={u.id}>
-                <span>
-                  <b>{u.name}</b>
-                </span>
-                <button class="icon-btn sm" aria-label={`Rename ${u.name}`} onClick={() => setNaming(u)}>
-                  <Icon name="edit" size={16} />
-                </button>
-                <button class="icon-btn sm" aria-label={`Delete ${u.name}`} onClick={() => deleteSaved(u, u.name)}>
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {preconfigured.length > 0 && (
-        <>
-          <div class="list-label">Preconfigured units</div>
-          <div class="pick-list" role="group" aria-label="Preconfigured units">
-            {preconfigured.map(({ u, name }) => (
-              <div class="pick" key={u.id}>
-                <span>
-                  <b>{name}</b>
-                </span>
-                <button class="icon-btn sm" aria-label={`Delete ${name}`} onClick={() => deleteSaved(u, name)}>
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {naming && <RenameSavedSheet unit={naming} onClose={() => setNaming(undefined)} />}
       {groups.map((g) => {
         const items = g.items.filter((x) => x.o.node.name.toLowerCase().includes(ql));
         if (!items.length) return null;
@@ -373,41 +322,6 @@ function UnitList({ repo, catId }: { repo: string; catId: string }) {
         );
       })}
     </div>
-  );
-}
-
-function deleteSaved(unit: SavedUnit, name: string) {
-  const question = isUnique(unit)
-    ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
-    : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
-  if (!confirm(question)) return;
-  deleteSavedUnit(unit.id).catch((e: unknown) => toast(failureMessage('delete this saved unit', e)));
-}
-
-function RenameSavedSheet({ unit, onClose }: { unit: SavedUnit; onClose: () => void }) {
-  const [name, setName] = useState(unit.name);
-  const save = (e: Event) => {
-    e.preventDefault();
-    // a unique unit always has a name, so an empty one keeps the old
-    const named = name.trim();
-    if (named)
-      renameSavedUnit(unit.id, named).catch((e: unknown) => toast(failureMessage('rename this saved unit', e)));
-    onClose();
-  };
-  return (
-    <Sheet title="Rename unique unit" onClose={onClose}>
-      <form class="form" onSubmit={save}>
-        <label>
-          Name
-          <div class="name-field">
-            <input value={name} placeholder={unit.name} onInput={(e) => setName(e.currentTarget.value)} />
-            <button type="submit" class="icon-btn" aria-label="Save name">
-              <Icon name="check" />
-            </button>
-          </div>
-        </label>
-      </form>
-    </Sheet>
   );
 }
 

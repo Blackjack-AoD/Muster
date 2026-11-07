@@ -1,17 +1,15 @@
+import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
 import {
   addModels,
   addSel,
-  applySaved,
   isUnique,
   matchesSaved,
   canNameModel,
   displayName,
-  duplicateSel,
   issuesOn,
-  linkCopy,
   locate,
   nameSel,
   nameToSet,
@@ -24,17 +22,35 @@ import {
 } from '../data/engine';
 import type { SavedUnit } from '../data/db';
 import type { Profile, Rule } from '../data/model';
-import { failureMessage, getState, saveUnit, saveUpdates, toast, useStore, type RosterCtl } from '../store';
+import { failureMessage, getState, saveUnit, toast, updateFromCopy, useStore, type RosterCtl } from '../store';
+import { follow } from '../data/units';
 import { Pts, Sheet, TopBar, fmtN } from './common';
 import { Icon } from './Icon';
 import { onOffPair, pick } from '../data/setup';
 import { StatBlock } from './StatBlock';
 import { cleanCat } from './RosterView';
 
-export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: string; backTo: string }) {
+/**
+ * A unit's page. In a list it edits that list's unit; on the Units tab it edits a saved unit, with `head` above
+ * the options (the army's set-up) and `foot` below them (the saved unit's actions).
+ */
+export function UnitEditor({
+  ctl,
+  selUid,
+  backTo,
+  head,
+  foot,
+}: {
+  ctl: RosterCtl;
+  selUid: string;
+  backTo: string;
+  head?: ComponentChildren;
+  foot?: ComponentChildren;
+}) {
   const rs = ctl.ev.find(selUid);
   const [tab, setTab] = useState<'options' | 'stats' | 'rules'>('options');
   const [naming, setNaming] = useState(false);
+  const [savingCopy, setSavingCopy] = useState(false);
   const savedUnits = useStore((s) => s.savedUnits);
   if (!rs) {
     return (
@@ -66,7 +82,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         backTo={backTo}
         right={
           <>
-            {canEdit(ctl) && isRoot && unitLike && (
+            {canEdit(ctl) && isRoot && unitLike && !(linked && isUnique(linked)) && (
               <button class="icon-btn" aria-label="Rename unit" onClick={() => setNaming(true)}>
                 <Icon name="edit" />
               </button>
@@ -76,18 +92,15 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
         }
       />
       {naming && <NameSheet title="Unit" ctl={ctl} rs={rs} onClose={() => setNaming(false)} />}
-      {ctl.draft && (
+      {savingCopy && linked && <SaveCopySheet ctl={ctl} rs={rs} linked={linked} onClose={() => setSavingCopy(false)} />}
+      {linked && isRoot && (
         <div class="banner info" role="note">
-          Setting up a new saved unit. Name it to make it a unique unit. Save updates keeps it, and no list changes.
+          {inStep
+            ? `${isUnique(linked) ? 'Unique' : 'Preconfigured'} unit from the Units tab. Changes here stay in this list.`
+            : 'This copy has changes of its own. They stay in this list.'}
         </div>
       )}
-      {linked && (
-        <div class="banner info" role="note">
-          {!inStep
-            ? "This list has changes that other lists don't. Save updates shares them with every list that holds it."
-            : `${isUnique(linked) ? 'Unique' : 'Preconfigured'} unit. Changes here stay in this list until you tap Save updates.`}
-        </div>
-      )}
+      {head}
       {tabs.length > 1 && (
         <div class="tabs" role="tablist">
           {tabs.map((t) => (
@@ -125,23 +138,13 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
               a Rite of War needs a Primarch, or a character with Master of the Legion).
             </p>
           )}
-          {canEdit(ctl) && isRoot && unitLike && !inStep && (
-            <div class="unit-actions">
-              <button class="btn" onClick={() => void saveChanges(ctl, rs, linked, backTo)}>
-                Save updates
-              </button>
-            </div>
-          )}
           {!ctl.scratch && isRoot && unitLike && (
             <div class="unit-actions">
               <button
                 class="btn"
-                onClick={() => {
-                  ctl.mutate((r) => duplicateSel(r, rs.sel.uid));
-                  back(backTo);
-                }}
+                onClick={() => (linked ? setSavingCopy(true) : void saveToUnits(ctl, rs, rs.sel.name))}
               >
-                <Icon name="copy" /> Duplicate
+                <Icon name="shield" /> Save to Units
               </button>
               <button
                 class="btn danger"
@@ -156,6 +159,7 @@ export function UnitEditor({ ctl, selUid, backTo }: { ctl: RosterCtl; selUid: st
           )}
         </>
       )}
+      {tab === 'options' && foot}
       {tab === 'stats' && <Profiles ctl={ctl} profiles={ctl.ev.profilesFor(rs)} />}
       {tab === 'rules' && <Rules ctl={ctl} rs={rs} />}
     </div>
@@ -618,41 +622,64 @@ function NameSheet({ title, ctl, rs, onClose }: { title: string; ctl: RosterCtl;
   );
 }
 
-/**
- * Save updates. A unit with no saved unit, or a named copy of a preconfigured one, becomes a new saved unit:
- * unique when it has a name, preconfigured when not. A copy takes its changes to its saved unit and every copy.
- */
-async function saveChanges(ctl: RosterCtl, rs: RSel, linked: SavedUnit | undefined, backTo: string) {
+/** Save to Units on a normal unit: a new saved unit, unique when named. The unit in the list stays as it is. */
+async function saveToUnits(ctl: RosterCtl, rs: RSel, name: string | undefined) {
   try {
-    if (!linked || (!isUnique(linked) && rs.sel.name !== undefined)) {
-      const saved = await saveUnit(ctl.roster, rs, rs.sel.name);
-      const kind = isUnique(saved) ? 'Saved as a unique unit' : 'Saved as a preconfigured unit';
-      // a unit set up on its own isn't in any list: it's done once saved
-      if (ctl.draft) {
-        toast(kind);
-        back(backTo);
-        return;
-      }
-      ctl.mutate((r) => {
-        const own = locate(r, rs.sel.uid)?.sel;
-        if (own) linkCopy(own, saved);
-      });
-      toast(kind);
-      return;
-    }
-    const updated = await saveUpdates(ctl.roster, rs.sel.uid);
-    ctl.mutate((r) => {
-      for (const f of r.forces)
-        for (const s of f.selections) if (s.saved === updated.id && s.uid !== rs.sel.uid) applySaved(s, updated);
-    });
-    toast('Updates saved');
+    const saved = await saveUnit(ctl.roster, rs, name);
+    toast(isUnique(saved) ? 'Saved to Units as a unique unit' : 'Saved to Units as a preconfigured unit');
   } catch (e) {
     toast(failureMessage('save this unit', e));
   }
 }
 
-/** Whether the page can rename, split and save: a list, or a unit set up on its own, but not a read-only preview. */
-const canEdit = (ctl: RosterCtl) => !ctl.scratch || ctl.draft === true;
+/** Save to Units on a copy: update its saved unit, which untouched copies follow, or save it as a new unit. */
+function SaveCopySheet({
+  ctl,
+  rs,
+  linked,
+  onClose,
+}: {
+  ctl: RosterCtl;
+  rs: RSel;
+  linked: SavedUnit;
+  onClose: () => void;
+}) {
+  const label = isUnique(linked) ? linked.name : `preconfigured ${rs.eff.name}`;
+  const update = async () => {
+    onClose();
+    try {
+      const { before, after } = await updateFromCopy(ctl.roster, rs.sel.uid);
+      ctl.mutate((r) => {
+        for (const f of r.forces)
+          for (const s of f.selections) if (s.saved === after.id && s.uid !== rs.sel.uid) follow(s, before, after);
+      });
+      toast(`Updated ${label}`);
+    } catch (e) {
+      toast(failureMessage('update this saved unit', e));
+    }
+  };
+  const asNew = () => {
+    onClose();
+    // a list holds a unique unit once, so a new one from a unique copy takes a name of its own
+    void saveToUnits(ctl, rs, isUnique(linked) ? `${linked.name} (copy)` : undefined);
+  };
+  return (
+    <Sheet title="Save to Units" onClose={onClose}>
+      <div class="menu">
+        <button onClick={() => void update()}>
+          <Icon name="shield" /> Update {label}
+        </button>
+        <button onClick={asNew}>
+          <Icon name="plus" /> Save as a new unit
+        </button>
+      </div>
+      <p class="muted small">Copies in other lists that haven't been changed follow an update.</p>
+    </Sheet>
+  );
+}
+
+/** Whether the page can rename and split: a list, or a saved unit on the Units tab, but not a read-only preview. */
+const canEdit = (ctl: RosterCtl) => !ctl.scratch || ctl.unitTab === true;
 
 /** same option tree and counts (ignoring uids) */
 function gearSig(s: Sel): string {

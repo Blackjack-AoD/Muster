@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
 import type { RepoState } from '../data/db';
 import { Evaluator, uid, type Roster } from '../data/engine';
+import { newListLimit } from '../data/units';
 import { activeSystems, getContext, rosterGameKey, systemsOf, gameKey, type SystemInfo } from '../data/library';
 import { failureReason } from '../data/sync';
 import { addRoster, failureMessage, toast, useStore } from '../store';
@@ -189,8 +190,7 @@ function NewListDetails({
             .forceEntries()
             .filter((f) => !f.hidden)
             .map((f) => ({ id: f.id, name: f.name }));
-          const pt = ctx.pointsType();
-          const lim = pt && pt.defaultCostLimit > 0 ? pt.defaultCostLimit : 3000;
+          const lim = newListLimit(ctx);
           setState({ forces, limit: lim, ctx });
           setForceId(forces[0]?.id);
           setLimit(String(lim));

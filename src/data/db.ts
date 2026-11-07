@@ -37,8 +37,16 @@ export interface SavedUnit {
   key: string;
   categoryId: string;
   build: Sel;
+  /** the army set-up it was built with; absent on units saved before set-ups were kept, which use a new list's */
+  setUp?: SetUp;
   created: number;
   updated: number;
+}
+
+/** A saved unit's army set-up: the detachment type and its set-up picks (e.g. Allegiance, Rite of War). */
+export interface SetUp {
+  forceEntryId: string;
+  selections: Sel[];
 }
 
 const DB_NAME = 'muster';

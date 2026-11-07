@@ -1,12 +1,10 @@
 // The army-wide Preconfigured page: every saved unit of the list's armies, added straight into the force org
-// without showing it, and a search of the data for new units to set up and save.
-import { useEffect, useMemo, useState } from 'preact/hooks';
+// without showing it. Saved units are made and changed on the Units tab.
+import { useMemo, useState } from 'preact/hooks';
 import { go } from '../app';
-import type { Opt } from '../data/catalog';
 import type { SavedUnit } from '../data/db';
 import {
   addSavedUnit,
-  addSel,
   forceRootOptions,
   isUnique,
   removeSel,
@@ -15,14 +13,12 @@ import {
   type RForce,
   type Roster,
 } from '../data/engine';
-import { deleteSavedUnit, failureMessage, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
-import { Loading, Sheet, TopBar } from './common';
-import { UnitEditor } from './UnitEditor';
+import { clashOf } from '../data/units';
+import { toast, useStore, type RosterCtl } from '../store';
+import { Sheet } from './common';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
-import { PickRow, REFUSED, cleanCat, droppedMessage, heldCopy, isUnitLike, roomFor, unitSummary } from './RosterView';
-
-const primaryOf = (o: Opt) => (o.node.categoryLinks.find((c) => c.primary) ?? o.node.categoryLinks[0])?.targetId ?? '';
+import { PickRow, REFUSED, RefusedRow, droppedMessage, heldCopy, roomFor, unitSummary } from './RosterView';
 
 /** Whether detachment `rf` has a slot for a unit of entry `key` in category `catId`. */
 function hasRoom(ctl: RosterCtl, rf: RForce, key: string, catId: string): boolean {
@@ -56,6 +52,7 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
           if (!tried) return [];
           const rs = tried.added ? tried.rs : ctl.ev.find(heldCopy(ctl.roster, unit.id) ?? '');
           const name = isUnique(unit) ? unit.name : (rs?.eff.name ?? 'Preconfigured unit');
+          const clash = tried.added ? clashOf(tried.rs) : undefined;
           // a unique unit the list holds can't go in again: it shows the points of the copy it holds
           const pts = !tried.added
             ? tried.reason === 'already-in-list' && rs
@@ -64,7 +61,7 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
             : fits.length
               ? tried.pts
               : 'No room';
-          return [{ unit, name, sub: rs ? unitSummary(rs) : undefined, pts, fits }];
+          return [{ unit, name, sub: rs ? unitSummary(rs) : undefined, pts, fits, clash }];
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
     [savedUnits, ctl.ev],
@@ -94,32 +91,31 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
         <Icon name="search" size={18} />
         <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       </div>
-      {!shown.length && !q && (
-        <p class="muted pad">
-          No saved units for this army yet. Search for a unit to set one up, or tap Save updates on a unit's page.
-        </p>
-      )}
+      {!shown.length && <p class="muted pad">{q ? 'No saved units matching that.' : NO_SAVED_UNITS}</p>}
       {shown.length > 0 && (
         <p class="muted small pad-x pick-hint">
-          Tap to add and open a unit. Swipe right to add it and stay here, or left to delete it.
+          Tap to add and open a unit. Swipe right to add it and stay here, or left to take one out of the list.
         </p>
       )}
       <div class="pick-list" role="group" aria-label="Saved units">
-        {shown.map(({ unit, name, sub, pts, fits }) => (
-          <PickRow
-            key={unit.id}
-            name={name}
-            sub={sub}
-            pts={pts}
-            added={copiesOf(ctl.roster, unit.id)}
-            swipeLabel="Add saved build"
-            onTap={() => place(name, fits, addSaved(unit, true))}
-            onSwipe={() => place(name, fits, addSaved(unit, false))}
-            onSwipeLeft={() => void takeOffOrForget(ctl, unit, name)}
-          />
-        ))}
+        {shown.map(({ unit, name, sub, pts, fits, clash }) =>
+          clash ? (
+            <RefusedRow key={unit.id} name={name} sub={clash} reason="Not allowed" />
+          ) : (
+            <PickRow
+              key={unit.id}
+              name={name}
+              sub={sub}
+              pts={pts}
+              added={copiesOf(ctl.roster, unit.id)}
+              swipeLabel="Add saved build"
+              onTap={() => place(name, fits, addSaved(unit, true))}
+              onSwipe={() => place(name, fits, addSaved(unit, false))}
+              onSwipeLeft={() => takeOff(ctl, name, unit)}
+            />
+          ),
+        )}
       </div>
-      <DataUnits ctl={ctl} forces={ctl.ev.forces} q={q} />
       {placing && <PlaceSheet ctl={ctl} placing={placing} onClose={() => setPlacing(null)} />}
     </div>
   );
@@ -129,37 +125,26 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
 export const copiesOf = (r: Roster, id: string) =>
   r.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
 
-/**
- * A swipe left on a saved unit: takes its last copy out of the list, with Undo. When the list holds none,
- * it deletes the saved unit itself, after asking.
- */
-export async function takeOffOrForget(ctl: RosterCtl, unit: SavedUnit, name: string): Promise<void> {
+/** What a list shows when its armies have no saved units. */
+export const NO_SAVED_UNITS = 'No saved units for this army yet. Make them on the Units tab.';
+
+/** A swipe left on a saved unit: takes its last copy out of the list, with Undo. The saved unit stays. */
+export function takeOff(ctl: RosterCtl, name: string, unit: SavedUnit): void {
   const held = ctl.roster.forces.flatMap((f) => f.selections.filter((s) => s.saved === unit.id).map((s) => ({ f, s })));
   const last = held[held.length - 1];
-  if (last) {
-    const forceUid = last.f.uid;
-    const idx = last.f.selections.indexOf(last.s);
-    const copy = structuredClone(last.s);
-    ctl.mutate((r) => removeSel(r, copy.uid));
-    toast(`Removed ${name}`, {
-      label: 'Undo',
-      run: () =>
-        ctl.mutate((r) => {
-          const f = r.forces.find((x) => x.uid === forceUid);
-          if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, copy);
-        }),
-    });
-    return;
-  }
-  const question = isUnique(unit)
-    ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
-    : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
-  if (!confirm(question)) return;
-  try {
-    await deleteSavedUnit(unit.id);
-  } catch (e) {
-    toast(failureMessage('delete this saved unit', e));
-  }
+  if (!last) return;
+  const forceUid = last.f.uid;
+  const idx = last.f.selections.indexOf(last.s);
+  const copy = structuredClone(last.s);
+  ctl.mutate((r) => removeSel(r, copy.uid));
+  toast(`Removed ${name}`, {
+    label: 'Undo',
+    run: () =>
+      ctl.mutate((r) => {
+        const f = r.forces.find((x) => x.uid === forceUid);
+        if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, copy);
+      }),
+  });
 }
 
 /** Asks which detachment, of those with room, takes the unit. */
@@ -183,96 +168,4 @@ function PlaceSheet({ ctl, placing, onClose }: { ctl: RosterCtl; placing: Placin
       </div>
     </Sheet>
   );
-}
-
-/** The plain units of the data, from these detachments and of category `cat` when given, that match `q`. */
-export function DataUnits({
-  ctl,
-  forces,
-  cat,
-  q,
-}: {
-  ctl: RosterCtl;
-  forces: readonly RForce[];
-  cat?: string;
-  q: string;
-}) {
-  const units = useMemo(() => {
-    const byKey = new Map<string, { o: Opt; name: string; cat: string; rf: RForce }>();
-    for (const rf of forces) {
-      for (const o of forceRootOptions(rf.ctx, rf.entry)) {
-        const c = primaryOf(o);
-        if (!isUnitLike(o) || (cat !== undefined && c !== cat)) continue;
-        const e = ctl.ev.optionEff(o, null, rf);
-        if (e.hidden) continue;
-        const id = `${rf.force.catalogueId}|${o.key}`;
-        if (!byKey.has(id)) byKey.set(id, { o, name: e.name, cat: c, rf });
-      }
-    }
-    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [forces, cat, ctl.ev]);
-  const ql = q.trim().toLowerCase();
-  const shown = ql ? units.filter((u) => u.name.toLowerCase().includes(ql)) : [];
-  if (!shown.length) return null;
-  return (
-    <>
-      <div class="list-label">From the data</div>
-      <p class="muted small pad-x pick-hint">Tap a unit to set it up and save it as a preconfigured unit.</p>
-      <div class="pick-list" role="group" aria-label="From the data">
-        {shown.map(({ o, name, cat: c, rf }) => (
-          <button
-            key={`${rf.force.catalogueId}|${o.key}`}
-            class="pick"
-            onClick={() => go(`/r/${ctl.roster.uid}/new/${rf.force.uid}/${encodeURIComponent(o.key)}`)}
-          >
-            <span>
-              <b>{name}</b>
-              {cat === undefined && <small class="pick-sub">{cleanCat(rf.ctx.categoryName(c))}</small>}
-            </span>
-            <Icon name="chev" />
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
-
-/**
- * A plain unit of the data, set up on its own page and saved as a preconfigured or unique unit.
- * It sits in a copy of the list, so its options follow the list's set-up, and the list itself never changes.
- */
-export function DraftPage({ rosterUid, forceUid, optKey }: { rosterUid: string; forceUid: string; optKey: string }) {
-  const roster = useStore((s) => s.rosters.find((r) => r.uid === rosterUid));
-  const { ctl, error, loading } = useRosterCtl(roster, true, true);
-  const [selUid, setSelUid] = useState<string>();
-  const backTo = `/r/${rosterUid}/pre`;
-  useEffect(() => {
-    if (!ctl || selUid !== undefined) return;
-    const rf = ctl.ev.forces.find((f) => f.force.uid === forceUid);
-    const opt = rf && forceRootOptions(rf.ctx, rf.entry).find((o) => o.key === optKey);
-    let added = '';
-    if (opt) {
-      ctl.mutate((r) => {
-        added = addSel(r, ctl.contexts, forceUid, null, opt, 1, primaryOf(opt) || undefined) ?? '';
-      });
-    }
-    setSelUid(added);
-  }, [ctl, selUid]);
-  if (!ctl || selUid === '')
-    return (
-      <div class="page">
-        <TopBar title="New saved unit" backTo={backTo} />
-        {loading || !ctl ? (
-          loading ? (
-            <Loading label="Loading army data…" />
-          ) : (
-            <p class="error-text pad">{error}</p>
-          )
-        ) : (
-          <p class="error-text pad">This unit isn't in this army's data.</p>
-        )}
-      </div>
-    );
-  if (selUid === undefined) return <Loading label="Loading army data…" />;
-  return <UnitEditor ctl={ctl} selUid={selUid} backTo={backTo} />;
 }

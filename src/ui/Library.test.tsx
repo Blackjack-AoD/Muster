@@ -1,20 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { fireEvent, screen, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
-import { db, type SavedUnit } from '../data/db';
-import { getState } from '../store';
+import { db } from '../data/db';
 import { unit } from '../test/fixture';
-import {
-  expectError,
-  expectToast,
-  failReads,
-  openHash,
-  refuse,
-  renderScreen,
-  stubBrowserGaps,
-  worldFiles,
-} from '../test/screen';
+import { expectError, failReads, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 
 const STATS =
   '<profiles><profile id="p" name="Tactical Marine" typeId="t" typeName="Unit"><characteristics><characteristic name="M" typeId="m">7</characteristic><characteristic name="Sv" typeId="s">3+</characteristic></characteristics></profile></profiles>';
@@ -124,170 +114,25 @@ describe('Library', () => {
     await expectError('Storage is gone');
   });
 
-  describe('Saved units', () => {
-    const TAC = unit('tac', 'Tactical Squad', 100);
-    const saved = (id: string, name: string, o: Partial<SavedUnit> = {}): SavedUnit => ({
-      id,
-      name,
+  it('lists no saved units on an army page: they live on the Units tab', async () => {
+    const tac = unit('tac', 'Tactical Squad', 100);
+    await db.putSavedUnit({
+      id: 'thrax',
+      name: 'Squad Thrax',
       repo: 'test/repo',
       gameSystemId: 'gst',
       catalogueId: 'cat',
       key: 'tac',
       categoryId: '',
-      build: { uid: 's-' + id, key: 'tac', number: 1, children: [] },
+      build: { uid: 's-thrax', key: 'tac', number: 1, children: [] },
       created: 1,
       updated: 1,
-      ...o,
     });
+    await renderScreen(<App />, { files: worldFiles(tac) });
+    fireEvent.click(screen.getByRole('link', { name: 'Test Army' }));
+    await screen.findByRole('link', { name: /Tactical Squad/ });
 
-    /** The army's unit list, with these saved units on the phone. */
-    async function openArmy(units: readonly SavedUnit[]) {
-      for (const u of units) await db.putSavedUnit(u);
-      await renderScreen(<App />, { files: worldFiles(TAC) });
-      fireEvent.click(screen.getByRole('link', { name: 'Test Army' }));
-      await screen.findByRole('link', { name: /Tactical Squad/ });
-    }
-
-    const savedNames = () =>
-      [...(screen.queryByRole('group', { name: 'Unique units' })?.querySelectorAll('b') ?? [])].map(
-        (b) => b.textContent,
-      );
-
-    it('lists first the saved units of this army file, and none from another army or repo', async () => {
-      await openArmy([
-        saved('thrax', 'Squad Thrax'),
-        saved('orks', 'Da Boyz', { catalogueId: 'orks' }),
-        saved('elsewhere', 'Squad Elsewhere', { repo: 'other/repo' }),
-      ]);
-
-      expect(savedNames()).toEqual(['Squad Thrax']);
-      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual([
-        'Unique units',
-        'Other',
-      ]);
-    });
-
-    it('shows no Unique units section for an army with no saved units', async () => {
-      await openArmy([saved('orks', 'Da Boyz', { catalogueId: 'orks' })]);
-
-      expect(screen.queryByRole('group', { name: 'Unique units' })).toBeNull();
-      expect(screen.queryByText('Unique units')).toBeNull();
-    });
-
-    it('searching units narrows the saved units by name', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax'), saved('iron', 'Squad Iron')]);
-
-      fireEvent.input(screen.getByPlaceholderText('Search units'), { target: { value: 'IRON' } });
-
-      expect(savedNames()).toEqual(['Squad Iron']);
-    });
-
-    /** Opens the rename sheet of saved unit `name`, types `typed` and presses the tick. */
-    function rename(name: string, typed: string) {
-      fireEvent.click(screen.getByRole('button', { name: `Rename ${name}` }));
-      fireEvent.input(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Name' }), {
-        target: { value: typed },
-      });
-      fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-    }
-
-    it('closing the rename sheet keeps the old name', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-
-      fireEvent.click(screen.getByRole('button', { name: 'Rename Squad Thrax' }));
-      fireEvent.input(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Name' }), {
-        target: { value: 'Squad Iron' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-      expect(savedNames()).toEqual(['Squad Thrax']);
-      expect((await db.savedUnits()).map((u) => u.name)).toEqual(['Squad Thrax']);
-    });
-
-    it('lists preconfigured units by the data name, under their own heading, with delete and no rename', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax'), saved('melta', '', { kind: 'preconfigured' })]);
-
-      const group = screen.getByRole('group', { name: 'Preconfigured units' });
-      expect([...group.querySelectorAll('b')].map((b) => b.textContent)).toEqual(['Tactical Squad']);
-      expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual([
-        'Unique units',
-        'Preconfigured units',
-        'Other',
-      ]);
-      expect(within(group).queryByRole('button', { name: /^Rename/ })).toBeNull();
-
-      vi.stubGlobal('confirm', () => true);
-      fireEvent.click(within(group).getByRole('button', { name: 'Delete Tactical Squad' }));
-      await waitFor(async () => expect((await db.savedUnits()).map((u) => u.id)).toEqual(['thrax']));
-      vi.unstubAllGlobals();
-    });
-    const storedName = async (id: string) => (await db.savedUnits()).find((u) => u.id === id)?.name;
-
-    it('renames a saved unit from its rename button', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-
-      rename('Squad Thrax', '  Squad Iron ');
-
-      await waitFor(() => expect(savedNames()).toEqual(['Squad Iron']));
-      expect(await storedName('thrax')).toBe('Squad Iron');
-    });
-
-    it('keeps the old name when the rename leaves the name empty', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-      const before = getState().savedUnits;
-
-      rename('Squad Thrax', '   ');
-
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-      expect(getState().savedUnits).toBe(before);
-      expect(savedNames()).toEqual(['Squad Thrax']);
-      expect(await storedName('thrax')).toBe('Squad Thrax');
-    });
-
-    it('tells the player when storage refuses the rename, and keeps the old name', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-      refuse('put');
-
-      rename('Squad Thrax', 'Squad Iron');
-
-      await expectToast("Couldn't rename this saved unit: Storage is full");
-      expect(savedNames()).toEqual(['Squad Thrax']);
-    });
-
-    const ASKED = `Delete "Squad Thrax"? Lists that hold it keep it as a normal unit, without the name.`;
-    const answer = (yes: boolean) => vi.spyOn(window, 'confirm').mockReturnValue(yes);
-    const stored = async () => (await db.savedUnits()).map((u) => u.id);
-
-    it('asks before deleting a saved unit, saying what happens to its copies, and keeps it on no', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-      const asked = answer(false);
-
-      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
-
-      expect(asked).toHaveBeenCalledWith(ASKED);
-      expect(savedNames()).toEqual(['Squad Thrax']);
-      expect(await stored()).toEqual(['thrax']);
-    });
-
-    it('deletes a saved unit once the player agrees', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax'), saved('iron', 'Squad Iron')]);
-      answer(true);
-
-      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
-
-      await waitFor(() => expect(savedNames()).toEqual(['Squad Iron']));
-      expect(await stored()).toEqual(['iron']);
-    });
-
-    it('tells the player when storage refuses the delete, and keeps the saved unit', async () => {
-      await openArmy([saved('thrax', 'Squad Thrax')]);
-      answer(true);
-      refuse('delete');
-
-      fireEvent.click(screen.getByRole('button', { name: 'Delete Squad Thrax' }));
-
-      await expectToast("Couldn't delete this saved unit: Storage is full");
-      expect(savedNames()).toEqual(['Squad Thrax']);
-    });
+    expect(screen.queryByText('Squad Thrax')).toBeNull();
+    expect([...document.querySelectorAll('.list-label')].map((l) => l.textContent)).toEqual(['Other']);
   });
 });
