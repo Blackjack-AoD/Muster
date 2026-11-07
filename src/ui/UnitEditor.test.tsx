@@ -44,6 +44,14 @@ const inlineLevels = () =>
 
 const option = (role: 'checkbox' | 'radio', name: RegExp) => screen.getByRole(role, { name });
 
+/** The box of a section, by the name it shows. */
+const section = (name: string) => screen.getByRole('button', { name: new RegExp('^' + name) });
+
+/** Opens a section's sheet from its box. */
+const openSection = (name: string) => fireEvent.click(section(name));
+
+const sectionSheet = (name: string) => screen.queryByRole('dialog', { name });
+
 /** Opens the page of a list's only unit. `builtOn` builds the list on data older than what's on the phone. */
 async function openUnit(units = UNITS, builtOn = units) {
   const w = world(builtOn, { costLimit: 2000 });
@@ -120,11 +128,14 @@ describe('UnitEditor', () => {
   it("choosing another option in a pick-one group swaps its cost for the last one's", async () => {
     await openUnit();
 
+    openSection('Special Weapon');
     fireEvent.click(option('radio', /Flamer/));
     await waitFor(() => expect(topPoints()).toBe('110pts'));
+    openSection('Special Weapon');
     fireEvent.click(option('radio', /Melta Gun/));
 
     await waitFor(() => expect(topPoints()).toBe('125pts'));
+    openSection('Special Weapon');
     expect(option('radio', /Flamer/).getAttribute('aria-checked')).toBe('false');
     expect(option('radio', /Melta Gun/).getAttribute('aria-checked')).toBe('true');
   });
@@ -150,15 +161,18 @@ describe('UnitEditor', () => {
       </selectionEntryGroups>`,
     );
     await openUnit(guns);
+    openSection('Bolter');
     expect(screen.queryByRole('button', { name: 'More Bolter' })).toBeNull();
     expect(option('radio', /^Bolter/).getAttribute('aria-checked')).toBe('true');
 
     fireEvent.click(option('radio', /Melta Gun/));
     await waitFor(() => expect(topPoints()).toBe('115pts'));
+    openSection('Bolter');
     expect(option('radio', /^Bolter/).getAttribute('aria-checked')).toBe('false');
 
     fireEvent.click(option('radio', /Shrapnel Bolter/));
     await waitFor(() => expect(topPoints()).toBe('102pts'));
+    openSection('Bolter');
     expect(option('radio', /Melta Gun/).getAttribute('aria-checked')).toBe('false');
     expect((await storedUnit())?.children.map((c) => c.key)).toEqual([expect.stringMatching(/shrapnel$/)]);
   });
@@ -181,6 +195,7 @@ describe('UnitEditor', () => {
     </selectionEntryGroups>`;
     await openUnit(unit('tac', 'Tactical Squad', 100, group));
 
+    openSection('Relics');
     fireEvent.click(option('checkbox', /Cloak/));
     await waitFor(() => expect(topPoints()).toBe('105pts'));
     fireEvent.click(option('checkbox', /Banner/));
@@ -509,6 +524,7 @@ describe('UnitEditor', () => {
     if (kael) kael.name = 'Brother Kael';
     await openPage(w, tac, units);
 
+    openSection('Squad');
     fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
 
     await waitFor(async () =>
@@ -653,6 +669,123 @@ async function openLinked(
   await screen.findByRole('heading', { name: preconfigured ? 'Tactical Squad' : 'Squad Thrax' });
   return { root, w };
 }
+
+describe('UnitEditor sections', () => {
+  const one = (id: string, type: 'min' | 'max') =>
+    `<constraint id="${id}-${type}" type="${type}" field="selections" scope="parent" value="1"/>`;
+  const groupOf = (id: string, name: string, inner: string) =>
+    `<selectionEntryGroups><selectionEntryGroup id="${id}" name="${name}">${inner}</selectionEntryGroup></selectionEntryGroups>`;
+  const squad = (inner: string) => unit('tac', 'Tactical Squad', 100, inner);
+  const FLAMER = entry('flamer', 'Flamer', 10);
+  const REQUIRED = squad(groupOf('w', 'Weapon', cons(one('w', 'min'), one('w', 'max')) + children(FLAMER)));
+  const OPTIONAL = squad(groupOf('w', 'Weapon', cons(one('w', 'max')) + children(FLAMER)));
+
+  it("keeps a section's options in a sheet until its box is tapped", async () => {
+    await openUnit();
+    expect(screen.queryByRole('radio', { name: /Flamer/ })).toBeNull();
+    expect(section('Special Weapon').textContent).toContain('None');
+
+    openSection('Special Weapon');
+
+    expect(sectionSheet('Special Weapon')).not.toBeNull();
+    expect(option('radio', /Flamer/)).not.toBeNull();
+  });
+
+  it('closes a pick-one sheet on a choice, and the box shows it', async () => {
+    await openUnit();
+    openSection('Special Weapon');
+
+    fireEvent.click(option('radio', /Melta Gun/));
+
+    await waitFor(() => expect(sectionSheet('Special Weapon')).toBeNull());
+    expect(section('Special Weapon').textContent).toContain('Melta Gun');
+  });
+
+  it('keeps a pick-one sheet open when the choice has options of its own', async () => {
+    const scoped = entry('combi', 'Combi Bolter', 10, children(entry('scope', 'Scope', 5)));
+    await openUnit(squad(groupOf('w', 'Weapon', cons(one('w', 'max')) + children(scoped))));
+    openSection('Weapon');
+
+    fireEvent.click(option('radio', /Combi Bolter/));
+
+    await waitFor(() => expect(topPoints()).toBe('110pts'));
+    expect(sectionSheet('Weapon')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'More Scope' })).not.toBeNull();
+  });
+
+  it('keeps a pick-many sheet open, and the box lists each choice with its count', async () => {
+    await openUnit(squad(groupOf('kit', 'Kit', children(FLAMER, GRENADE))));
+    openSection('Kit');
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Flamer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More Flamer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More Frag Grenade' }));
+
+    await waitFor(() => expect(topPoints()).toBe('125pts'));
+    expect(sectionSheet('Kit')).not.toBeNull();
+    expect(section('Kit').textContent).toContain('2× Flamer, Frag Grenade');
+  });
+
+  it('shows a section under a model as a box too', async () => {
+    const trooper = entry('marine', 'Marine', 10, groupOf('g', 'Gear', children(GRENADE)), 'type="model"');
+    await openUnit(squad(children(trooper)));
+    fireEvent.click(screen.getByRole('button', { name: 'More Marine' }));
+    await waitFor(() => expect(section('Gear').textContent).toContain('None'));
+  });
+
+  it('marks a section missing a required choice until it has one', async () => {
+    await openUnit(REQUIRED, OPTIONAL);
+    expect(section('Weapon').classList.contains('missing')).toBe(true);
+    expect(section('Weapon').textContent).toContain('Not chosen');
+
+    openSection('Weapon');
+    fireEvent.click(option('radio', /Flamer/));
+
+    await waitFor(() => expect(section('Weapon').classList.contains('missing')).toBe(false));
+    expect(section('Weapon').textContent).toContain('Flamer');
+  });
+
+  it('leaves an optional section with nothing chosen unmarked', async () => {
+    await openUnit();
+    expect(section('Special Weapon').classList.contains('missing')).toBe(false);
+  });
+
+  it('marks a section when a section inside it is missing a choice', async () => {
+    const inner = (min: string) => groupOf('w', 'Weapon', cons(min, one('w', 'max')) + children(FLAMER));
+    const kit = (min: string) => squad(groupOf('kit', 'Kit', inner(min) + children(GRENADE)));
+    await openUnit(kit(one('w', 'min')), kit(''));
+    expect(section('Kit').classList.contains('missing')).toBe(true);
+  });
+
+  it('marks a section when a choice in it is missing one of its own', async () => {
+    const combi = (min: string) =>
+      entry('combi', 'Combi Bolter', 10, groupOf('w', 'Ammo', cons(min, one('w', 'max')) + children(FLAMER)));
+    const armed = (min: string) => squad(groupOf('kit', 'Kit', cons(one('kit', 'max')) + children(combi(min))));
+    const w = world(armed(''), { costLimit: 2000 });
+    const sel = w.add('Tactical Squad');
+    w.pick(sel, 'Combi Bolter');
+    await openPage(w, sel, armed(one('w', 'min')));
+    expect(section('Kit').classList.contains('missing')).toBe(true);
+  });
+
+  it('stays inline inside a sheet, one sheet deep', async () => {
+    await openUnit(squad(groupOf('kit', 'Kit', groupOf('ammo', 'Ammo', children(FLAMER)) + children(GRENADE))));
+    openSection('Kit');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'More Flamer' })).not.toBeNull();
+  });
+
+  it('leaves an On/Off pair as a switch, with no box', async () => {
+    const pair = groupOf(
+      'p',
+      'Psyker',
+      cons(one('p', 'max')) + children(entry('on', 'Psyker On', 0), entry('off', 'Psyker Off', 0)),
+    );
+    await openUnit(squad(pair));
+    expect(screen.getByRole('switch', { name: /Psyker/ })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /^Psyker/ })).toBeNull();
+  });
+});
 
 describe('UnitEditor saved units', () => {
   afterEach(async () => {
