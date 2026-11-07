@@ -15,7 +15,6 @@ import {
   tryAddSaved,
   uid,
   unavailable,
-  unlinkCopy,
   type AddSavedResult,
   type Issue,
   type RForce,
@@ -28,7 +27,6 @@ import { getContext, systemsOf } from '../data/library';
 import {
   addRoster,
   deleteRoster,
-  deleteSavedUnit,
   failureMessage,
   getState,
   toast,
@@ -41,7 +39,7 @@ import { pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
-import { DataUnits, PreconfiguredView } from './Preconfigured';
+import { DataUnits, PreconfiguredView, copiesOf, takeOffOrForget } from './Preconfigured';
 import { rosterText, shareText } from './exporter';
 
 export const cleanCat = (s: string) => s.replace(/[:\s]+$/, '');
@@ -126,7 +124,7 @@ function RosterBody({ ctl, view }: { ctl: RosterCtl; view: View }) {
         <div class="sum-row">
           <Pts v={ev.total} limit={roster.costLimit} />
           <button class="view-toggle" onClick={() => setView(view === 'foc' ? 'preconfigured' : 'foc')}>
-            {view === 'foc' ? 'Preconfigured' : 'FoC'}
+            {view === 'foc' ? 'Preconfigured' : 'Force organisation'}
           </button>
           <button
             class={'chip ' + (errors.length ? 'bad' : warns.length ? 'warn' : 'good')}
@@ -624,29 +622,14 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
           // a unique unit the list holds can't be tried again: its copy in the list shows its wargear
           const rs = tried.added ? tried.rs : ctl.ev.find(heldCopy(ctl.roster, unit.id) ?? '');
           const name = isUnique(unit) ? unit.name : (rs?.eff.name ?? 'Preconfigured unit');
-          return [{ unit, tried, name, sub: rs ? unitSummary(rs) : undefined }];
+          return [
+            { unit, tried, name, sub: rs ? unitSummary(rs) : undefined, heldPts: tried.added ? 0 : (rs?.total ?? 0) },
+          ];
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
     [savedUnits, rf, cat, ctl.ev],
   );
   const configuredShown = configured.filter(({ name }) => name.toLowerCase().includes(q.toLowerCase()));
-  const copiesOf = (id: string) =>
-    ctl.roster.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
-  const forget = async (unit: SavedUnit, name: string) => {
-    const question = isUnique(unit)
-      ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
-      : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
-    if (!confirm(question)) return;
-    try {
-      await deleteSavedUnit(unit.id);
-    } catch (e) {
-      toast(failureMessage('delete this saved unit', e));
-      return;
-    }
-    ctl.mutate((r) => {
-      for (const f of r.forces) for (const s of f.selections) if (s.saved === unit.id) unlinkCopy(s);
-    });
-  };
   const groups = new Map<string, typeof shown>();
   for (const x of shown) groups.set(x.cat ?? '', [...(groups.get(x.cat ?? '') ?? []), x]);
 
@@ -711,17 +694,23 @@ function AddUnitSheet({ ctl, rf, cat, onClose }: { ctl: RosterCtl; rf: RForce; c
             </p>
           )}
           <div class="pick-list" role="group" aria-label="Preconfigured units">
-            {configuredShown.map(({ unit, tried, name, sub }) => (
+            {configuredShown.map(({ unit, tried, name, sub, heldPts }) => (
               <PickRow
                 key={unit.id}
                 name={name}
                 sub={sub}
-                pts={tried.added ? tried.pts : REFUSED[tried.reason]}
-                added={isUnique(unit) ? 0 : copiesOf(unit.id)}
+                pts={
+                  tried.added
+                    ? tried.pts
+                    : tried.reason === 'already-in-list' && heldPts
+                      ? heldPts
+                      : REFUSED[tried.reason]
+                }
+                added={copiesOf(ctl.roster, unit.id)}
                 swipeLabel="Add saved build"
                 onTap={() => tried.added && openSaved(unit)}
                 onSwipe={() => tried.added && addSaved(unit)}
-                onSwipeLeft={() => void forget(unit, name)}
+                onSwipeLeft={() => void takeOffOrForget(ctl, unit, name)}
               />
             ))}
           </div>

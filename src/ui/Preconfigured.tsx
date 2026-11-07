@@ -9,10 +9,11 @@ import {
   addSel,
   forceRootOptions,
   isUnique,
+  removeSel,
   savedUnitIsFor,
   tryAddSaved,
-  unlinkCopy,
   type RForce,
+  type Roster,
 } from '../data/engine';
 import { deleteSavedUnit, failureMessage, toast, useRosterCtl, useStore, type RosterCtl } from '../store';
 import { Loading, Sheet, TopBar } from './common';
@@ -55,15 +56,20 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
           if (!tried) return [];
           const rs = tried.added ? tried.rs : ctl.ev.find(heldCopy(ctl.roster, unit.id) ?? '');
           const name = isUnique(unit) ? unit.name : (rs?.eff.name ?? 'Preconfigured unit');
-          const pts = !tried.added ? REFUSED[tried.reason] : fits.length ? tried.pts : 'No room';
+          // a unique unit the list holds can't go in again: it shows the points of the copy it holds
+          const pts = !tried.added
+            ? tried.reason === 'already-in-list' && rs
+              ? rs.total
+              : REFUSED[tried.reason]
+            : fits.length
+              ? tried.pts
+              : 'No room';
           return [{ unit, name, sub: rs ? unitSummary(rs) : undefined, pts, fits }];
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
     [savedUnits, ctl.ev],
   );
   const shown = rows.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
-  const copiesOf = (id: string) =>
-    ctl.roster.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
 
   /** Runs `add` on the only detachment with room, or asks which one when more than 1 has room. */
   const place = (title: string, forces: RForce[], add: Add) => {
@@ -81,21 +87,6 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
       if (out.dropped > 0) toast(droppedMessage(out.dropped));
       if (open && out.uid) go(`/r/${ctl.roster.uid}/u/${out.uid}`, fromSheet);
     };
-  const forget = async (unit: SavedUnit, name: string) => {
-    const question = isUnique(unit)
-      ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
-      : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
-    if (!confirm(question)) return;
-    try {
-      await deleteSavedUnit(unit.id);
-    } catch (e) {
-      toast(failureMessage('delete this saved unit', e));
-      return;
-    }
-    ctl.mutate((r) => {
-      for (const f of r.forces) for (const s of f.selections) if (s.saved === unit.id) unlinkCopy(s);
-    });
-  };
 
   return (
     <div class="preconfigured">
@@ -120,11 +111,11 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
             name={name}
             sub={sub}
             pts={pts}
-            added={isUnique(unit) ? 0 : copiesOf(unit.id)}
+            added={copiesOf(ctl.roster, unit.id)}
             swipeLabel="Add saved build"
             onTap={() => place(name, fits, addSaved(unit, true))}
             onSwipe={() => place(name, fits, addSaved(unit, false))}
-            onSwipeLeft={() => void forget(unit, name)}
+            onSwipeLeft={() => void takeOffOrForget(ctl, unit, name)}
           />
         ))}
       </div>
@@ -132,6 +123,43 @@ export function PreconfiguredView({ ctl }: { ctl: RosterCtl }) {
       {placing && <PlaceSheet ctl={ctl} placing={placing} onClose={() => setPlacing(null)} />}
     </div>
   );
+}
+
+/** How many copies of saved unit `id` a list holds, in any detachment. */
+export const copiesOf = (r: Roster, id: string) =>
+  r.forces.reduce((t, f) => t + f.selections.filter((s) => s.saved === id).length, 0);
+
+/**
+ * A swipe left on a saved unit: takes its last copy out of the list, with Undo. When the list holds none,
+ * it deletes the saved unit itself, after asking.
+ */
+export async function takeOffOrForget(ctl: RosterCtl, unit: SavedUnit, name: string): Promise<void> {
+  const held = ctl.roster.forces.flatMap((f) => f.selections.filter((s) => s.saved === unit.id).map((s) => ({ f, s })));
+  const last = held[held.length - 1];
+  if (last) {
+    const forceUid = last.f.uid;
+    const idx = last.f.selections.indexOf(last.s);
+    const copy = structuredClone(last.s);
+    ctl.mutate((r) => removeSel(r, copy.uid));
+    toast(`Removed ${name}`, {
+      label: 'Undo',
+      run: () =>
+        ctl.mutate((r) => {
+          const f = r.forces.find((x) => x.uid === forceUid);
+          if (f) f.selections.splice(Math.min(idx, f.selections.length), 0, copy);
+        }),
+    });
+    return;
+  }
+  const question = isUnique(unit)
+    ? `Delete "${name}"? Lists that hold it keep it as a normal unit, without the name.`
+    : `Delete this preconfigured ${name}? Lists that hold it keep it as a normal unit.`;
+  if (!confirm(question)) return;
+  try {
+    await deleteSavedUnit(unit.id);
+  } catch (e) {
+    toast(failureMessage('delete this saved unit', e));
+  }
 }
 
 /** Asks which detachment, of those with room, takes the unit. */

@@ -801,7 +801,7 @@ describe('RosterView', () => {
           </categoryLink>`,
         ),
       };
-      const toggle = () => screen.getByRole('button', { name: /^(Preconfigured|FoC)$/ });
+      const toggle = () => screen.getByRole('button', { name: /^(Preconfigured|Force organisation)$/ });
       const pageRows = () =>
         [...screen.getByRole('group', { name: 'Saved units' }).querySelectorAll('.pick')].map((row) => [
           row.querySelector('b')?.textContent,
@@ -817,7 +817,7 @@ describe('RosterView', () => {
 
       it('switches between the force org and the saved units, and its button names the other view', async () => {
         await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
-        expect(toggle().textContent).toBe('FoC');
+        expect(toggle().textContent).toBe('Force organisation');
         expect(screen.queryByRole('button', { name: 'Add detachment' })).toBeNull();
 
         fireEvent.click(toggle());
@@ -875,6 +875,50 @@ describe('RosterView', () => {
         fireEvent.click(pageRow(/Lord Thrax/));
 
         expect((await storedRoots()).map((s) => s.saved)).toEqual([undefined]);
+      });
+
+      it('removes the last copy from the list on a swipe left, with Undo, and keeps the saved unit', async () => {
+        const ask = vi.fn(() => true);
+        vi.stubGlobal('confirm', ask);
+        const w = world(SAVED_UNITS, CATEGORIES);
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', MELTA)).toMatchObject({ added: true });
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', MELTA)).toMatchObject({ added: true });
+        const [first] = w.roster.forces[0]?.selections ?? [];
+        await openPage(w, [MELTA]);
+        expect(pageRows()).toEqual([['Tactical Squad', '135 ×2']]);
+
+        drag(pageRow(/Tactical Squad/), [[-SWIPE, 0]]);
+
+        await waitFor(async () => expect((await storedRoots()).map((s) => s.uid)).toEqual([first?.uid]));
+        expect(pageRows()).toEqual([['Tactical Squad', '135 ×1']]);
+        expect(ask).not.toHaveBeenCalled();
+        expect((await db.savedUnits()).map((u) => u.id)).toEqual(['melta']);
+        await expectToast('Removed Tactical Squad');
+
+        getState().toastAction?.run();
+        await waitFor(async () => expect(await storedRoots()).toHaveLength(2));
+        vi.unstubAllGlobals();
+      });
+
+      it('deletes a saved unit the list holds no copy of on a swipe left, after asking', async () => {
+        const ask = vi.fn(() => true);
+        vi.stubGlobal('confirm', ask);
+        await openPage(world(SAVED_UNITS, CATEGORIES), [LORD]);
+
+        drag(pageRow(/Lord Thrax/), [[-SWIPE, 0]]);
+
+        expect(ask).toHaveBeenCalledWith(
+          'Delete "Lord Thrax"? Lists that hold it keep it as a normal unit, without the name.',
+        );
+        await waitFor(async () => expect(await db.savedUnits()).toEqual([]));
+        vi.unstubAllGlobals();
+      });
+
+      it('shows a unique unit the list holds with its points and a count of 1', async () => {
+        const w = world(SAVED_UNITS, CATEGORIES);
+        expect(addSavedUnit(w.roster, w.contexts, 'f1', LORD)).toMatchObject({ added: true });
+        await openPage(w, [LORD]);
+        expect(pageRows()).toEqual([['Lord Thrax', '100 ×1']]);
       });
 
       it('has an address of its own, so coming back to the list returns to it', async () => {
@@ -1016,12 +1060,12 @@ describe('RosterView', () => {
         expect(tabRows(sheet)).toEqual([['Tactical Squad', 'Sergeant · Power Fist', '135 ×2']]);
       });
 
-      it('shows a unique unit the list holds as added', async () => {
+      it('shows a unique unit the list holds with its points and its count in the list', async () => {
         const w = world(SAVED_UNITS, CATEGORIES);
         expect(addSavedUnit(w.roster, w.contexts, 'f1', SQUAD)).toMatchObject({ added: true });
         await openWithSaved(w, [SQUAD]);
         const sheet = await openTab('Add Troops');
-        expect(tabRows(sheet)).toEqual([['Squad Iron', 'Sergeant · Power Fist', 'Added']]);
+        expect(tabRows(sheet)).toEqual([['Squad Iron', 'Sergeant · Power Fist', '135 ×1']]);
       });
 
       it('deletes a saved unit on a swipe left, after asking', async () => {
