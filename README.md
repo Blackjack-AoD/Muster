@@ -14,7 +14,7 @@ Open the site, then **Add to Home screen** / **Install app** in the browser menu
 Tools and tasks are managed by [mise](https://mise.jdx.dev), which installs the Node version set in `mise.toml`. Tasks install npm dependencies when needed. Run `mise trust` once after cloning, then `mise install`.
 ```
 mise tasks                                 # list every task
-mise run dev                               # local dev server
+mise run dev                               # dev server, open on the network
 mise run test                              # unit tests
 mise run coverage                          # unit tests with a coverage report
 mise run format                            # format the code with Prettier
