@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 import { db, type SavedUnit } from '../data/db';
 import type { Roster, Sel } from '../data/engine';
-import { dismissToast } from '../store';
-import { children, cons, entry, sergeant, unit, world } from '../test/fixture';
+import { dismissToast, setUnitArmy } from '../store';
+import { catalogueXml, children, cons, entry, sergeant, unit, world } from '../test/fixture';
 import { drag, openHash, renderScreen, stubBrowserGaps, worldFiles } from '../test/screen';
 import { SWIPE } from './swipe';
 
@@ -48,10 +48,15 @@ const saved = (id: string, extra: Partial<SavedUnit> = {}): SavedUnit => ({
 const thrax = (extra: Partial<SavedUnit> = {}) => saved('thrax', { name: 'Squad Thrax', kind: undefined, ...extra });
 
 /** Opens `hash` with these saved units and lists on the phone. */
-async function open(hash: string, units: readonly SavedUnit[], rosters: readonly Roster[] = []) {
+async function open(
+  hash: string,
+  units: readonly SavedUnit[],
+  rosters: readonly Roster[] = [],
+  files: Record<string, string> = worldFiles(DATA),
+) {
   for (const u of units) await db.putSavedUnit(u);
   openHash(hash);
-  await renderScreen(<App />, { files: worldFiles(DATA), rosters });
+  await renderScreen(<App />, { files, rosters });
 }
 
 /** A list holding a copy of saved unit `unit`, as adding it would leave it. */
@@ -72,6 +77,7 @@ const rows = () =>
 beforeEach(stubBrowserGaps);
 afterEach(async () => {
   dismissToast();
+  setUnitArmy(undefined);
   vi.unstubAllGlobals();
   for (const { id } of await db.savedUnits()) await db.delSavedUnit(id);
 });
@@ -121,6 +127,54 @@ describe('Units tab', () => {
       'Delete "Squad Thrax"? Lists that hold it keep it as a normal unit, without the name.',
     );
     await waitFor(async () => expect(await db.savedUnits()).toEqual([]));
+  });
+
+  describe('faction filter', () => {
+    const army = (id: string, name: string) =>
+      catalogueXml(`<selectionEntries>${DATA}</selectionEntries>`, id).replace('name="Test Army"', `name="${name}"`);
+    const files = { ...worldFiles(DATA), 'b.cat': army('b', 'Blood Angels'), 'w.cat': army('w', 'World Eaters') };
+    const angel = saved('angel', { catalogueId: 'b' });
+    const faction = () => screen.getByRole('combobox', { name: 'Faction' }) as HTMLSelectElement;
+    const heads = () => [...document.querySelectorAll('.army-head')].map((h) => h.textContent);
+
+    it('offers All factions, then every army in the game', async () => {
+      await open('#/units', [thrax(), angel], [], files);
+      await waitFor(() => expect(rows()).toHaveLength(2));
+
+      expect([...faction().options].map((o) => o.text)).toEqual([
+        'All factions',
+        'Blood Angels',
+        'Test Army',
+        'World Eaters',
+      ]);
+      expect(faction().value).toBe('');
+      expect(heads()).toEqual(['Blood Angels', 'Test Army']);
+    });
+
+    it("shows only the picked army's units, and says so when it has none", async () => {
+      await open('#/units', [thrax(), angel], [], files);
+      await waitFor(() => expect(rows()).toHaveLength(2));
+
+      fireEvent.change(faction(), { target: { value: 'test/repo|b' } });
+      await waitFor(() => expect(heads()).toEqual(['Blood Angels']));
+
+      fireEvent.change(faction(), { target: { value: 'test/repo|w' } });
+      expect(heads()).toEqual([]);
+      expect(screen.getByText('No saved units for World Eaters yet.')).not.toBeNull();
+    });
+
+    it('keeps the picked army after opening a unit and coming back', async () => {
+      await open('#/units', [thrax(), angel], [], files);
+      await waitFor(() => expect(rows()).toHaveLength(2));
+      fireEvent.change(faction(), { target: { value: 'test/repo|b' } });
+
+      fireEvent.click(await screen.findByRole('button', { name: /Tactical Squad/ }));
+      await screen.findByRole('heading', { name: 'Tactical Squad' });
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+      await waitFor(() => expect(heads()).toEqual(['Blood Angels']));
+      expect(faction().value).toBe('test/repo|b');
+    });
   });
 
   it("+ sets up one of the army's units as a preconfigured unit, keeps it, and opens it", async () => {

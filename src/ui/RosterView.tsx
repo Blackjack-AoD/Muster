@@ -35,7 +35,7 @@ import {
   type RosterCtl,
 } from '../store';
 import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
-import { pick, setUpForce } from '../data/setup';
+import { changeForce, isAllegianceChoice, matchAllegiance, pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { catalogueName } from './Lists';
@@ -100,13 +100,17 @@ export type View = 'foc' | 'preconfigured';
 function RosterBody({ ctl, view }: { ctl: RosterCtl; view: View }) {
   const { roster, ev } = ctl;
   const repos = useStore((s) => s.repos);
-  const [sheet, setSheet] = useState<null | 'menu' | 'issues' | 'force' | { forceUid: string; cat?: string }>(null);
+  const [sheet, setSheet] = useState<
+    null | 'menu' | 'issues' | 'force' | { forceUid: string; cat?: string } | { change: string }
+  >(null);
   const setView = (v: View) => go(v === 'foc' ? `/r/${roster.uid}` : `/r/${roster.uid}/pre`, true);
   const errors = ev.issues.filter((i) => i.level === 'error');
   const warns = ev.issues.filter((i) => i.level === 'warn');
   const pct = roster.costLimit > 0 ? Math.min(100, (ev.total / roster.costLimit) * 100) : 0;
   // looked up on each render: a unit added with the sheet open has to count against the next one
-  const adding = typeof sheet === 'object' ? sheet : null;
+  const adding = sheet !== null && typeof sheet === 'object' && 'forceUid' in sheet ? sheet : null;
+  const changing = sheet !== null && typeof sheet === 'object' && 'change' in sheet ? sheet.change : null;
+  const changeOf = changing ? ev.forces.find((f) => f.force.uid === changing) : undefined;
   const addTo = adding && ev.forces.find((f) => f.force.uid === adding.forceUid);
 
   return (
@@ -156,6 +160,7 @@ function RosterBody({ ctl, view }: { ctl: RosterCtl; view: View }) {
               ctl={ctl}
               rf={rf}
               onAdd={(cat) => setSheet({ forceUid: rf.force.uid, cat })}
+              onChange={() => setSheet({ change: rf.force.uid })}
             />
           ))}
           <div class="pad">
@@ -168,7 +173,8 @@ function RosterBody({ ctl, view }: { ctl: RosterCtl; view: View }) {
 
       {sheet === 'issues' && <IssuesSheet issues={ev.issues} ctl={ctl} onClose={() => setSheet(null)} />}
       {sheet === 'menu' && <MenuSheet ctl={ctl} onClose={() => setSheet(null)} />}
-      {sheet === 'force' && <AddForceSheet ctl={ctl} onClose={() => setSheet(null)} />}
+      {sheet === 'force' && <DetachmentSheet ctl={ctl} onClose={() => setSheet(null)} />}
+      {changeOf && <DetachmentSheet ctl={ctl} change={changeOf} onClose={() => setSheet(null)} />}
       {adding && addTo && <AddUnitSheet ctl={ctl} rf={addTo} cat={adding.cat} onClose={() => setSheet(null)} />}
     </div>
   );
@@ -187,7 +193,17 @@ function deleteForce(ctl: RosterCtl, rf: RForce): boolean {
   return true;
 }
 
-function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (cat?: string) => void }) {
+function ForceBlock({
+  ctl,
+  rf,
+  onAdd,
+  onChange,
+}: {
+  ctl: RosterCtl;
+  rf: RForce;
+  onAdd: (cat?: string) => void;
+  onChange: () => void;
+}) {
   const repos = useStore((s) => s.repos);
   const [open, setOpen] = useState(true);
   const avail = useMemo(() => forceRootOptions(rf.ctx, rf.entry), [rf.ctx, rf.entry]);
@@ -208,11 +224,18 @@ function ForceBlock({ ctl, rf, onAdd }: { ctl: RosterCtl; rf: RForce; onAdd: (ca
   return (
     <section class="force">
       <div class="force-bar">
-        <button class="force-head" onClick={() => setOpen(!open)}>
-          <div>
-            <div class="force-name">{rf.entry.name.replace(/^\d+\.\s*/, '')}</div>
-            <div class="force-sub">{catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)}</div>
+        <button class="force-title" aria-label={`Change ${rf.entry.name}`} onClick={onChange}>
+          <div class="force-name">{rf.entry.name.replace(/^\d+\.\s*/, '')}</div>
+          <div class="force-sub">
+            {catalogueName(repos, ctl.roster.repo, rf.force.catalogueId)} <Icon name="edit" size={13} />
           </div>
+        </button>
+        <button
+          class="force-head"
+          aria-label={`${open ? 'Hide' : 'Show'} ${rf.entry.name}`}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
           <span class="force-pts">{fmtN(rf.total)}</span>
           <Icon name={open ? 'down' : 'chev'} size={18} />
         </button>
@@ -363,25 +386,35 @@ export function inlineChoice(ev: Evaluator, rs: RSel): { g: Opt; members: Opt[] 
 }
 
 export function ChoiceRow({ ctl, u, choice }: { ctl: RosterCtl; u: RSel; choice: { g: Opt; members: Opt[] } }) {
+  const side = isAllegianceChoice(choice.members);
+  // every later detachment fights on the first one's side
+  const locked = side && ctl.roster.forces[0]?.uid !== u.force.force.uid;
   return (
-    <div class="choice-row" role="radiogroup" aria-label={u.eff.name}>
-      {choice.members.map((m) => {
-        const on = u.children.some((c) => c.opt.key === m.key);
-        return (
-          <button
-            role="radio"
-            aria-checked={on}
-            class={on ? 'on' : ''}
-            onClick={() => {
-              if (on) return;
-              ctl.mutate((r) => pick(r, ctl.contexts, u, choice.g, m));
-            }}
-          >
-            {ctl.ev.optionEff(m, u, u.force).name}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div class="choice-row" role="radiogroup" aria-label={u.eff.name}>
+        {choice.members.map((m) => {
+          const on = u.children.some((c) => c.opt.key === m.key);
+          return (
+            <button
+              role="radio"
+              aria-checked={on}
+              class={on ? 'on' : ''}
+              disabled={locked}
+              onClick={() => {
+                if (on) return;
+                ctl.mutate((r) => {
+                  pick(r, ctl.contexts, u, choice.g, m);
+                  if (side) matchAllegiance(r, ctl.contexts);
+                });
+              }}
+            >
+              {ctl.ev.optionEff(m, u, u.force).name}
+            </button>
+          );
+        })}
+      </div>
+      {locked && <p class="muted small pad-x choice-note">Set by the first detachment.</p>}
+    </>
   );
 }
 
@@ -904,14 +937,19 @@ function MenuSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
   );
 }
 
-function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }) {
+/**
+ * Adds a detachment, or with `change` moves one to another army or detachment type.
+ * A move to another army asks first when units have to come out.
+ */
+function DetachmentSheet({ ctl, change, onClose }: { ctl: RosterCtl; change?: RForce; onClose: () => void }) {
   const repos = useStore((s) => s.repos);
   const sys = systemsOf(repos).find((s) => s.repo === ctl.roster.repo && s.gst.header.id === ctl.roster.gameSystemId);
-  const [catId, setCatId] = useState(ctl.roster.forces[0]?.catalogueId);
+  const [catId, setCatId] = useState(change?.force.catalogueId ?? ctl.roster.forces[0]?.catalogueId);
   const [forces, setForces] = useState<{ id: string; name: string }[]>();
   const [q, setQ] = useState('');
   const [picking, setPicking] = useState(false);
   const repo = repos.find((r) => r.repo === ctl.roster.repo);
+  const title = change ? 'Change detachment' : 'Add detachment';
 
   useEffect(() => {
     if (!repo || !catId) return;
@@ -928,9 +966,45 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
       .catch((e: unknown) => toast(failureMessage('load this army', e)));
   }, [catId]);
 
+  const choose = async (forceEntryId: string) => {
+    if (!repo || !catId) return;
+    if (change && change.force.catalogueId === catId && change.force.forceEntryId === forceEntryId) return onClose();
+    let ctx: Context;
+    try {
+      ctx = await getContext(repo, catId);
+    } catch (e) {
+      toast(failureMessage('load this army', e));
+      return;
+    }
+    const contexts = new Map(ctl.contexts).set(catId, ctx);
+    const army = catalogueName(repos, ctl.roster.repo, catId);
+    if (change) {
+      const forceUid = change.force.uid;
+      const out = changeForce(structuredClone(ctl.roster), contexts, forceUid, catId, forceEntryId, army);
+      const units = out === 1 ? '1 unit' : `${out} units`;
+      if (out && !confirm(`Move ${change.entry.name} to ${army}? ${units} it doesn't have will be taken out.`)) return;
+      ctl.mutate((r) => {
+        changeForce(r, contexts, forceUid, catId, forceEntryId, army);
+        matchAllegiance(r, contexts);
+      });
+    } else {
+      ctl.mutate((r) => {
+        const fu = uid();
+        r.forces.push({ uid: fu, forceEntryId, catalogueId: catId, selections: [] });
+        try {
+          setUpForce(r, contexts, fu, army);
+          matchAllegiance(r, contexts);
+        } catch (e) {
+          console.warn('set-up skipped', e);
+        }
+      });
+    }
+    onClose();
+  };
+
   if (!sys || !repo)
     return (
-      <Sheet title="Add detachment" onClose={onClose}>
+      <Sheet title={title} onClose={onClose}>
         <p class="error-text">This list's data isn't on the phone.</p>
       </Sheet>
     );
@@ -962,7 +1036,7 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
     );
   }
   return (
-    <Sheet title="Add detachment" onClose={onClose}>
+    <Sheet title={title} onClose={onClose}>
       <div class="label">Army</div>
       <button class="pick" onClick={() => setPicking(true)}>
         <span>
@@ -976,39 +1050,20 @@ function AddForceSheet({ ctl, onClose }: { ctl: RosterCtl; onClose: () => void }
         <Loading />
       ) : (
         <div class="pick-list compact">
-          {forces.map((f) => (
-            <button
-              class="pick"
-              onClick={async () => {
-                let ctx: Context;
-                try {
-                  ctx = await getContext(repo, catId);
-                } catch (e) {
-                  toast(failureMessage('load this army', e));
-                  return;
-                }
-                const contexts = new Map(ctl.contexts).set(catId, ctx);
-                ctl.mutate((r) => {
-                  const fu = uid();
-                  r.forces.push({ uid: fu, forceEntryId: f.id, catalogueId: catId, selections: [] });
-                  try {
-                    setUpForce(r, contexts, fu, catalogueName(repos, r.repo, catId));
-                  } catch (e) {
-                    console.warn('set-up skipped', e);
-                  }
-                });
-                onClose();
-              }}
-            >
-              <span>
-                <b>{f.name}</b>
-              </span>
-              <Icon name="plus" />
-            </button>
-          ))}
+          {forces.map((f) => {
+            const current = change?.force.catalogueId === catId && change.force.forceEntryId === f.id;
+            return (
+              <button class={'pick' + (current ? ' on' : '')} aria-current={current} onClick={() => void choose(f.id)}>
+                <span>
+                  <b>{f.name}</b>
+                </span>
+                <Icon name={current ? 'check' : change ? 'chev' : 'plus'} />
+              </button>
+            );
+          })}
         </div>
       )}
-      {ctl.roster.forces.length > 1 && (
+      {!change && ctl.roster.forces.length > 1 && (
         <>
           <div class="label">Remove a detachment</div>
           <div class="menu">

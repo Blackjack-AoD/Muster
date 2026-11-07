@@ -7,7 +7,7 @@ import { App } from '../app';
 import { db } from '../data/db';
 import type { Roster } from '../data/engine';
 import { importLocalFiles } from '../data/sync';
-import { deleteRoster, dismissToast, getState, importBackup, init, removeRepo, setGame } from '../store';
+import { deleteRoster, dismissToast, getState, importBackup, init, removeRepo, setGame, setUnitArmy } from '../store';
 import { encodeSnapshot, viewUrl, type Snapshot } from '../ui/snapshot';
 import { FORCE, catalogueXml, gameSystemXml, type WorldOptions } from './fixture';
 
@@ -98,6 +98,7 @@ export async function openCreateList(files: ScreenSeed['files']): Promise<void> 
 export async function resetStore(): Promise<void> {
   dismissToast();
   setGame(undefined);
+  setUnitArmy(undefined);
   // a repo that storage refused has a sync status and no record
   const stored = (await db.repos()).map((r) => r.repo);
   for (const repo of new Set([...stored, ...Object.keys(getState().sync)])) await removeRepo(repo);

@@ -29,6 +29,8 @@ interface State {
   toastAction?: { label: string; run: () => void; failedSave?: string };
   /** active game: "<repo>|<game system id>", or undefined for all games */
   game?: string;
+  /** the army the Units tab shows: "<repo>|<catalogue id>", or undefined for all factions */
+  unitArmy?: string;
   /** uids of lists whose latest edit is in memory and not in storage */
   unsaved: ReadonlySet<string>;
 }
@@ -110,6 +112,11 @@ export function setGame(game: string | undefined) {
     /* storage unavailable: keep it for this session only */
   }
   set({ game });
+}
+
+/** Pick the army the Units tab shows (undefined = all factions), for as long as the app is open. */
+export function setUnitArmy(unitArmy: string | undefined) {
+  set({ unitArmy });
 }
 
 /** A failed download shows on the repo's card and in a toast, and the next repo still syncs. A failed save stops. */

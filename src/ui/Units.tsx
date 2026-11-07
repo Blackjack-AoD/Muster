@@ -14,6 +14,7 @@ import {
   failureMessage,
   getState,
   keepSavedUnit,
+  setUnitArmy,
   toast,
   useRosterCtl,
   useStore,
@@ -28,6 +29,7 @@ import { UnitEditor } from './UnitEditor';
 
 const enc = (s: string) => s.split('/').map(encodeURIComponent).join('/');
 const armyKey = (u: Pick<SavedUnit, 'repo' | 'catalogueId'>) => `${u.repo}|${u.catalogueId}`;
+const shortName = (name: string) => name.replace(/^\d{4}\s*-\s*/, '');
 
 /** An army's data, loaded once the phone has read it. */
 function useArmy(repoName: string, catId: string) {
@@ -54,15 +56,21 @@ function useArmy(repoName: string, catId: string) {
   return { ctx, contexts, err };
 }
 
-/** The saved units of the chosen game, by army. */
+/** The saved units of the chosen game, by army, narrowed to one army when the player picks it. */
 export function Units() {
   const repos = useStore((s) => s.repos);
   const game = useStore((s) => s.game);
   const savedUnits = useStore((s) => s.savedUnits);
+  const picked = useStore((s) => s.unitArmy);
   const [q, setQ] = useState('');
-  const { active } = activeSystems(repos, game);
+  const { active, systems } = activeSystems(repos, game);
   const filterKey = active && systemsOf(repos).length > 1 ? gameKey(active) : undefined;
-  const shown = savedUnits.filter((u) => !filterKey || `${u.repo}|${u.gameSystemId}` === filterKey);
+  const inGame = savedUnits.filter((u) => !filterKey || `${u.repo}|${u.gameSystemId}` === filterKey);
+  const factions = systems
+    .flatMap((s) => s.catalogues.map((c) => ({ k: `${s.repo}|${c.header.id}`, name: shortName(c.header.name) })))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const faction = factions.find((f) => f.k === picked);
+  const shown = inGame.filter((u) => !faction || armyKey(u) === faction.k);
   const armies = [...new Set(shown.map(armyKey))]
     .map((k) => {
       const units = shown.filter((u) => armyKey(u) === k);
@@ -74,7 +82,7 @@ export function Units() {
   return (
     <div class="page">
       <TopBar title="Units" sub={active ? active.gst.header.name : 'Saved units · all games'} />
-      {!shown.length ? (
+      {!inGame.length ? (
         <Empty title="No saved units yet">
           <p class="muted">
             Build a unit once, such as a named squad or a favourite loadout, and add it to any list of its army.
@@ -87,17 +95,35 @@ export function Units() {
         </Empty>
       ) : (
         <>
+          <div class="pad-x faction-filter">
+            <select
+              aria-label="Faction"
+              value={faction?.k ?? ''}
+              onChange={(e) => setUnitArmy(e.currentTarget.value || undefined)}
+            >
+              <option value="">All factions</option>
+              {factions.map((f) => (
+                <option key={f.k} value={f.k}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div class="search">
             <Icon name="search" size={18} />
             <input placeholder="Search units" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
           </div>
-          <p class="muted small pad-x pick-hint">Tap a unit to change it. Swipe left to delete it.</p>
+          {faction && !shown.length ? (
+            <p class="muted pad">No saved units for {faction.name} yet.</p>
+          ) : (
+            <p class="muted small pad-x pick-hint">Tap a unit to change it. Swipe left to delete it.</p>
+          )}
           {armies.map(({ k, units, name }) => (
             <ArmyUnits key={k} name={name} units={units} q={q} />
           ))}
         </>
       )}
-      {hasData && shown.length > 0 && (
+      {hasData && inGame.length > 0 && (
         <button class="fab" aria-label="New unit" onClick={() => go('/units/new')}>
           <Icon name="plus" size={26} />
         </button>
@@ -143,7 +169,7 @@ function ArmyUnits({ name, units, q }: { name: string; units: SavedUnit[]; q: st
   const cats = [...new Set(shown.map((r) => r.cat))];
   return (
     <section class="army-units">
-      <h2 class="army-head">{name.replace(/^\d{4}\s*-\s*/, '')}</h2>
+      <h2 class="army-head">{shortName(name)}</h2>
       {err && <p class="error-text pad-x">{err}</p>}
       {!ctx && !err && <Loading label="Reading army data…" />}
       {cats.map((c) => (
