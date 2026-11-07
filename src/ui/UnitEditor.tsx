@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { createContext } from 'preact';
+import { useContext, useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
 import {
@@ -260,6 +261,84 @@ export function limitText(min: number, max: number) {
   return '';
 }
 
+/** The section whose sheet holds this part of the page. A section inside a sheet opens in place. */
+const OpenSection = createContext<{ g: Opt; close: () => void } | null>(null);
+
+/** Whether a group shows at all: conditions can hide it, or leave it with nothing to offer. */
+function groupShows(ev: RosterCtl['ev'], rs: RSel, g: Opt, eff: ReturnType<RosterCtl['ev']['optionEff']>, n: number) {
+  return n > 0 || (!eff.hidden && !unavailable(eff) && hasVisibleMember(ev, rs, g));
+}
+
+/** Whether an option, or anything inside it, is short of a choice the data requires. */
+function lacksChoice(ev: RosterCtl['ev'], rs: RSel, o: Opt, d = 0): boolean {
+  if (d > 6) return false;
+  const eff = ev.optionEff(o, rs, rs.force);
+  const chosen = ev.selected(o, rs, rs.force);
+  const n = chosen.reduce((t, c) => t + c.sel.number, 0);
+  if (o.kind === 'group' ? !groupShows(ev, rs, o, eff, n) : !n && (eff.hidden || unavailable(eff))) return false;
+  const { min, max } = ev.limits(o, rs, rs.force, eff);
+  if (n < min) return true;
+  // every option in a pick-one group is the same one choice, so a group in there asks for nothing more
+  const inner = max === 1 ? [] : o.members;
+  return (
+    inner.some((m) => lacksChoice(ev, rs, m, d + 1)) ||
+    chosen.some((c) => c.force.ctx.options(c.node).some((m) => lacksChoice(ev, c, m, d + 1)))
+  );
+}
+
+/** A section of options, as a box showing what's chosen. Tapping it opens the options in a sheet. */
+function SectionBox({
+  ctl,
+  rs,
+  g,
+  name,
+  limit,
+  children,
+}: {
+  ctl: RosterCtl;
+  rs: RSel;
+  g: Opt;
+  name: string;
+  limit: ComponentChildren;
+  children: ComponentChildren;
+}) {
+  const [open, setOpen] = useState(false);
+  const missing = lacksChoice(ctl.ev, rs, g);
+  const picks = ctl.ev
+    .selected(g, rs, rs.force)
+    .map((c) => (c.sel.number > 1 ? `${c.sel.number}× ` : '') + displayName(c))
+    .join(', ');
+  const close = () => setOpen(false);
+  return (
+    <>
+      <button class={'section' + (missing ? ' missing' : '')} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <span class="section-head">
+          <span class="g-name">{name}</span>
+          {limit}
+          <Icon name="chev" size={16} />
+        </span>
+        <span class={'section-picks' + (picks ? '' : ' none')}>{picks || (missing ? 'Not chosen' : 'None')}</span>
+      </button>
+      {open && (
+        <Sheet
+          title={name}
+          onClose={close}
+          footer={
+            <button class="btn primary wide" onClick={close}>
+              Done
+            </button>
+          }
+        >
+          <OpenSection.Provider value={{ g, close }}>
+            <p class="section-limit">{limit}</p>
+            {children}
+          </OpenSection.Provider>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 /** A pick-one group, and whether a choice in it is required: every option inside it, at any depth, is one choice. */
 type PickOne = { g: Opt; required: boolean };
 
@@ -282,9 +361,9 @@ function GroupBlock({
   const n = chosen.reduce((t, c) => t + c.sel.number, 0);
   const { min, max } = ev.limits(g, rs, rs.force, eff);
   const [open, setOpen] = useState(depth > 0 ? n > 0 || min > 0 : true);
-  if ((eff.hidden || unavailable(eff)) && !n) return null;
+  const inSheet = useContext(OpenSection) !== null;
   // a heading with nothing under it right now (every option hidden by conditions) is just noise
-  if (!n && !hasVisibleMember(ev, rs, g)) return null;
+  if (!groupShows(ev, rs, g, eff, n)) return null;
   // "X On" / "X Off" pair: a single switch
   const pair = onOffPair(
     g.members.filter((m) => {
@@ -297,31 +376,41 @@ function GroupBlock({
   // a group of On/Off switches needs no "· n" count
   const allSwitches = g.members.length > 0 && g.members.every((m) => m.kind === 'group' && onOffPair(m.members));
   const bad = (min > 0 && n < min) || (max >= 0 && n > max);
+  const limit = (
+    <span class={'g-lim' + (bad ? ' bad' : '')}>
+      {limitText(min, max)}
+      {max !== 1 && n && !allSwitches ? ` · ${n}` : ''}
+    </span>
+  );
+  const body = oneOf ? (
+    <div class="opts">
+      {g.members.map((m) =>
+        m.kind === 'group' ? (
+          <GroupBlock key={m.key} ctl={ctl} rs={rs} g={m} depth={depth} pickOne={oneOf} />
+        ) : (
+          <RadioRow key={m.key} ctl={ctl} rs={rs} g={oneOf.g} o={m} required={oneOf.required} depth={depth} />
+        ),
+      )}
+    </div>
+  ) : (
+    <OptList ctl={ctl} rs={rs} opts={g.members} depth={depth} />
+  );
 
+  if (!inSheet && !allSwitches) {
+    return (
+      <SectionBox ctl={ctl} rs={rs} g={g} name={eff.name} limit={limit}>
+        {body}
+      </SectionBox>
+    );
+  }
   return (
     <div class="group">
       <button class="group-head" onClick={() => setOpen(!open)}>
         <span class="g-name">{eff.name}</span>
-        <span class={'g-lim' + (bad ? ' bad' : '')}>
-          {limitText(min, max)}
-          {max !== 1 && n && !allSwitches ? ` · ${n}` : ''}
-        </span>
+        {limit}
         <Icon name={open ? 'down' : 'chev'} size={16} />
       </button>
-      {open &&
-        (oneOf ? (
-          <div class="opts">
-            {g.members.map((m) =>
-              m.kind === 'group' ? (
-                <GroupBlock key={m.key} ctl={ctl} rs={rs} g={m} depth={depth} pickOne={oneOf} />
-              ) : (
-                <RadioRow key={m.key} ctl={ctl} rs={rs} g={oneOf.g} o={m} required={oneOf.required} depth={depth} />
-              ),
-            )}
-          </div>
-        ) : (
-          <OptList ctl={ctl} rs={rs} opts={g.members} depth={depth} />
-        ))}
+      {open && body}
     </div>
   );
 }
@@ -490,6 +579,7 @@ function RadioRow({
   depth: number;
 }) {
   const { ev } = ctl;
+  const section = useContext(OpenSection);
   const eff = ev.optionEff(o, rs, rs.force);
   const chosen = ev.selected(o, rs, rs.force);
   const on = chosen.length > 0;
@@ -506,6 +596,8 @@ function RadioRow({
       parent.children = parent.children.filter((c) => !c.key.startsWith(g.key + '/'));
       addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, 1);
     });
+    // the choice ends the section, unless it brings options of its own to set
+    if (section?.g.key === g.key && !rs.force.ctx.options(o.node).length) section.close();
   };
   return (
     <div class="opt">

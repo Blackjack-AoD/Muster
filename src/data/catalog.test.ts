@@ -199,6 +199,48 @@ describe('options', () => {
     );
     expect(c.options(node).map((o) => o.key)).toEqual(['d', 'b', 'a', 'c']);
   });
+  it('puts numbered names in number order, leaving the rest in place', () => {
+    const { c, node } = owner(
+      children(
+        entry('a', '3) Third'),
+        entry('b', 'Sergeant'),
+        entry('c', '1.10) Later'),
+        entry('d', '1.2) Earlier'),
+        entry('e', 'Grenades'),
+        entry('f', '0) First'),
+      ),
+    );
+    expect(c.options(node).map((o) => o.key)).toEqual(['f', 'b', 'd', 'c', 'e', 'a']);
+  });
+  it('orders lettered numbers, and keeps file order between equal numbers', () => {
+    const { c, node } = owner(
+      children(
+        entry('a', '1.1b) Bayonets'),
+        entry('b', '2) May take:'),
+        entry('c', '1.1a) Lasguns'),
+        entry('d', '2) May take:'),
+      ),
+    );
+    expect(c.options(node).map((o) => o.key)).toEqual(['c', 'a', 'b', 'd']);
+  });
+  it('sorts numbered groups and the numbered options inside them', () => {
+    const { c, node } = owner(
+      `<selectionEntryGroups><selectionEntryGroup id="g" name="2) Later">${children(entry('x', '2) X'), entry('y', '1) Y'))}</selectionEntryGroup><selectionEntryGroup id="h" name="1) Earlier"/></selectionEntryGroups>`,
+    );
+    const [first, second] = c.options(node);
+    expect([first.key, second.key]).toEqual(['h', 'g']);
+    expect(second.members.map((o) => o.key)).toEqual(['g/y', 'g/x']);
+  });
+  it('lets sortIndex win over a number in the name', () => {
+    const { c, node } = owner(
+      children(entry('a', '2) Two', 0, '', 'sortIndex="1"'), entry('b', '1) One', 0, '', 'sortIndex="2"')),
+    );
+    expect(c.options(node).map((o) => o.key)).toEqual(['a', 'b']);
+  });
+  it('reads only a closing bracket as a number, not a name that starts with a count', () => {
+    const { c, node } = owner(children(entry('a', '5 Wracks'), entry('b', '1-3 Talos'), entry('c', '0-1 Lukas')));
+    expect(c.options(node).map((o) => o.key)).toEqual(['a', 'b', 'c']);
+  });
   it('finds an option by key, searching groups', () => {
     const { c, node } = owner(group('g', group('h', children(entry('b', 'B')))));
     expect(c.findOption(node, 'g/h/b')?.node.name).toBe('B');
