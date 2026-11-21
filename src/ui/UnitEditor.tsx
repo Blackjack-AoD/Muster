@@ -830,30 +830,13 @@ export function Profiles({ ctl, profiles }: { ctl: RosterCtl; profiles: Profile[
     <div class="profiles">
       {types.map((t) => {
         const list = profiles.filter((p) => p.typeName === t);
-        const long =
-          list.some((p) => p.characteristics.some((c) => c.value.length > 40)) || list[0].characteristics.length <= 1;
+        // a statline with its abilities beneath (New Recruit style); a type with no statline shows as text cards
         return (
           <section class="ptype">
             <h3>{t}</h3>
-            {long ? (
-              list.map((p) => (
-                <div class="pcard">
-                  <b>{p.name}</b>
-                  {p.characteristics.map(
-                    (c) =>
-                      c.value && (
-                        <p>
-                          <span class="muted">{c.name}:</span> {c.value}
-                        </p>
-                      ),
-                  )}
-                </div>
-              ))
-            ) : (
-              <div class="pad-x">
-                <StatBlock profiles={list} />
-              </div>
-            )}
+            <div class="pad-x">
+              <StatBlock profiles={list} />
+            </div>
           </section>
         );
       })}

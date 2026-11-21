@@ -1503,10 +1503,20 @@ input:focus {
   font-weight: 600;
   color: var(--brass2);
 }
+.stattable .sb-vals.has-text td {
+  padding-bottom: 4px;
+}
+/* abilities / special rules beneath the statline */
+.stattable .sb-text td {
+  text-align: left;
+  padding: 2px 12px 10px;
+  white-space: normal;
+}
 .sb-long {
   font-size: 13px;
   color: #cfccc4;
   margin-top: 2px;
+  white-space: pre-wrap;
 }
 .statcards .pcard {
   margin: 0 0 8px;
