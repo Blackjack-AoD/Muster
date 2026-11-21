@@ -125,7 +125,14 @@ export class Context {
       constraints: [...target.constraints, ...n.constraints],
       costs,
       modifiers: [...target.modifiers, ...n.modifiers],
-      categoryLinks: [...target.categoryLinks, ...n.categoryLinks],
+      // a link that sets a primary category overrides the target's own primary (as in BattleScribe / New Recruit):
+      // e.g. Kill Team 2018 links one shared model as Leader, Specialist and Non-specialist
+      categoryLinks: [
+        ...(n.categoryLinks.some((c) => c.primary)
+          ? target.categoryLinks.map((c) => (c.primary ? { ...c, primary: false } : c))
+          : target.categoryLinks),
+        ...n.categoryLinks,
+      ],
       profiles: [...target.profiles, ...n.profiles],
       rules: [...target.rules, ...n.rules],
       infoLinks: [...target.infoLinks, ...n.infoLinks],

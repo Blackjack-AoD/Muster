@@ -56,6 +56,32 @@ describe('resolving links', () => {
     expect(r.rules.map((x) => x.id)).toEqual(['r1', 'r2']);
     expect(r.children[0].id).toBe('kid');
   });
+  it("takes the link's primary category over the target's own primary", () => {
+    // Kill Team 2018: a shared model whose own primary is "Skitarii Ranger", linked as a Leader
+    const target = entry(
+      't',
+      'Target',
+      0,
+      '<categoryLinks><categoryLink id="t1" targetId="own" primary="true"/><categoryLink id="t2" targetId="kw"/></categoryLinks>',
+    );
+    const r = linked(
+      '',
+      '<categoryLinks><categoryLink id="l1" targetId="leader" primary="true"/></categoryLinks>',
+      target,
+    );
+    expect(r.categoryLinks.filter((c) => c.primary).map((c) => c.targetId)).toEqual(['leader']);
+    expect(r.categoryLinks.map((c) => c.targetId)).toEqual(['own', 'kw', 'leader']);
+  });
+  it("keeps the target's primary when the link sets none", () => {
+    const target = entry(
+      't',
+      'Target',
+      0,
+      '<categoryLinks><categoryLink id="t1" targetId="own" primary="true"/></categoryLinks>',
+    );
+    const r = linked('', '<categoryLinks><categoryLink id="l1" targetId="kw"/></categoryLinks>', target);
+    expect(r.categoryLinks.find((c) => c.primary)?.targetId).toBe('own');
+  });
   it('overrides a cost from the link, and adds one the target lacks', () => {
     const r = linked('', '<costs><cost typeId="pts" value="25"/><cost typeId="pl" value="2"/></costs>');
     expect(r.costs).toEqual([
