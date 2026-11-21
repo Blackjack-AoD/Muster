@@ -316,11 +316,14 @@ function SectionBox({
   const close = () => setOpen(false);
   // set by a pick; the next render (which sees the list after that pick) decides whether to close
   const [closing, setClosing] = useState(false);
+  // a pick can also let the group take more (T'au Shas'ui: a pulse pistol may sit beside the rifle)
+  const { max } = ctl.ev.limits(g, rs, rs.force);
+  const roomForMore = max !== 1 && (max < 0 || ctl.ev.selected(g, rs, rs.force).length < max);
   useEffect(() => {
     if (!closing) return;
     setClosing(false);
-    if (!missing) setOpen(false);
-  }, [closing, missing]);
+    if (!missing && !roomForMore) setOpen(false);
+  }, [closing, missing, roomForMore]);
   const closeWhenDone = () => setClosing(true);
   return (
     <>

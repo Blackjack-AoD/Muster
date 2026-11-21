@@ -735,6 +735,22 @@ describe('UnitEditor sections', () => {
     expect(section('Weapon').className).not.toContain('missing');
   });
 
+  it('keeps a pick-one sheet open when the choice lets the group take another', async () => {
+    // Kill Team 2018 Fire Warrior Shas'ui: a pulse pistol may be taken beside the rifle
+    const weapons = `<selectionEntryGroups><selectionEntryGroup id="w" name="Weapons" defaultSelectionEntryId="rifle">
+      <modifiers><modifier type="set" field="w-max" value="2"><conditions><condition type="equalTo" value="1" field="selections" scope="parent" childId="pistol"/></conditions></modifier></modifiers>
+      ${cons(one('w', 'min'), one('w', 'max'))}
+      ${children(entry('rifle', 'Pulse Rifle', 0), entry('pistol', 'Pulse Pistol', 0))}
+    </selectionEntryGroup></selectionEntryGroups>`;
+    await openUnit(squad(weapons));
+    openSection('Weapons');
+
+    fireEvent.click(option('radio', /Pulse Pistol/));
+
+    await waitFor(() => expect(section('Weapons').textContent).toContain('Pulse Pistol'));
+    expect(sectionSheet('Weapons')).not.toBeNull();
+  });
+
   it('keeps a pick-many sheet open, and the box lists each choice with its count', async () => {
     await openUnit(squad(groupOf('kit', 'Kit', children(FLAMER, GRENADE))));
     openSection('Kit');
