@@ -5,7 +5,7 @@ import { clearCaches } from '../data/library';
 import { failureMessage, getState, importBackup, refreshRepos, removeRepo, syncAll, toast, useStore } from '../store';
 import { TopBar, ago } from './common';
 import { Icon } from './Icon';
-import { readBackup, shareBackup } from './exporter';
+import { readBackup, shareBackup, shareRepoFiles } from './exporter';
 import { APP_VERSION, BUILD_TIME, checkForUpdate, lastUpdateCheck, resetAppCache } from '../update';
 
 async function restoreBackup(file: File) {
@@ -147,6 +147,15 @@ export function DataView() {
                   <Icon name="sync" />
                 </button>
               )}
+              {!working && r?.files.length ? (
+                <button
+                  class="icon-btn"
+                  aria-label={'Export ' + name + ' files'}
+                  onClick={() => shareRepoFiles(r).catch((e: unknown) => toast(failureMessage('export', e)))}
+                >
+                  <Icon name="share" />
+                </button>
+              ) : null}
               {!working && (
                 <button
                   class="icon-btn"

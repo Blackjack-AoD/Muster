@@ -1,9 +1,10 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dismissToast, getState } from '../store';
-import type { SavedUnit } from '../data/db';
+import { db, type RepoState, type SavedUnit } from '../data/db';
+import { readZip } from '../data/zip';
 import { unit, world } from '../test/fixture';
-import { downloadJson, shareBackup, shareText } from './exporter';
+import { downloadJson, shareBackup, shareRepoFiles, shareText } from './exporter';
 
 const TEXT = 'Strike Force, 1000 pts';
 const TITLE = 'Strike Force';
@@ -187,5 +188,53 @@ describe('shareBackup', () => {
     expect(getState().toast).toBe("Couldn't share: Permission denied");
     expect(downloads.map((d) => d.name)).toEqual([BACKUP_NAME]);
     expect(JSON.parse(await madeFrom[0].text())).toEqual(backup);
+  });
+});
+
+describe('shareRepoFiles', () => {
+  const repo: RepoState = {
+    repo: 'Captain-Altis/Killteam-2018',
+    files: [
+      { path: 'Warhammer 40,000 Kill Team.gst', sha: 'a', size: 1, header: null },
+      { path: 'Orks.catz', sha: 'b', size: 1, header: null },
+      { path: 'Gone.cat', sha: 'c', size: 1, header: null },
+    ],
+  };
+  const stored: Record<string, string> = {
+    'Warhammer 40,000 Kill Team.gst': '<gameSystem/>',
+    'Orks.catz': '<catalogue/>',
+  };
+  beforeEach(() => {
+    vi.spyOn(db, 'getFile').mockImplementation(async (_r, path) => stored[path]);
+  });
+
+  it("shares a dated zip of the source's files, unzipped .catz kept as .cat, skipping files not on the phone", async () => {
+    const { downloads } = stubDownloads();
+    const share = vi.fn<(data: { files: File[]; title: string }) => Promise<void>>(async () => {});
+    vi.stubGlobal('navigator', { canShare: () => true, share });
+    await shareRepoFiles(repo);
+    const { files, title } = share.mock.calls[0][0];
+    expect(title).toBe('Captain-Altis/Killteam-2018 data files');
+    expect(files.map((f) => f.name)).toEqual(['Captain-Altis-Killteam-2018-2026-11-05.zip']);
+    const entries = readZip(await files[0].arrayBuffer());
+    // (contents round-trip in zipWrite.test.ts; jsdom can't inflate)
+    expect(entries.map((e) => e.name)).toEqual(['Warhammer 40,000 Kill Team.gst', 'Orks.cat']);
+    expect(downloads).toEqual([]);
+  });
+
+  it('downloads the zip where the device cannot share files', async () => {
+    const { downloads } = stubDownloads();
+    vi.stubGlobal('navigator', { canShare: () => false, share: vi.fn() });
+    await shareRepoFiles(repo);
+    expect(downloads.map((d) => d.name)).toEqual(['Captain-Altis-Killteam-2018-2026-11-05.zip']);
+  });
+
+  it('says so when none of the files are on the phone', async () => {
+    const { downloads } = stubDownloads();
+    vi.spyOn(db, 'getFile').mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { canShare: () => true, share: vi.fn() });
+    await shareRepoFiles(repo);
+    expect(downloads).toEqual([]);
+    expect(getState().toast).toBe('No files on this phone to export');
   });
 });

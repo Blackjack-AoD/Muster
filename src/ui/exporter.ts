@@ -1,4 +1,5 @@
-import type { RepoState, SavedUnit } from '../data/db';
+import { db, type RepoState, type SavedUnit } from '../data/db';
+import { writeZip, type ZipInput } from '../data/zipWrite';
 import { dataNameIfNamed, displayName, type RSel } from '../data/engine';
 import type { Roster } from '../data/engine';
 import type { RosterCtl } from '../store';
@@ -99,7 +100,10 @@ export function shareText(text: string, title: string): Promise<void> {
 }
 
 export function downloadJson(name: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  downloadBlob(name, new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+}
+
+export function downloadBlob(name: string, blob: Blob) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -109,6 +113,35 @@ export function downloadJson(name: string, data: unknown) {
     URL.revokeObjectURL(a.href);
     a.remove();
   }, 1000);
+}
+
+/**
+ * A data source's files as a zip, e.g. to put them in a repo of your own. Files are kept as plain .gst/.cat
+ * (a .catz on the phone is stored unzipped), at their path in the source.
+ */
+export async function shareRepoFiles(repo: RepoState) {
+  const files: ZipInput[] = [];
+  for (const f of repo.files) {
+    const text = await db.getFile(repo.repo, f.path);
+    if (text != null) files.push({ name: f.path.replace(/\.(gst|cat)z$/i, '.$1'), text });
+  }
+  if (!files.length) {
+    toast('No files on this phone to export');
+    return;
+  }
+  const name = `${repo.repo.replace(/[^\w.-]+/g, '-')}-${new Date().toISOString().slice(0, 10)}.zip`;
+  const blob = new Blob([(await writeZip(files)) as BlobPart], { type: 'application/zip' });
+  const file = new File([blob], name, { type: 'application/zip' });
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: `${repo.repo} data files` });
+      return;
+    }
+  } catch (e) {
+    if (isCancelled(e)) return;
+    toast(failureMessage('share', e));
+  }
+  downloadBlob(name, blob);
 }
 
 /** A backup's lists and saved units. A file from before saved units has no `savedUnits`, and may be a bare array of lists. */
