@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { createContext } from 'preact';
-import { useContext, useState } from 'preact/hooks';
+import { useContext, useEffect, useState } from 'preact/hooks';
 import { back } from '../app';
 import type { Opt } from '../data/catalog';
 import {
@@ -261,8 +261,13 @@ export function limitText(min: number, max: number) {
   return '';
 }
 
-/** The section whose sheet holds this part of the page. A section inside a sheet opens in place. */
-const OpenSection = createContext<{ g: Opt; close: () => void } | null>(null);
+/**
+ * The section whose sheet holds this part of the page. A section inside a sheet opens in place.
+ * `closeWhenDone` closes the section once the choice just made has been applied, unless the group then still
+ * lacks a choice: a pick can change the group's own limits (Skitarii Vanguard Alpha: dropping the rifle turns
+ * "pick 1" into "pick a pistol and a melee weapon").
+ */
+const OpenSection = createContext<{ g: Opt; close: () => void; closeWhenDone: () => void } | null>(null);
 
 /** Whether a group shows at all: conditions can hide it, or leave it with nothing to offer. */
 function groupShows(ev: RosterCtl['ev'], rs: RSel, g: Opt, eff: ReturnType<RosterCtl['ev']['optionEff']>, n: number) {
@@ -309,6 +314,14 @@ function SectionBox({
     .map((c) => (c.sel.number > 1 ? `${c.sel.number}× ` : '') + displayName(c))
     .join(', ');
   const close = () => setOpen(false);
+  // set by a pick; the next render (which sees the list after that pick) decides whether to close
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (!closing) return;
+    setClosing(false);
+    if (!missing) setOpen(false);
+  }, [closing, missing]);
+  const closeWhenDone = () => setClosing(true);
   return (
     <>
       <button class={'section' + (missing ? ' missing' : '')} aria-haspopup="dialog" onClick={() => setOpen(true)}>
@@ -329,7 +342,7 @@ function SectionBox({
             </button>
           }
         >
-          <OpenSection.Provider value={{ g, close }}>
+          <OpenSection.Provider value={{ g, close, closeWhenDone }}>
             <p class="section-limit">{limit}</p>
             {children}
           </OpenSection.Provider>
@@ -596,8 +609,8 @@ function RadioRow({
       parent.children = parent.children.filter((c) => !c.key.startsWith(g.key + '/'));
       addSel(r, ctl.contexts, rs.force.force.uid, rs.sel.uid, o, 1);
     });
-    // the choice ends the section, unless it brings options of its own to set
-    if (section?.g.key === g.key && !rs.force.ctx.options(o.node).length) section.close();
+    // the choice ends the section, unless it brings options of its own to set, or the group still lacks a choice
+    if (section?.g.key === g.key && !rs.force.ctx.options(o.node).length) section.closeWhenDone();
   };
   return (
     <div class="opt">

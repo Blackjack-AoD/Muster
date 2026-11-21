@@ -709,6 +709,32 @@ describe('UnitEditor sections', () => {
     expect(screen.getByRole('button', { name: 'More Scope' })).not.toBeNull();
   });
 
+  it('keeps a pick-one sheet open when the choice turns it into a pick-two', async () => {
+    // Kill Team 2018 Skitarii Vanguard Alpha: a rifle, or a pistol and a melee weapon
+    const twoWithoutRifle = (field: string) =>
+      `<modifier type="set" field="${field}" value="2"><conditions><condition type="equalTo" value="0" field="selections" scope="parent" childId="rifle"/></conditions></modifier>`;
+    const sub = (id: string, name: string, e: string) =>
+      `<selectionEntryGroup id="${id}" name="${name}">${cons(one(id, 'max'))}${children(e)}</selectionEntryGroup>`;
+    const weapon = `<selectionEntryGroups><selectionEntryGroup id="w" name="Weapon" defaultSelectionEntryId="rifle">
+      <modifiers>${twoWithoutRifle('w-min')}${twoWithoutRifle('w-max')}</modifiers>
+      ${cons(one('w', 'min'), one('w', 'max'))}
+      ${children(entry('rifle', 'Galvanic Rifle', 0))}
+      <selectionEntryGroups><selectionEntryGroup id="pm" name="Pistol + Melee">
+        <selectionEntryGroups>${sub('pistol', 'Pistol', entry('radium', 'Radium Pistol', 0))}${sub('melee', 'Melee Weapon', entry('goad', 'Taser Goad', 0))}</selectionEntryGroups>
+      </selectionEntryGroup></selectionEntryGroups>
+    </selectionEntryGroup></selectionEntryGroups>`;
+    await openUnit(squad(weapon));
+    openSection('Weapon');
+
+    fireEvent.click(option('radio', /Taser Goad/));
+
+    await waitFor(() => expect(section('Weapon').textContent).toContain('Taser Goad'));
+    expect(sectionSheet('Weapon')).not.toBeNull();
+    fireEvent.click(option('radio', /Radium Pistol/));
+    await waitFor(() => expect(section('Weapon').textContent).toContain('Radium Pistol'));
+    expect(section('Weapon').className).not.toContain('missing');
+  });
+
   it('keeps a pick-many sheet open, and the box lists each choice with its count', async () => {
     await openUnit(squad(groupOf('kit', 'Kit', children(FLAMER, GRENADE))));
     openSection('Kit');
