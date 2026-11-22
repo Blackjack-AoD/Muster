@@ -39,6 +39,7 @@ import { changeForce, isAllegianceChoice, matchAllegiance, pick, setUpForce } fr
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
 import { StatBlock } from './StatBlock';
+import { tacticsFor } from '../data/tactics';
 import { catalogueName } from './Lists';
 import { NO_SAVED_UNITS, PreconfiguredView, copiesOf, takeOff } from './Preconfigured';
 import { clashOf } from '../data/units';
@@ -257,7 +258,7 @@ function ForceBlock({
           </button>
         )}
       </div>
-      {showTactics && <TacticsSheet groups={tactics} onClose={() => setShowTactics(false)} />}
+      {showTactics && <TacticsSheet rf={rf} onClose={() => setShowTactics(false)} />}
       {open && (
         <div class="cats">
           {cats.map((c) => {
@@ -364,11 +365,20 @@ export function silentSetup(_ev: Evaluator, rs: RSel) {
 }
 
 /** An army's tactics, by where they come from (the game system's generic ones, then the army's own). */
-function TacticsSheet({ groups, onClose }: { groups: ReturnType<Context['tactics']>; onClose: () => void }) {
+function TacticsSheet({ rf, onClose }: { rf: RForce; onClose: () => void }) {
   const [q, setQ] = useState('');
+  const [all, setAll] = useState(false);
+  const groups = useMemo(() => tacticsFor(rf), [rf]);
   const match = (p: { name: string; characteristics: { value: string }[] }) =>
     !q || [p.name, ...p.characteristics.map((c) => c.value)].join(' ').toLowerCase().includes(q.toLowerCase());
-  const shown = groups.map((g) => ({ ...g, profiles: g.profiles.filter(match) })).filter((g) => g.profiles.length);
+  const shown = groups
+    .map((g) => ({
+      source: g.source,
+      can: g.tactics.filter((t) => t.available && match(t.profile)).map((t) => t.profile),
+      cannot: g.tactics.filter((t) => !t.available && match(t.profile)).map((t) => t.profile),
+    }))
+    .filter((g) => g.can.length || (all && g.cannot.length));
+  const hiddenCount = groups.reduce((n, g) => n + g.tactics.filter((t) => !t.available).length, 0);
   return (
     <Sheet title="Tactics" onClose={onClose} full>
       <div class="pad-x">
@@ -379,6 +389,12 @@ function TacticsSheet({ groups, onClose }: { groups: ReturnType<Context['tactics
           value={q}
           onInput={(e) => setQ(e.currentTarget.value)}
         />
+        {hiddenCount > 0 && (
+          <label class="tactics-all">
+            <input type="checkbox" checked={all} onChange={(e) => setAll(e.currentTarget.checked)} />
+            Show the {hiddenCount} this list can't use
+          </label>
+        )}
       </div>
       {shown.length === 0 && <p class="muted pad">No tactics match.</p>}
       <div class="profiles">
@@ -386,7 +402,13 @@ function TacticsSheet({ groups, onClose }: { groups: ReturnType<Context['tactics
           <section class="ptype">
             <h3>{g.source}</h3>
             <div class="pad-x">
-              <StatBlock profiles={g.profiles} />
+              {g.can.length > 0 && <StatBlock profiles={g.can} />}
+              {all && g.cannot.length > 0 && (
+                <div class="tactics-cannot">
+                  <p class="muted">Not usable: this list doesn't have what they require</p>
+                  <StatBlock profiles={g.cannot} />
+                </div>
+              )}
             </div>
           </section>
         ))}

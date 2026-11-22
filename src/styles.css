@@ -1521,6 +1521,23 @@ input:focus {
 .statcards .pcard {
   margin: 0 0 8px;
 }
+/* Tactics sheet: the switch for tactics this list can't use, and those tactics dimmed */
+.tactics-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.tactics-cannot {
+  margin-top: 12px;
+  opacity: 0.6;
+}
+.tactics-cannot > p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
 .lib-unit .rules {
   padding-top: 0;
 }
@@ -1907,6 +1924,14 @@ input:focus {
   margin: -2px 0 10px;
   font-size: 13.5px;
   color: #cfccc4;
+}
+/* army sheet: the force's tactics, after its units */
+.as-tactics h3 {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 6px;
 }
 @media print {
   .as-setup {

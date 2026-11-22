@@ -4,7 +4,7 @@ import { rosterText } from './exporter';
 import type { RepoState } from '../data/db';
 import { locate } from '../data/engine';
 import type { RosterCtl } from '../store';
-import { children, entry, present, unit, world } from '../test/fixture';
+import { FORCE, children, entry, present, unit, world } from '../test/fixture';
 
 vi.mock('./Lists', () => ({ catalogueName: () => 'Orks', systemName: () => 'Test Game' }));
 vi.mock('../store', () => ({ toast: vi.fn() }));
@@ -386,5 +386,54 @@ describe('share links', () => {
     vi.stubGlobal('location', { origin: 'https://x.test', pathname: '/muster/' });
     expect(viewUrl('abc')).toBe('https://x.test/muster/#/view/abc');
     vi.unstubAllGlobals();
+  });
+});
+
+describe('tactics on the sheet', () => {
+  const tactic = (id: string, name: string, requires = '', text = 'Does a thing.') =>
+    `<profile id="${id}" name="${name}" typeName="Tactic"><characteristics><characteristic name="CP">1</characteristic>` +
+    (requires ? `<characteristic name="Requires">${requires}</characteristic>` : '') +
+    `<characteristic name="Description">${text}</characteristic></characteristics></profile>`;
+  const tacticsWorld = (profiles: string) => {
+    const w = world(unit('b', 'Boss', 50), { gst: FORCE + `<sharedProfiles>${profiles}</sharedProfiles>` });
+    w.add('Boss');
+    return w;
+  };
+
+  it("holds the tactics a force can use, and leaves out those it can't", () => {
+    const w = tacticsWorld(
+      tactic('t1', 'Waaagh!') + tactic('t2', 'Big Mek Trick', 'Big Mek') + tactic('t3', 'Boss Shout', 'Boss'),
+    );
+    const [force] = buildSnapshot(ctlOf(w), repos).forces;
+    expect(force.tactics?.map((t) => t.name)).toEqual(['Waaagh!', 'Boss Shout']);
+    expect(force.tactics?.[0]).toEqual({
+      name: 'Waaagh!',
+      type: 'Tactic',
+      chars: [
+        ['CP', '1'],
+        ['Description', 'Does a thing.'],
+      ],
+    });
+  });
+  it('holds no tactics for a force whose data has none', () => {
+    expect(buildSnapshot(ctlOf(tacticsWorld('')), repos).forces[0].tactics).toBeUndefined();
+  });
+  it('keep the tactics in a link, dropping the rules text first when it would be too long', async () => {
+    const s = buildSnapshot(ctlOf(tacticsWorld(tactic('t1', 'Waaagh!'))), repos);
+    const noise = Array.from(
+      { length: 6000 },
+      (_, i) => [`Rule ${i}`, Math.random().toString(36).repeat(3)] as [string, string],
+    );
+    const back = await decodeSnapshot((await encodeSnapshot({ ...s, rules: noise })).data);
+    expect(back.rules).toBeUndefined();
+    expect(back.forces[0].tactics?.map((t) => t.name)).toEqual(['Waaagh!']);
+  });
+  it('drop the tactics too when the link is still too long without the rules', async () => {
+    const many = Array.from({ length: 3000 }, (_, i) =>
+      tactic(`t${i}`, `Tactic ${i}`, '', Math.random().toString(36).repeat(3)),
+    ).join('');
+    const { data, withRules } = await encodeSnapshot(buildSnapshot(ctlOf(tacticsWorld(many)), repos));
+    expect(withRules).toBe(false);
+    expect((await decodeSnapshot(data)).forces[0].tactics).toBeUndefined();
   });
 });

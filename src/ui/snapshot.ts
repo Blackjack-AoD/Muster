@@ -4,6 +4,7 @@ import type { RepoState } from '../data/db';
 import { dataNameIfNamed, displayName, isRecord, type RSel } from '../data/engine';
 import type { RosterCtl } from '../store';
 import { catalogueName, systemName } from './Lists';
+import { tacticsFor } from '../data/tactics';
 
 export interface SnapProfile {
   name: string;
@@ -28,6 +29,8 @@ export interface SnapForce {
   units: SnapUnit[];
   /** set-up choices shown as one line, e.g. "Allegiance: Traitor" */
   setup?: string[];
+  /** the tactics this force can use (left out of links when they'd get too long) */
+  tactics?: SnapProfile[];
 }
 export interface Snapshot {
   v: 1;
@@ -93,6 +96,15 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
         return u.children.length ? '' : label;
       })
       .filter(Boolean);
+    const tactics: SnapProfile[] = tacticsFor(rf).flatMap((g) =>
+      g.tactics
+        .filter((t) => t.available)
+        .map((t) => ({
+          name: t.profile.name,
+          type: t.profile.typeName,
+          chars: t.profile.characteristics.map((c) => [c.name, c.value] as [string, string]),
+        })),
+    );
     return {
       name: clean(rf.entry.name),
       army: catalogueName(repos, roster.repo, rf.force.catalogueId).replace(/^\d{4}\s*-\s*/, ''),
@@ -102,6 +114,7 @@ export function buildSnapshot(ctl: RosterCtl, repos: RepoState[]): Snapshot {
         .sort((a, b) => rank(a) - rank(b))
         .map(unit),
       setup,
+      ...(tactics.length > 0 && { tactics }),
     };
   });
   return {
@@ -141,8 +154,17 @@ const MAX_LINK_DATA = 24_000;
 export async function encodeSnapshot(s: Snapshot): Promise<{ data: string; withRules: boolean }> {
   const pack = async (x: Snapshot) => b64url(await deflate(JSON.stringify(x)));
   const full = await pack(s);
-  if (full.length <= MAX_LINK_DATA || !s.rules?.length) return { data: full, withRules: !!s.rules?.length };
-  return { data: await pack({ ...s, rules: undefined }), withRules: false };
+  // read defensively: a link can be packed from anything
+  const hasTactics =
+    Array.isArray(s.forces) &&
+    s.forces.some((f: unknown) => isRecord(f) && Array.isArray(f.tactics) && f.tactics.length > 0);
+  if (full.length <= MAX_LINK_DATA || (!s.rules?.length && !hasTactics))
+    return { data: full, withRules: !!s.rules?.length };
+  // the rules text goes first; the tactics only if the link is still too long without it
+  const noRules = s.rules?.length ? await pack({ ...s, rules: undefined }) : full;
+  if (noRules.length <= MAX_LINK_DATA || !hasTactics) return { data: noRules, withRules: false };
+  const forces = s.forces.map((f) => ({ ...f, tactics: undefined }));
+  return { data: await pack({ ...s, rules: undefined, forces }), withRules: false };
 }
 
 /** Well above any real list: a short link could otherwise unpack to enough text to freeze a phone. */
@@ -176,9 +198,10 @@ const isSnapForce = (f: unknown): f is SnapForce =>
   isText(f.army) &&
   typeof f.pts === 'number' &&
   isListOf(f.units, isSnapUnit) &&
-  (f.setup === undefined || isListOf(f.setup, isText));
+  (f.setup === undefined || isListOf(f.setup, isText)) &&
+  (f.tactics === undefined || isListOf(f.tactics, isSnapProfile));
 
-/** Every field the sheet draws. Only `rules`, `setup` and a unit's `dataName` may be absent from a link. */
+/** Every field the sheet draws. Only `rules`, a force's `setup` and `tactics`, and a unit's `dataName` may be absent from a link. */
 function isSnapshot(s: unknown): s is Snapshot {
   return (
     isRecord(s) &&

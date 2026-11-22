@@ -1080,3 +1080,25 @@ describe('tactics', () => {
     expect(screen.queryByRole('button', { name: /^Tactics for/ })).toBeNull();
   });
 });
+
+describe('tactics this list cannot use', () => {
+  const tactic = (id: string, name: string, requires = '') =>
+    `<profile id="${id}" name="${name}" typeName="Tactic"><characteristics><characteristic name="CP">1</characteristic>` +
+    (requires ? `<characteristic name="Requires">${requires}</characteristic>` : '') +
+    `</characteristics></profile>`;
+  const gst =
+    FORCE + `<sharedProfiles>${tactic('t1', 'Rally')}${tactic('t2', 'Big Mek Trick', 'Big Mek')}</sharedProfiles>`;
+
+  it('hides a tactic whose requirement the list lacks, and shows it dimmed on request', async () => {
+    await openList(world(UNITS, { gst }), UNITS, { gst });
+    fireEvent.click(screen.getByRole('button', { name: 'Tactics for Detachment' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Tactics' });
+    expect(within(sheet).getByText('Rally')).not.toBeNull();
+    expect(within(sheet).queryByText('Big Mek Trick')).toBeNull();
+
+    fireEvent.click(within(sheet).getByLabelText("Show the 1 this list can't use"));
+
+    await waitFor(() => expect(within(sheet).getByText('Big Mek Trick').closest('.tactics-cannot')).not.toBeNull());
+    expect(within(sheet).getByText('Big Mek', { exact: false, selector: '.sb-long' })).not.toBeNull();
+  });
+});

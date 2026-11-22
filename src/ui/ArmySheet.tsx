@@ -47,6 +47,14 @@ export function ArmySheet({ snap }: { snap: Snapshot }) {
           {f.units.map((u) => (
             <UnitCard u={u} />
           ))}
+          {f.tactics && f.tactics.length > 0 && (
+            <div class="as-tactics">
+              <h3>Tactics</h3>
+              <div class="as-stats">
+                <StatBlock profiles={f.tactics.map(asStat)} />
+              </div>
+            </div>
+          )}
         </section>
       ))}
       {ruleText.size > 0 && (
