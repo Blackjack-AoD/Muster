@@ -38,6 +38,7 @@ import { Loading, Pts, Sheet, TopBar, fmtN } from './common';
 import { changeForce, isAllegianceChoice, matchAllegiance, pick, setUpForce } from '../data/setup';
 import { SWIPE, useSwipe } from './swipe';
 import { Icon } from './Icon';
+import { StatBlock } from './StatBlock';
 import { catalogueName } from './Lists';
 import { NO_SAVED_UNITS, PreconfiguredView, copiesOf, takeOff } from './Preconfigured';
 import { clashOf } from '../data/units';
@@ -206,6 +207,8 @@ function ForceBlock({
 }) {
   const repos = useStore((s) => s.repos);
   const [open, setOpen] = useState(true);
+  const [showTactics, setShowTactics] = useState(false);
+  const tactics = useMemo(() => rf.ctx.tactics(), [rf.ctx]);
   const avail = useMemo(() => forceRootOptions(rf.ctx, rf.entry), [rf.ctx, rf.entry]);
   const cats = rf.entry.categoryLinks.map((c) => c.targetId);
   const byCat = new Map<string, RSel[]>();
@@ -239,6 +242,11 @@ function ForceBlock({
           <span class="force-pts">{fmtN(rf.total)}</span>
           <Icon name={open ? 'down' : 'chev'} size={18} />
         </button>
+        {tactics.length > 0 && (
+          <button class="icon-btn sm" aria-label={`Tactics for ${rf.entry.name}`} onClick={() => setShowTactics(true)}>
+            <Icon name="book" size={18} />
+          </button>
+        )}
         {ctl.roster.forces.length > 1 && (
           <button
             class="icon-btn sm force-del"
@@ -249,6 +257,7 @@ function ForceBlock({
           </button>
         )}
       </div>
+      {showTactics && <TacticsSheet groups={tactics} onClose={() => setShowTactics(false)} />}
       {open && (
         <div class="cats">
           {cats.map((c) => {
@@ -352,6 +361,38 @@ function visibleOpts(ev: Evaluator, rs: RSel) {
 /** a set-up entry (not a unit) with no choices in it at all, e.g. the Legion picked when the list was made */
 export function silentSetup(_ev: Evaluator, rs: RSel) {
   return !isUnitLike(rs.opt) && !rs.total && rs.force.ctx.options(rs.node).length === 0;
+}
+
+/** An army's tactics, by where they come from (the game system's generic ones, then the army's own). */
+function TacticsSheet({ groups, onClose }: { groups: ReturnType<Context['tactics']>; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const match = (p: { name: string; characteristics: { value: string }[] }) =>
+    !q || [p.name, ...p.characteristics.map((c) => c.value)].join(' ').toLowerCase().includes(q.toLowerCase());
+  const shown = groups.map((g) => ({ ...g, profiles: g.profiles.filter(match) })).filter((g) => g.profiles.length);
+  return (
+    <Sheet title="Tactics" onClose={onClose} full>
+      <div class="pad-x">
+        <input
+          class="wide"
+          type="search"
+          placeholder="Search tactics"
+          value={q}
+          onInput={(e) => setQ(e.currentTarget.value)}
+        />
+      </div>
+      {shown.length === 0 && <p class="muted pad">No tactics match.</p>}
+      <div class="profiles">
+        {shown.map((g) => (
+          <section class="ptype">
+            <h3>{g.source}</h3>
+            <div class="pad-x">
+              <StatBlock profiles={g.profiles} />
+            </div>
+          </section>
+        ))}
+      </div>
+    </Sheet>
+  );
 }
 
 /** room for another of this root option in the force (its own max, ignoring category limits) */

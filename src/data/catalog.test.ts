@@ -371,3 +371,21 @@ describe('startCost', () => {
     expect(c.startCost(present(c.get('u'), 'entry u'), 'pts')).toBeGreaterThan(0);
   });
 });
+
+describe('tactics', () => {
+  const tac = (id: string, name: string, attrs = '') =>
+    `<profile id="${id}" name="${name}" typeName="Tactic" ${attrs}><characteristics><characteristic name="CP">1</characteristic></characteristics></profile>`;
+  it("lists the game system's tactics first, then the army's, leaving out hidden ones and other profiles", () => {
+    const c = ctxOf(
+      `<sharedProfiles>${tac('a', 'Canticle Surge')}${tac('h', 'Secret', 'hidden="true"')}<profile id="w" name="Rifle" typeName="Weapon"/></sharedProfiles>`,
+      `<sharedProfiles>${tac('g', 'Command Re-roll')}</sharedProfiles>`,
+    );
+    expect(c.tactics().map((g) => [g.source, g.profiles.map((p) => p.name)])).toEqual([
+      ['Test Game', ['Command Re-roll']],
+      ['Test Army', ['Canticle Surge']],
+    ]);
+  });
+  it('has none when the data has none', () => {
+    expect(ctxOf('').tactics()).toEqual([]);
+  });
+});

@@ -185,6 +185,28 @@ export class Context {
     return undefined;
   }
 
+  /**
+   * The army's tactics: shared profiles of a "Tactic" type, grouped by the file they come from — the game
+   * system's generic ones first, then the army's own and those of files it links to (e.g. Kill Team 2018).
+   */
+  tactics(): { source: string; profiles: Profile[] }[] {
+    const out: { source: string; profiles: Profile[] }[] = [];
+    const seen = new Set<DataFile>();
+    const add = (f: DataFile) => {
+      if (seen.has(f)) return;
+      seen.add(f);
+      const profiles = f.sharedProfiles.filter((p) => !p.hidden && /^tactics?$/i.test(p.typeName.trim()));
+      if (profiles.length) out.push({ source: f.name, profiles });
+      for (const l of f.catalogueLinks) {
+        const t = this.files.find((x) => x.id === l.targetId);
+        if (t) add(t);
+      }
+    };
+    add(this.gst);
+    add(this.cat);
+    return out;
+  }
+
   /** All options that can be added at the root of a force. */
   rootOptions(): Opt[] {
     const seen = new Set<DataFile>();

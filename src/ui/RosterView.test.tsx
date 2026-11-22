@@ -8,6 +8,7 @@ import { addMandatoryRoots } from '../data/setup';
 import { getState, importBackup } from '../store';
 import {
   ASSAULT,
+  FORCE,
   RULED_OUT_BY_ASSAULT,
   SWORD,
   children,
@@ -1047,5 +1048,35 @@ describe('RosterView', () => {
         expect(savedOffered(sheet)).toEqual([['Lord Vex', 'Not allowed']]);
       });
     });
+  });
+});
+
+describe('tactics', () => {
+  const TACTIC_TYPE =
+    '<profileTypes><profileType id="tt" name="Tactic"><characteristicTypes><characteristicType id="cp" name="CP"/><characteristicType id="ph" name="Phase"/><characteristicType id="de" name="Description"/></characteristicTypes></profileType></profileTypes>';
+  const tactic = (id: string, name: string, cp: string, phase: string, text: string) =>
+    `<profile id="${id}" name="${name}" typeId="tt" typeName="Tactic"><characteristics><characteristic name="CP" typeId="cp">${cp}</characteristic><characteristic name="Phase" typeId="ph">${phase}</characteristic><characteristic name="Description" typeId="de">${text}</characteristic></characteristics></profile>`;
+  const gst =
+    FORCE +
+    TACTIC_TYPE +
+    `<sharedProfiles>${tactic('t1', 'Second Wind', '1', 'Fight', 'Re-roll one hit roll.')}${tactic('t2', 'Ambush', '2', 'Movement', 'Set up a model anywhere.')}</sharedProfiles>`;
+
+  it("opens the army's tactics from its force, each with its cost and phase, and its text beneath", async () => {
+    await openList(world(UNITS, { gst }), UNITS, { gst });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tactics for Detachment' }));
+
+    const sheet = await screen.findByRole('dialog', { name: 'Tactics' });
+    expect([...sheet.querySelectorAll('th')].map((t) => t.textContent)).toEqual(['CP', 'Phase']);
+    expect(within(sheet).getByText('Second Wind')).not.toBeNull();
+    expect(within(sheet).getByText('Re-roll one hit roll.', { exact: false })).not.toBeNull();
+    fireEvent.input(within(sheet).getByPlaceholderText('Search tactics'), { target: { value: 'ambush' } });
+    await waitFor(() => expect(within(sheet).queryByText('Second Wind')).toBeNull());
+    expect(within(sheet).getByText('Ambush')).not.toBeNull();
+  });
+
+  it('shows no tactics button when the data has none', async () => {
+    await openList(world(UNITS));
+    expect(screen.queryByRole('button', { name: /^Tactics for/ })).toBeNull();
   });
 });
